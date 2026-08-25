@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dstar.dev/spec/0.1/schemas/sources.schema.json",
+  "title": "DSTAR 0.1 Sources",
+  "type": "object",
+  "required": ["sources"],
+  "properties": {
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "title"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$"
+          },
+          "type": { "enum": ["url", "file", "citation"] },
+          "title": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "path": { "type": "string" },
+          "accessedAt": { "type": "string", "format": "date-time" }
+        },
+        "patternProperties": {
+          "^x-": true
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
+

@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dstar.dev/spec/0.1/schemas/projection.schema.json",
+  "title": "DSTAR 0.1 Projection Index",
+  "type": "object",
+  "required": ["projections"],
+  "properties": {
+    "projections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/projection" }
+    }
+  },
+  "patternProperties": {
+    "^x-": true
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "enum": ["human", "agent", "service"] },
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false
+    },
+    "generator": {
+      "type": "object",
+      "required": ["actor"],
+      "properties": {
+        "actor": { "$ref": "#/$defs/actor" },
+        "version": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false
+    },
+    "textPositionSelector": {
+      "type": "object",
+      "required": ["type", "start", "end", "unit"],
+      "properties": {
+        "type": { "const": "TextPositionSelector" },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "unit": { "const": "unicode-code-point" }
+      },
+      "additionalProperties": false
+    },
+    "textQuoteSelector": {
+      "type": "object",
+      "required": ["type", "exact"],
+      "properties": {
+        "type": { "const": "TextQuoteSelector" },
+        "exact": { "type": "string", "minLength": 1 },
+        "prefix": { "type": "string" },
+        "suffix": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "fragmentSelector": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "const": "FragmentSelector" },
+        "value": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "projectionSelector": {
+      "oneOf": [
+        { "$ref": "#/$defs/textPositionSelector" },
+        { "$ref": "#/$defs/textQuoteSelector" },
+        { "$ref": "#/$defs/fragmentSelector" }
+      ]
+    },
+    "canonicalTarget": {
+      "type": "object",
+      "required": ["node"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "refinedBy": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/textPositionSelector" },
+              { "$ref": "#/$defs/textQuoteSelector" }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "segment": {
+      "type": "object",
+      "required": ["id", "selectors", "derivedFrom"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "selectors": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/projectionSelector" }
+        },
+        "derivedFrom": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/canonicalTarget" }
+        }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false
+    },
+    "projection": {
+      "type": "object",
+      "required": [
+        "id",
+        "role",
+        "mediaType",
+        "path",
+        "generatedFromRevision",
+        "revision"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "role": { "type": "string", "minLength": 1 },
+        "mediaType": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\.\\./).+$"
+        },
+        "generatedFromRevision": { "$ref": "#/$defs/revision" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "generator": { "$ref": "#/$defs/generator" },
+        "segments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/segment" }
+        }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false
+    }
+  }
+}

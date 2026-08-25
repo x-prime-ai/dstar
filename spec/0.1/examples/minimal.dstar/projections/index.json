@@ -1,0 +1,81 @@
+{
+  "projections": [
+    {
+      "id": "projection_markdown",
+      "role": "source",
+      "mediaType": "text/markdown",
+      "path": "projections/document.md",
+      "generatedFromRevision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
+      "revision": "sha256:180eb03b4c36fc41234d438d17cd0efe79d8a2a4eb5fc0363bd0fe8b920cafbf",
+      "generator": {
+        "actor": {
+          "type": "service",
+          "id": "service_renderer",
+          "name": "DSTAR example renderer"
+        },
+        "version": "0.1",
+        "createdAt": "2026-08-24T00:00:00Z"
+      },
+      "segments": [
+        {
+          "id": "segment_markdown_promise",
+          "selectors": [
+            {
+              "type": "TextPositionSelector",
+              "start": 15,
+              "end": 45,
+              "unit": "unicode-code-point"
+            },
+            {
+              "type": "TextQuoteSelector",
+              "exact": "Agents produce. Humans decide."
+            }
+          ],
+          "derivedFrom": [
+            {
+              "node": "node_promise"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "projection_summary",
+      "role": "summary",
+      "mediaType": "text/markdown",
+      "path": "projections/summary.md",
+      "generatedFromRevision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
+      "revision": "sha256:5742aaa6a98f7712c96236eb7effc040d00a2f1beac4f6d4cbd04a6b9a65aa8a",
+      "generator": {
+        "actor": {
+          "type": "agent",
+          "id": "agent_demo",
+          "name": "Demo agent"
+        },
+        "createdAt": "2026-08-24T00:00:00Z"
+      },
+      "segments": [
+        {
+          "id": "segment_summary_promise",
+          "selectors": [
+            {
+              "type": "TextPositionSelector",
+              "start": 11,
+              "end": 75,
+              "unit": "unicode-code-point"
+            },
+            {
+              "type": "TextQuoteSelector",
+              "exact": "Agents produce document content; humans make the final decision."
+            }
+          ],
+          "derivedFrom": [
+            {
+              "node": "node_promise"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dstar.dev/spec/0.1/schemas/annotation.schema.json",
+  "title": "DSTAR 0.1 Annotation Thread",
+  "type": "object",
+  "required": ["id", "type", "target", "body", "author", "status", "createdAt"],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" },
+    "type": { "type": "string", "minLength": 1 },
+    "target": { "$ref": "#/$defs/target" },
+    "canonicalTarget": { "$ref": "#/$defs/canonicalTarget" },
+    "body": { "type": "string", "minLength": 1 },
+    "author": { "$ref": "#/$defs/actor" },
+    "replies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reply" }
+    },
+    "audience": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["human", "agent", "service"] }
+    },
+    "status": { "enum": ["open", "resolved"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "resolvedAt": { "type": "string", "format": "date-time" },
+    "resolvedBy": { "$ref": "#/$defs/actor" }
+  },
+  "patternProperties": {
+    "^x-": true
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "target": {
+            "properties": {
+              "source": { "not": { "const": "document" } }
+            },
+            "required": ["source"]
+          }
+        },
+        "required": ["target"]
+      },
+      "then": { "required": ["canonicalTarget"] }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "resolved" } },
+        "required": ["status"]
+      },
+      "then": { "required": ["resolvedAt", "resolvedBy"] }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "enum": ["human", "agent", "service"] },
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false
+    },
+    "textPositionSelector": {
+      "type": "object",
+      "required": ["type", "start", "end", "unit"],
+      "properties": {
+        "type": { "const": "TextPositionSelector" },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "unit": { "const": "unicode-code-point" }
+      },
+      "additionalProperties": false
+    },
+    "textQuoteSelector": {
+      "type": "object",
+      "required": ["type", "exact"],
+      "properties": {
+        "type": { "const": "TextQuoteSelector" },
+        "exact": { "type": "string", "minLength": 1 },
+        "prefix": { "type": "string" },
+        "suffix": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "refinedSelector": {
+      "oneOf": [
+        { "$ref": "#/$defs/textPositionSelector" },
+        { "$ref": "#/$defs/textQuoteSelector" }
+      ]
+    },
+    "nodeSelector": {
+      "type": "object",
+      "required": ["type", "node"],
+      "properties": {
+        "type": { "const": "NodeSelector" },
+        "node": { "$ref": "#/$defs/id" },
+        "refinedBy": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/refinedSelector" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "segmentSelector": {
+      "type": "object",
+      "required": ["type", "segment"],
+      "properties": {
+        "type": { "const": "SegmentSelector" },
+        "segment": { "$ref": "#/$defs/id" },
+        "refinedBy": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/refinedSelector" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["source", "revision", "selector"],
+      "properties": {
+        "source": { "$ref": "#/$defs/id" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "selector": {
+          "oneOf": [
+            { "$ref": "#/$defs/nodeSelector" },
+            { "$ref": "#/$defs/segmentSelector" }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "source": { "const": "document" } },
+            "required": ["source"]
+          },
+          "then": {
+            "properties": { "selector": { "$ref": "#/$defs/nodeSelector" } }
+          },
+          "else": {
+            "properties": { "selector": { "$ref": "#/$defs/segmentSelector" } }
+          }
+        }
+      ]
+    },
+    "canonicalTarget": {
+      "allOf": [
+        { "$ref": "#/$defs/target" },
+        {
+          "properties": {
+            "source": { "const": "document" },
+            "selector": { "$ref": "#/$defs/nodeSelector" }
+          }
+        }
+      ]
+    },
+    "reply": {
+      "type": "object",
+      "required": ["id", "body", "author", "createdAt"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "body": { "type": "string", "minLength": 1 },
+        "author": { "$ref": "#/$defs/actor" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false
+    }
+  }
+}

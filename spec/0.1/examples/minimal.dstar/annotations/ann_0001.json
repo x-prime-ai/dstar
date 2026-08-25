@@ -1,0 +1,30 @@
+{
+  "id": "ann_0001",
+  "type": "comment",
+  "target": {
+    "source": "projection_summary",
+    "revision": "sha256:5742aaa6a98f7712c96236eb7effc040d00a2f1beac4f6d4cbd04a6b9a65aa8a",
+    "selector": {
+      "type": "SegmentSelector",
+      "segment": "segment_summary_promise"
+    }
+  },
+  "canonicalTarget": {
+    "source": "document",
+    "revision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
+    "selector": {
+      "type": "NodeSelector",
+      "node": "node_promise"
+    }
+  },
+  "body": "Clarify what kinds of agent changes require human approval.",
+  "author": {
+    "type": "human",
+    "id": "human_demo",
+    "name": "Demo reviewer"
+  },
+  "replies": [],
+  "audience": ["human", "agent"],
+  "status": "open",
+  "createdAt": "2026-08-24T00:00:00Z"
+}

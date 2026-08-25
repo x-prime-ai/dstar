@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dstar.dev/spec/0.1/schemas/change.schema.json",
+  "title": "DSTAR 0.1 Change",
+  "type": "object",
+  "required": [
+    "id",
+    "idempotencyKey",
+    "baseRevision",
+    "author",
+    "operations",
+    "status",
+    "createdAt"
+  ],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" },
+    "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "baseRevision": { "$ref": "#/$defs/revision" },
+    "author": { "$ref": "#/$defs/actor" },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/operation" }
+    },
+    "status": { "enum": ["proposed", "accepted", "rejected", "superseded"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "motivatedBy": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/id" },
+      "uniqueItems": true
+    },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/id" },
+      "uniqueItems": true
+    },
+    "decision": { "$ref": "#/$defs/decision" }
+  },
+  "patternProperties": {
+    "^x-": true
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "proposed" } },
+        "required": ["status"]
+      },
+      "then": { "not": { "required": ["decision"] } },
+      "else": { "required": ["decision"] }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "accepted" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "decision": { "required": ["resultRevision"] }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "enum": ["human", "agent", "service"] },
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["node"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "precondition": {
+      "type": "object",
+      "required": ["nodeRevision"],
+      "properties": {
+        "nodeRevision": { "$ref": "#/$defs/revision" },
+        "expectedText": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "range": {
+      "type": "object",
+      "required": ["start", "end", "unit"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "unit": { "const": "unicode-code-point" }
+      },
+      "additionalProperties": false
+    },
+    "destination": {
+      "type": "object",
+      "required": ["parent"],
+      "properties": {
+        "parent": { "$ref": "#/$defs/id" },
+        "before": { "$ref": "#/$defs/id" },
+        "after": { "$ref": "#/$defs/id" },
+        "index": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "operation": {
+      "type": "object",
+      "required": ["id", "op", "target", "precondition"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "op": {
+          "enum": ["replace_text", "insert_node", "delete_node", "move_node", "set_attrs"]
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "precondition": { "$ref": "#/$defs/precondition" },
+        "range": { "$ref": "#/$defs/range" },
+        "value": {},
+        "destination": { "$ref": "#/$defs/destination" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "op": { "const": "replace_text" } },
+            "required": ["op"]
+          },
+          "then": {
+            "required": ["range", "value"],
+            "properties": { "value": { "type": "string" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "op": { "const": "insert_node" } },
+            "required": ["op"]
+          },
+          "then": { "required": ["destination", "value"] }
+        },
+        {
+          "if": {
+            "properties": { "op": { "const": "move_node" } },
+            "required": ["op"]
+          },
+          "then": { "required": ["destination"] }
+        },
+        {
+          "if": {
+            "properties": { "op": { "const": "set_attrs" } },
+            "required": ["op"]
+          },
+          "then": {
+            "required": ["value"],
+            "properties": { "value": { "type": "object" } }
+          }
+        }
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "required": ["status", "actor", "at"],
+      "properties": {
+        "status": { "enum": ["accepted", "rejected", "superseded"] },
+        "actor": { "$ref": "#/$defs/actor" },
+        "at": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string" },
+        "resultRevision": { "$ref": "#/$defs/revision" }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false
+    }
+  }
+}

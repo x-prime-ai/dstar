@@ -1,0 +1,32 @@
+{
+  "id": "change_0001",
+  "idempotencyKey": "example-change-0001",
+  "baseRevision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
+  "author": {
+    "type": "agent",
+    "id": "agent_demo",
+    "name": "Demo agent"
+  },
+  "operations": [
+    {
+      "id": "operation_0001",
+      "op": "replace_text",
+      "target": {
+        "node": "node_promise"
+      },
+      "precondition": {
+        "nodeRevision": "sha256:3e2e54707ac5a4095f5373dcce99a8da50359a89b4b16719754f89e248769a32",
+        "expectedText": "Agents produce"
+      },
+      "range": {
+        "start": 0,
+        "end": 14,
+        "unit": "unicode-code-point"
+      },
+      "value": "Agents propose changes"
+    }
+  ],
+  "status": "proposed",
+  "createdAt": "2026-08-24T00:01:00Z",
+  "motivatedBy": ["ann_0001"]
+}

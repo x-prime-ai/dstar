@@ -1,0 +1,29 @@
+{
+  "id": "node_root",
+  "type": "document",
+  "children": [
+    {
+      "id": "node_title",
+      "type": "heading",
+      "attrs": {
+        "level": 1
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello DSTAR"
+        }
+      ]
+    },
+    {
+      "id": "node_promise",
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Agents produce. Humans decide."
+        }
+      ]
+    }
+  ]
+}
