@@ -6,8 +6,8 @@
       "mediaType": "text/markdown",
       "path": "projections/document.md",
       "reviewable": true,
-      "generatedFromRevision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
-      "revision": "sha256:180eb03b4c36fc41234d438d17cd0efe79d8a2a4eb5fc0363bd0fe8b920cafbf",
+      "generatedFromRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
+      "revision": "sha256:6a951338ff903e3891ccdd2aa843d3c83f9f643f6638e3ffa55c275c1b503af5",
       "generator": {
         "actor": {
           "type": "service",
@@ -24,12 +24,12 @@
             {
               "type": "TextPositionSelector",
               "start": 15,
-              "end": 45,
+              "end": 55,
               "unit": "unicode-code-point"
             },
             {
               "type": "TextQuoteSelector",
-              "exact": "Agents produce. Humans decide."
+              "exact": "Agents author. Humans direct and decide."
             }
           ],
           "derivedFrom": [
@@ -47,8 +47,8 @@
       "mediaType": "text/markdown",
       "path": "projections/summary.md",
       "reviewable": true,
-      "generatedFromRevision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
-      "revision": "sha256:5742aaa6a98f7712c96236eb7effc040d00a2f1beac4f6d4cbd04a6b9a65aa8a",
+      "generatedFromRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
+      "revision": "sha256:c16a9a47ff1342393d4a110d9e8d09384d839911230e7d9bb7fde62aee70c0a8",
       "generator": {
         "actor": {
           "type": "agent",
@@ -64,12 +64,12 @@
             {
               "type": "TextPositionSelector",
               "start": 11,
-              "end": 75,
+              "end": 95,
               "unit": "unicode-code-point"
             },
             {
               "type": "TextQuoteSelector",
-              "exact": "Agents produce document content; humans make the final decision."
+              "exact": "Agents author canonical content; humans direct the work and decide what is accepted."
             }
           ],
           "derivedFrom": [
@@ -87,8 +87,8 @@
       "mediaType": "text/html",
       "path": "projections/document.html",
       "reviewable": true,
-      "generatedFromRevision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
-      "revision": "sha256:611d5a7efa76273ba49bf50e40adfce92f601ca84b9efc8f2df6617cf87fd906",
+      "generatedFromRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
+      "revision": "sha256:8a11b8bc7b118c4dc27eb8b9716267387392bf0ac45dad0f0b3279a03055209d",
       "generator": {
         "actor": {
           "type": "service",
@@ -127,7 +127,7 @@
             },
             {
               "type": "TextQuoteSelector",
-              "exact": "Agents produce. Humans decide."
+              "exact": "Agents author. Humans direct and decide."
             }
           ],
           "derivedFrom": [

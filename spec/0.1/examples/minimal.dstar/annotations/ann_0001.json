@@ -4,21 +4,21 @@
   "scope": "canonical",
   "target": {
     "source": "projection_html",
-    "revision": "sha256:611d5a7efa76273ba49bf50e40adfce92f601ca84b9efc8f2df6617cf87fd906",
+    "revision": "sha256:8a11b8bc7b118c4dc27eb8b9716267387392bf0ac45dad0f0b3279a03055209d",
     "selector": {
       "type": "SegmentSelector",
       "segment": "segment_html_promise",
       "refinedBy": [
         {
           "type": "TextPositionSelector",
-          "start": 16,
-          "end": 29,
+          "start": 15,
+          "end": 39,
           "unit": "unicode-code-point"
         },
         {
           "type": "TextQuoteSelector",
-          "exact": "Humans decide",
-          "prefix": "Agents produce. ",
+          "exact": "Humans direct and decide",
+          "prefix": "Agents author. ",
           "suffix": "."
         }
       ]
@@ -28,28 +28,28 @@
     {
       "relation": "exact",
       "source": "document",
-      "revision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
+      "revision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
       "selector": {
         "type": "NodeSelector",
         "node": "node_promise",
         "refinedBy": [
           {
             "type": "TextPositionSelector",
-            "start": 16,
-            "end": 29,
+            "start": 15,
+            "end": 39,
             "unit": "unicode-code-point"
           },
           {
             "type": "TextQuoteSelector",
-            "exact": "Humans decide",
-            "prefix": "Agents produce. ",
+            "exact": "Humans direct and decide",
+            "prefix": "Agents author. ",
             "suffix": "."
           }
         ]
       }
     }
   ],
-  "body": "Clarify what kinds of agent changes require human approval.",
+  "body": "Clarify the distinction between directing work and approving it.",
   "author": {
     "type": "human",
     "id": "human_demo",

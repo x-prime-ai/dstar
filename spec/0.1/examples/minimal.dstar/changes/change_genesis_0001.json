@@ -1,0 +1,57 @@
+{
+  "id": "change_genesis_0001",
+  "kind": "genesis",
+  "idempotencyKey": "example-genesis-0001",
+  "author": {
+    "type": "agent",
+    "id": "agent_demo",
+    "name": "Demo agent"
+  },
+  "operations": [
+    {
+      "id": "operation_genesis_0001",
+      "op": "create_document",
+      "value": {
+        "id": "node_root",
+        "type": "document",
+        "children": [
+          {
+            "id": "node_title",
+            "type": "heading",
+            "attrs": {
+              "level": 1
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Hello DSTAR"
+              }
+            ]
+          },
+          {
+            "id": "node_promise",
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Agents author. Humans direct and decide."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "status": "accepted",
+  "createdAt": "2026-08-23T23:59:00Z",
+  "decision": {
+    "status": "accepted",
+    "actor": {
+      "type": "human",
+      "id": "human_demo",
+      "name": "Demo reviewer"
+    },
+    "at": "2026-08-23T23:59:30Z",
+    "resultRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799"
+  }
+}

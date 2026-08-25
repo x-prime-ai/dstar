@@ -3,136 +3,233 @@
 ## The shift
 
 Documents were designed for a world in which people wrote and read nearly every
-word. Agents can now produce and maintain most of a document, while people
-increasingly read summaries, inspect important passages, leave feedback, and
-make final decisions.
+word. AI changes both sides of that relationship: agents can draft, transform,
+and maintain large amounts of content, while people increasingly direct the
+work, inspect what matters, discuss it, and make decisions.
 
-The scarce resource is no longer text production. It is human attention and
-judgment.
+The scarce resource is no longer text production. It is shared understanding,
+human attention, and accountable judgment.
 
-Existing formats do not preserve that new division of labor. Markdown is easy
-for agents but has no durable review model. HTML is expressive but mixes
-meaning with presentation. Office and workspace applications support comments
-and suggestions, but keep their content and review state inside a proprietary
-system.
+Existing formats do not preserve this new collaboration well. Markdown is easy
+to generate and inspect but has limited expressive power and no portable review
+model. HTML can create excellent reading experiences but mixes meaning with
+presentation and is a poor source of truth for structured change. Office and
+workspace applications support rich documents and comments, but keep content,
+review state, and automation inside a proprietary system.
 
 ## Vision
 
-DSTAR is an open, portable protocol for reviewable documents, where agents
-produce and maintain content while humans retain judgment and authority.
+DSTAR is an open, portable protocol for AI-native collaborative documents.
+Agents author and maintain canonical content; humans direct the work, comment
+on precise meaning, and decide what becomes part of the document.
 
 A DSTAR document is not only formatted text. It is a portable semantic object
-containing content, stable identity, discussion, proposed changes, evidence,
-assets, provenance, and addressable views. Humans and agents can use different
-views without creating different sources of truth.
+containing content, stable identity, discussion, delegations, proposed changes,
+evidence, assets, provenance, and addressable views. Humans and agents can use
+different interfaces and views without creating different sources of truth.
 
-DSTAR standardizes the object that moves between editors and agents. It does
-not standardize a particular editor, model, collaboration server, or user
-interface.
+DSTAR standardizes the document object that moves between review clients,
+renderers, and agents. It does not standardize a particular model,
+collaboration server, storage backend, or user interface.
 
 ## Product promise
 
 With DSTAR, a person should be able to:
 
-- read a rich document, summary, or other projection;
-- comment on a precise passage or semantic object in that view;
-- retain the comment's connection to canonical content across regeneration and
-  rewrites;
-- assign the feedback to any capable agent;
-- inspect the agent's proposed change as a local, source-backed diff;
-- accept, reject, or continue the discussion; and
-- move the document, its review state, and its decision history to another
-  conforming tool.
+- read a polished, accessible document with the expressive range expected from
+  a modern web experience;
+- select a precise passage or semantic object and start a portable discussion;
+- leave a comment without immediately assigning it to an agent;
+- delegate an anchored comment or requested change to a capable agent;
+- inspect the agent's local, source-backed proposal before it is committed;
+- understand which sources, comments, delegations, and actors motivated a
+  change;
+- retain review provenance when content or a derived view changes; and
+- move the document, its collaboration state, and its decision history to
+  another conforming tool.
 
 An agent should be able to:
 
-- request only the context relevant to its task;
-- address document objects by stable identifiers;
-- understand which projection and source material a person reviewed;
+- create the initial canonical document from human direction and evidence;
+- request only the semantic content and review context relevant to its task;
+- address document objects by stable identifiers rather than DOM paths or line
+  numbers;
+- understand what a person saw, selected, discussed, and delegated;
 - make structured, conflict-aware, idempotent proposals;
-- explain which feedback and evidence motivated a change; and
+- preserve content and extensions it does not understand; and
 - work without parsing presentation-oriented HTML or proprietary office XML.
 
 ## The DSTAR object
 
 DSTAR separates five connected layers:
 
-1. **Canonical content** — a small semantic document tree with durable IDs.
-2. **Review state** — comments and threads stored outside canonical content.
-3. **Changes** — revision-aware proposals that require an explicit decision.
+1. **Canonical content** — an agent-authored semantic document tree with durable
+   IDs.
+2. **Collaboration state** — comments, replies, delegations, and their lifecycle
+   outside canonical content.
+3. **Changes** — agent-authored, revision-aware proposals that require a human
+   decision.
 4. **Evidence and provenance** — sources, actors, generators, and motivations.
 5. **Projections** — addressable human and agent views with mappings back to
    canonical content.
 
-The portable review state is the center of the design. Rich-text editing,
-real-time collaboration, and AI chat are implementation capabilities around
-that object.
+In DSTAR 0.1, canonical content is the JSON semantic tree in `document.json`
+inside a `.dstar` directory. Markdown, HTML, summaries, and agent context are
+projections, imports, or exports; they are not competing canonical sources.
 
-## Initial users
+The semantic tree stores meaning and review identity. It does not attempt to
+store a browser DOM or all of CSS. Content profiles, assets, renderers, and
+themes provide rich tables, figures, media, equations, interactive components,
+and presentation without turning generated HTML into the source of truth.
 
-The first users are individuals and small teams that already use coding agents,
-Markdown, and Git for product specifications, technical designs, RFCs, research
-reports, and similar documents.
+## Initial users and documents
 
-This audience has an immediate need for reviewable agent edits and can evaluate
-the protocol without requiring a complete office suite.
+The first users are individuals and small teams already using AI to create and
+maintain consequential, long-lived documents. They need a strong reading
+experience, precise discussion, and fast agent-mediated updates, but do not want
+those capabilities tied to one workspace application.
+
+Initial document categories include:
+
+- product specifications and design documents;
+- research reports and analyses;
+- proposals, plans, and decision records;
+- tutorials, manuals, and knowledge documents; and
+- rich documents containing tables, figures, citations, media, or embeds.
+
+The first implementation may use local files and asynchronous collaboration to
+keep the protocol testable. DSTAR does not require Git or assume that its users
+are software developers.
+
+## Experience model
+
+A person encounters a DSTAR document through reviewable views, not by directly
+manipulating canonical content:
+
+- A **canonical view** is a faithful, read-only rendering of the current
+  semantic document. A selection maps directly to canonical nodes and ranges.
+- A **projection** is a derived, versioned view such as a polished HTML report,
+  summary, Markdown export, or focused agent context. A selection maps through
+  the projection's source map to canonical content.
+
+Both may look like rich HTML in a browser. Human actions create comments,
+delegations, replies, and decisions. Every canonical content change, including
+a typo fix, is produced by an agent as a proposal.
+
+The human creates the selection in the displayed view. DSTAR records semantic
+identity, quotation, position, context, and projection mappings so that target
+precision is a protocol property rather than a model's guess from natural
+language.
 
 ## North-star workflow
 
 ```text
-agent produces canonical document
-    -> human reads a projection
-    -> human comments on meaning
-    -> agent proposes a traceable change
-    -> human decides
-    -> projections regenerate without losing review context
+human provides intent and evidence
+    -> agent creates or updates the semantic document
+    -> a person reads it through a rich web experience
+    -> the person selects content and comments
+    -> the comment remains open, is discussed, or is delegated to an agent
+    -> the agent returns a local, traceable proposal
+    -> an authorized person accepts, rejects, or continues the discussion
+    -> the document and its views update without silently losing review context
 ```
 
-The primary success measure is the time from a human comment to a correct,
-reviewable change. Generated word count is not a success measure.
+Success is measured by whether DSTAR improves collaboration and preserves
+understanding, not by generated word count. Initial measures are:
+
+- time from a comment or delegation to a correct, reviewable proposal;
+- selection-to-proposal latency and acceptance rate for trivial changes;
+- the share of review targets that remain exactly or unambiguously resolvable
+  after changes and projection regeneration;
+- the rate at which proposals require regeneration before a decision; and
+- preservation of content and collaboration state across independent tools.
 
 ## Principles
 
-### Human judgment is the authority boundary
+### Agents author, humans direct and decide
 
-Agent-authored changes are proposals until an authorized human or policy makes
-an explicit decision. Provenance records who proposed and who approved every
-material change. An agent cannot be the sole approver of its own proposal.
+Agents produce and modify all canonical content. Humans do not edit canonical
+content directly, at any scale, including trivial changes such as typo fixes.
+Every content change is an agent-mediated, provenance-bearing proposal that a
+human accepts, rejects, supersedes, or continues to discuss.
 
-### Portable review state
+Humans retain full authority over what becomes canonical, but exercise that
+authority through direction, precise feedback, delegation, and decision rather
+than direct manipulation of the document.
 
-Comments, replies, suggestions, decisions, and their targets travel with the
-document. They are not database-only application metadata.
+### Comments exist before delegation
 
-### Semantic identity with redundant anchors
+A human can select content and create a durable comment without invoking an
+agent. The comment may support discussion, mark an unresolved question, or
+remain open for later work. Delegation is a separate, explicit action that
+assigns an existing comment or request to an agent.
 
-Document objects have durable identifiers. Inline ranges also carry position,
-quotation, and surrounding context. No single positional coordinate is trusted
-to survive a rewrite.
+Comment lifecycle, delegation lifecycle, and change lifecycle remain distinct.
+Producing a proposal does not silently resolve the comment that motivated it.
+
+Delegation assumes an existing annotation anchored to canonical content or a
+projection. Genesis is the only authoring path without a pre-existing document
+target: the human provides intent and evidence, and an agent proposes the
+initial canonical document.
+
+### Human approval is the commit boundary
+
+In DSTAR 0.1, accepting any canonical content change requires an explicit
+decision by an authorized human. Policies and services may validate, block,
+defer, or request a new proposal, but they do not act as an accepting authority.
+Provenance records which agent authored and which human accepted each change.
+
+### Portable collaboration state
+
+Comments, replies, delegations, proposals, decisions, and their targets travel
+with the document. They are not database-only application metadata. Real-time
+presence and synchronization may be provided by an implementation without
+becoming the only durable copy of collaboration state.
+
+### Precise human selection, durable semantic anchors
+
+Humans select text or semantic objects in the view they actually saw. Document
+objects have durable identifiers; inline ranges also carry position, quotation,
+and surrounding context. Projection selections carry explicit source mappings.
+No single positional coordinate is trusted to survive a rewrite, and an agent
+is never asked to infer the original target from prose alone.
+
+Moving or changing the same semantic object preserves its ID. Splitting or
+merging objects creates an identity-lineage question rather than silently
+assigning an old ID to an arbitrary result. DSTAR 0.1 favors an unresolved
+target over an incorrectly reattached comment; portable lineage for structural
+rewrites remains an open design problem.
 
 ### Local proposals over whole-document rewrites
 
-Agents propose ordered operations against explicit targets, revisions, and
-local preconditions. Replacing an entire document is exceptional, not the
-default.
+After initial document creation, agents propose ordered operations against
+explicit targets, revisions, and local preconditions. Replacing an entire
+existing document is exceptional, not the default.
 
 ### One truth, multiple addressable views
 
-Markdown, HTML, summaries, and agent context are projections of the canonical
-document. A projection may be regenerated, but its version and its mapping to
-canonical nodes are explicit so that review performed on the projection is not
-lost.
+A canonical view, HTML report, summary, Markdown export, and agent context may
+present the same document differently. Only the canonical semantic document is
+the source of truth. Derived projections carry explicit versions and mappings
+so that review performed on them remains explainable.
 
-A comment made on a projection records both what the person actually saw and
-the canonical sources from which it was derived. That source link preserves
-provenance without assuming that every projection comment requests a change to
-canonical content.
+A projection comment records both what the person actually saw and the
+canonical sources from which it was derived. After regeneration, a tool may
+reattach it only when the new mapping is unambiguous. Otherwise the comment
+remains visible as unresolved review work with its original provenance intact.
+
+### Rich expression through semantic composition
+
+DSTAR should support excellent human reading experiences without making HTML
+or a specific application schema canonical. A small semantic core composes with
+declared profiles, assets, themes, and deterministic renderers. Unsupported
+rich objects produce visible fallbacks and remain losslessly preservable.
 
 ### Open files and replaceable implementations
 
 A document remains inspectable and recoverable without a hosted DSTAR service.
-Any editor or agent can implement the protocol, and no reference application
-defines the format by itself.
+Any review client, renderer, or agent can implement the protocol, and no
+reference application defines the format by itself.
 
 ### Small core, explicit profiles
 
@@ -140,36 +237,45 @@ The base content model stays small. Rich domain objects are introduced through
 named profiles and extensions that conforming readers can preserve even when
 they cannot render them.
 
-### Graceful degradation
-
-Core text, metadata, and assets use broadly supported encodings. Unsupported
-content produces a visible fallback or diagnostic rather than disappearing.
-
 ## First milestone
 
-DSTAR 0.1 will prove one interoperable review loop:
+DSTAR 0.1 will prove one interoperable creation and review loop:
 
-1. Store a small semantic document in a `.dstar` directory.
-2. Generate a summary projection with mappings to canonical nodes.
-3. Attach a comment using stable identity, range, quotation, and revision.
-4. Create an agent-authored change with document and operation preconditions.
-5. Detect a stale or locally conflicting proposal without overwriting content.
-6. Accept or reject the proposal with separate authorship and decision records.
-7. Render the resulting document and preserve projection review context.
-8. Validate the same package with an independent conforming implementation.
+1. Record an agent-authored genesis proposal and human acceptance that create a
+   small semantic document in a `.dstar` directory.
+2. Render the document as a rich canonical view and reviewable HTML projection.
+3. Attach a comment to a human-created selection in either view.
+4. Leave the comment open or explicitly delegate it to an agent.
+5. Create an agent-authored local change with document and operation
+   preconditions.
+6. Detect a stale or locally conflicting proposal without overwriting content.
+7. Accept, reject, supersede, or regenerate the proposal without mutating its
+   original payload.
+8. Regenerate affected views while preserving original review provenance and
+   surfacing ambiguous targets for human confirmation.
+9. Validate the same package with an independent conforming implementation.
+
+Conflict detection is in scope for 0.1. A conflicting proposal remains
+unapplied and may be rejected, superseded, or replaced by an explicit rebased
+proposal. Interactive merge and conflict-resolution UX is deferred.
 
 ## Non-goals for 0.1
 
-- Google Docs or Microsoft Word feature parity
-- Real-time multi-user collaboration or a standardized CRDT
-- Pixel-perfect DOCX round trips
+- Any interface for directly editing canonical content, including typo fixes or
+  other small changes; all content changes are agent-mediated proposals
+- Google Docs, Notion, or Microsoft Word feature parity
+- Real-time multi-user synchronization or a standardized CRDT; these are
+  deferred, not permanently excluded
+- Cryptographic proof that no out-of-band modification has occurred
+- Pixel-perfect DOCX round trips or a general-purpose browser layout engine
+- Standardizing a viewer's DOM, selection implementation, or transient positions
 - A built-in model provider or model subscription
 - Cloud accounts, billing, or organization administration
 - A complete knowledge base or retrieval system
-- Standardizing every possible rich-content node
-- Standardizing an editor's internal document model or transient positions
+- Standardizing every possible rich-content node or interaction
+- Requiring Git, a hosted review service, or a particular storage backend
 - Treating generated content volume as product value
 
 The specification should remain small enough that an independent developer can
-write a conforming reader and review client without adopting the reference
-implementation.
+write a conforming reader, renderer, review client, and change processor without
+adopting the reference implementation.

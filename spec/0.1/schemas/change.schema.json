@@ -5,8 +5,8 @@
   "type": "object",
   "required": [
     "id",
+    "kind",
     "idempotencyKey",
-    "baseRevision",
     "author",
     "operations",
     "status",
@@ -14,17 +14,28 @@
   ],
   "properties": {
     "id": { "$ref": "#/$defs/id" },
+    "kind": { "enum": ["genesis", "update"] },
     "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 255 },
     "baseRevision": { "$ref": "#/$defs/revision" },
-    "author": { "$ref": "#/$defs/actor" },
+    "author": { "$ref": "#/$defs/agentActor" },
     "operations": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/operation" }
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/createDocumentOperation" },
+          { "$ref": "#/$defs/updateOperation" }
+        ]
+      }
     },
     "status": { "enum": ["proposed", "accepted", "rejected", "superseded"] },
     "createdAt": { "type": "string", "format": "date-time" },
     "motivatedBy": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/id" },
+      "uniqueItems": true
+    },
+    "fulfills": {
       "type": "array",
       "items": { "$ref": "#/$defs/id" },
       "uniqueItems": true
@@ -59,6 +70,30 @@
           "decision": { "required": ["resultRevision"] }
         }
       }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "const": "genesis" } },
+        "required": ["kind"]
+      },
+      "then": {
+        "not": { "required": ["baseRevision"] },
+        "properties": {
+          "operations": {
+            "minItems": 1,
+            "maxItems": 1,
+            "items": { "$ref": "#/$defs/createDocumentOperation" }
+          }
+        }
+      },
+      "else": {
+        "required": ["baseRevision"],
+        "properties": {
+          "operations": {
+            "items": { "$ref": "#/$defs/updateOperation" }
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -86,6 +121,24 @@
         "^x-": true
       },
       "additionalProperties": false
+    },
+    "agentActor": {
+      "allOf": [
+        { "$ref": "#/$defs/actor" },
+        {
+          "properties": { "type": { "const": "agent" } },
+          "required": ["type"]
+        }
+      ]
+    },
+    "humanActor": {
+      "allOf": [
+        { "$ref": "#/$defs/actor" },
+        {
+          "properties": { "type": { "const": "human" } },
+          "required": ["type"]
+        }
+      ]
     },
     "target": {
       "type": "object",
@@ -125,7 +178,17 @@
       },
       "additionalProperties": false
     },
-    "operation": {
+    "createDocumentOperation": {
+      "type": "object",
+      "required": ["id", "op", "value"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "op": { "const": "create_document" },
+        "value": { "$ref": "document.schema.json" }
+      },
+      "additionalProperties": false
+    },
+    "updateOperation": {
       "type": "object",
       "required": ["id", "op", "target", "precondition"],
       "properties": {
@@ -182,7 +245,7 @@
       "required": ["status", "actor", "at"],
       "properties": {
         "status": { "enum": ["accepted", "rejected", "superseded"] },
-        "actor": { "$ref": "#/$defs/actor" },
+        "actor": { "$ref": "#/$defs/humanActor" },
         "at": { "type": "string", "format": "date-time" },
         "reason": { "type": "string" },
         "resultRevision": { "$ref": "#/$defs/revision" }

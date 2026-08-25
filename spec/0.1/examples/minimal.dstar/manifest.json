@@ -1,11 +1,12 @@
 {
   "dstar": "0.1",
   "id": "doc_minimal",
-  "revision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
+  "revision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
   "title": "Hello DSTAR",
   "profiles": ["dstar:base"],
   "document": "document.json",
   "annotations": "annotations",
+  "delegations": "delegations",
   "sources": "sources.json",
   "changes": "changes",
   "assets": "assets",

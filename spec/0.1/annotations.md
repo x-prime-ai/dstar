@@ -42,10 +42,33 @@ summary segment records which canonical nodes it summarizes.
 An annotation directly targeting `document` MUST use canonical scope. An
 annotation targeting a projection MAY use any scope.
 
+## Comment creation and delegation
+
+A human MAY create an annotation directly from a selection without assigning it
+to an agent. The annotation can support discussion, record an unresolved issue,
+or remain open for later work.
+
+Assigning the comment to an agent is a separate operation represented by a
+[delegation](delegations.md). Creating, completing, or cancelling a delegation
+MUST NOT implicitly resolve the annotation. Likewise, resolving an annotation
+does not rewrite the history of its delegations or resulting changes.
+
 ## Target model
 
 A target identifies a source, a source revision, and a selector. Canonical
 content uses source `document`; a projection uses its projection ID.
+
+A comment made in a canonical view targets `document`, even when the view is
+implemented with HTML. The Review Client converts the browser or native
+selection into a `NodeSelector`. A comment made while viewing a separately
+versioned projection targets that projection and copies its source mappings
+into `canonicalTargets`. Visual similarity between the two views does not
+change which object the person actually reviewed.
+
+The selection MUST originate from the view the human actually inspected. A
+natural-language description interpreted by an agent MAY supplement the
+comment, but it MUST NOT replace portable semantic and quotation anchors when a
+precise selection is available.
 
 A canonical selection uses `NodeSelector` with optional position and quotation
 evidence:
@@ -60,13 +83,13 @@ evidence:
     "refinedBy": [
       {
         "type": "TextPositionSelector",
-        "start": 16,
-        "end": 29,
+        "start": 15,
+        "end": 39,
         "unit": "unicode-code-point"
       },
       {
         "type": "TextQuoteSelector",
-        "exact": "Humans decide"
+        "exact": "Humans direct and decide"
       }
     ]
   }
@@ -75,7 +98,7 @@ evidence:
 
 `TextPositionSelector` and `TextQuoteSelector` describe the same intended
 segment using independent evidence. Position is fast but brittle. Exact text
-and optional prefix/suffix provide validation and recovery after edits.
+and optional prefix/suffix provide validation and recovery after changes.
 
 Node-level comments omit `refinedBy`.
 
@@ -92,13 +115,13 @@ visible text stream, not to raw HTML bytes:
   "refinedBy": [
     {
       "type": "TextPositionSelector",
-      "start": 16,
-      "end": 29,
+      "start": 15,
+      "end": 39,
       "unit": "unicode-code-point"
     },
     {
       "type": "TextQuoteSelector",
-      "exact": "Humans decide"
+      "exact": "Humans direct and decide"
     }
   ]
 }
@@ -171,9 +194,23 @@ A Review Client resolving an inline canonical target MUST:
 Projection target resolution first locates the segment or segment range in the
 recorded projection revision, then applies the same quotation checks.
 
+After an accepted canonical change or projection regeneration, a client MAY
+show an old annotation in the new view only when its canonical target and
+current mapping resolve exactly or unambiguously. Otherwise it MUST retain the
+original target and provenance and surface the thread as `ambiguous`,
+`orphaned`, or `missing-source` review work requiring confirmation.
+
 An implementation MUST NOT silently attach a comment to different text when
 the target cannot be recovered unambiguously. Resolution state is computed by
 the client and does not change the annotation's stored target.
+
+## Collaboration boundary
+
+Annotation files are the portable snapshot of asynchronous discussion. An
+implementation MAY provide live cursors, presence, notifications, access
+control, or CRDT-backed synchronization, but those services do not replace the
+portable thread records. DSTAR 0.1 does not define concurrent write resolution
+for two tools editing the same annotation file.
 
 ## Audience
 

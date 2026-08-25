@@ -1,3 +1,3 @@
 # Summary
 
-Agents produce document content; humans make the final decision.
+Agents author canonical content; humans direct the work and decide what is accepted.

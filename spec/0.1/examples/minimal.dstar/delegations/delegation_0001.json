@@ -1,0 +1,19 @@
+{
+  "id": "delegation_0001",
+  "annotation": "ann_0001",
+  "assignee": {
+    "type": "agent",
+    "id": "agent_demo",
+    "name": "Demo agent"
+  },
+  "createdBy": {
+    "type": "human",
+    "id": "human_demo",
+    "name": "Demo reviewer"
+  },
+  "instruction": "Propose a concise clarification without changing the authority boundary.",
+  "status": "completed",
+  "createdAt": "2026-08-24T00:00:30Z",
+  "completedAt": "2026-08-24T00:01:00Z",
+  "resultChanges": ["change_0001"]
+}

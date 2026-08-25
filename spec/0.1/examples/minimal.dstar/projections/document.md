@@ -1,3 +1,3 @@
 # Hello DSTAR
 
-Agents produce. Humans decide.
+Agents author. Humans direct and decide.

@@ -1,7 +1,8 @@
 {
   "id": "change_0001",
+  "kind": "update",
   "idempotencyKey": "example-change-0001",
-  "baseRevision": "sha256:13d3c46034c8f14f5f5a8028447cecf2c37d027126f081c7b1916e354bc47efa",
+  "baseRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
   "author": {
     "type": "agent",
     "id": "agent_demo",
@@ -15,18 +16,19 @@
         "node": "node_promise"
       },
       "precondition": {
-        "nodeRevision": "sha256:3e2e54707ac5a4095f5373dcce99a8da50359a89b4b16719754f89e248769a32",
-        "expectedText": "Agents produce"
+        "nodeRevision": "sha256:50752f49235e617d6742f038497605ae903881843918ae3dbb6b545eb7aea9bd",
+        "expectedText": "Humans direct and decide"
       },
       "range": {
-        "start": 0,
-        "end": 14,
+        "start": 15,
+        "end": 39,
         "unit": "unicode-code-point"
       },
-      "value": "Agents propose changes"
+      "value": "Humans direct, review, and decide"
     }
   ],
   "status": "proposed",
   "createdAt": "2026-08-24T00:01:00Z",
-  "motivatedBy": ["ann_0001"]
+  "motivatedBy": ["ann_0001"],
+  "fulfills": ["delegation_0001"]
 }

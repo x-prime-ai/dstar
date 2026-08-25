@@ -13,6 +13,20 @@ Expected roles include:
 - `plain-text` for search and accessibility; and
 - `agent-context` for targeted machine operations.
 
+## Canonical views and projections
+
+A canonical view faithfully renders the current semantic tree and is not a
+separately versioned artifact. A human selection in that view targets
+`document` directly.
+
+A projection is a separately versioned artifact derived from a canonical
+revision. A human selection in a projection targets the artifact the person
+actually saw and copies its source mappings back to canonical content.
+
+Both may look like polished HTML in a browser. Neither provides direct canonical
+editing in DSTAR 0.1. Human actions create comments, delegations, replies, or
+decisions; agents alone create canonical content proposals.
+
 ## Projection index
 
 When `projections/` exists, `projections/index.json` MUST describe every
@@ -85,16 +99,25 @@ canonical document, the projection or its generator, or both. Source mappings
 do not imply edit intent.
 
 After regeneration, a client MAY use canonical targets and the new source map
-to show the annotation in the new view. It MUST preserve the original projection
-revision, visible quotation, and copied mappings as review provenance.
+to show the annotation in the new view only when the mapping is unique and
+unambiguous. It MUST preserve the original projection revision, visible
+quotation, and copied mappings as review provenance. If exact or unambiguous
+reattachment is impossible, the client MUST keep the thread visible as
+unresolved review work rather than silently choosing a new location.
 
 ## HTML projections
+
+HTML is the primary rich human projection expected in DSTAR 0.1. A renderer may
+combine semantic nodes, declared profiles, package assets, and a theme to
+produce tables, figures, media, citations, accessible fallbacks, and other
+polished presentation. Meaningful content MUST remain traceable to canonical
+nodes and MUST NOT exist only in generated markup.
 
 A reviewable HTML projection SHOULD use markup such as:
 
 ```html
 <p data-dstar-segment="segment_html_promise">
-  Agents produce. Humans decide.
+  Agents author. Humans direct and decide.
 </p>
 ```
 

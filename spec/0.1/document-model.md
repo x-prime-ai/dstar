@@ -20,6 +20,25 @@ Node identity is independent of tree position. Reordering a node does not create
 a new node. A renderer's DOM path, ProseMirror position, or CRDT item ID is not a
 DSTAR node ID.
 
+## Rich content boundary
+
+The canonical tree stores meaning and structure, not a browser DOM or
+a complete presentation program. The base profile covers common document
+semantics; declared profiles may add figures, citations, equations, charts,
+callouts, media, interactive components, layout hints, or domain-specific
+objects.
+
+Renderers combine canonical nodes, profiles, assets, and a theme to create a
+polished HTML or other human experience. Presentation that does not change the
+document's meaning belongs in the renderer or projection. Meaningful content
+MUST NOT exist only in generated markup if it is expected to survive accepted
+changes, export, or a change of implementation.
+
+An implementation that cannot render or transform a profile-defined object MUST
+preserve it losslessly and provide a visible fallback or diagnostic. Richness is
+therefore extensible without making one editor schema or arbitrary HTML
+canonical.
+
 ## Base node types
 
 DSTAR 0.1 reserves these types in the `dstar:base` profile:
@@ -42,6 +61,21 @@ The root MUST have type `document`. The initial conformance examples exercise
 only `document`, `heading`, and `paragraph`; detailed containment rules for the
 remaining types are still pre-draft.
 
+## Authoring boundary
+
+The initial root document is produced by an agent in a genesis proposal. Every
+later canonical transformation is also authored by an agent using the
+operations in [Changes](changes.md). A Core Writer materializes canonical
+content only after an authorized human accepts the proposal.
+
+Human selection, comment, delegation, and decision actions do not directly
+mutate this tree. A DSTAR 0.1 authoring client MUST NOT serialize DOM mutations,
+editor-specific JSON, exact human replacement text, or transient selection
+positions as a human-authored canonical change.
+
+This is a behavioral boundary for conforming tools, not a cryptographic claim
+about the package's filesystem history.
+
 ## Inline content
 
 Inline content is an ordered array. The required base inline type is `text`:
@@ -49,7 +83,7 @@ Inline content is an ordered array. The required base inline type is `text`:
 ```json
 {
   "type": "text",
-  "text": "Agents produce. Humans decide.",
+  "text": "Agents author. Humans direct and decide.",
   "marks": [
     { "type": "strong" }
   ]
@@ -79,6 +113,20 @@ grapheme cluster. Adapters for editors that use UTF-16 or another coordinate
 system MUST convert at the protocol boundary.
 
 Cross-node text ranges are not part of the base 0.1 profile.
+
+## Identity across accepted transformations
+
+Changing a node's text or attributes, or moving the same semantic object within
+the tree, SHOULD preserve its ID. Copying an object creates a new ID.
+
+Splitting one semantic object into multiple objects or merging multiple objects
+creates new semantic identity. Until DSTAR defines portable lineage, a 0.1
+writer SHOULD assign new IDs to every split or merged result rather than attach
+an old ID to an arbitrary descendant. Existing annotations then resolve through
+their redundant anchors or become explicitly ambiguous or orphaned.
+
+Implementations MAY retain richer local lineage to assist recovery, but they
+MUST NOT silently claim an exact target when the relationship is ambiguous.
 
 ## Revision
 
