@@ -93,8 +93,9 @@
     },
     "canonicalTarget": {
       "type": "object",
-      "required": ["node"],
+      "required": ["relation", "node"],
       "properties": {
+        "relation": { "enum": ["exact", "transformed", "summarizes"] },
         "node": { "$ref": "#/$defs/id" },
         "refinedBy": {
           "type": "array",
@@ -137,6 +138,7 @@
         "role",
         "mediaType",
         "path",
+        "reviewable",
         "generatedFromRevision",
         "revision"
       ],
@@ -152,6 +154,7 @@
           "minLength": 1,
           "pattern": "^(?!/)(?!.*\\.\\./).+$"
         },
+        "reviewable": { "type": "boolean" },
         "generatedFromRevision": { "$ref": "#/$defs/revision" },
         "revision": { "$ref": "#/$defs/revision" },
         "generator": { "$ref": "#/$defs/generator" },
@@ -163,7 +166,21 @@
       "patternProperties": {
         "^x-": true
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "reviewable": { "const": true } },
+            "required": ["reviewable"]
+          },
+          "then": {
+            "required": ["segments"],
+            "properties": {
+              "segments": { "minItems": 1 }
+            }
+          }
+        }
+      ]
     }
   }
 }

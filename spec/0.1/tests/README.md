@@ -28,8 +28,13 @@ codes, and operation triples where behavior changes state.
 - stale position recovered by quotation and context
 - ambiguous quotation remains unattached
 - missing node produces `orphaned`
-- projection comment includes a valid canonical target
-- projection comment without a canonical target is invalid
+- HTML selection within one mapped segment resolves to an exact canonical range
+- HTML selection across mapped elements produces a `SegmentRangeSelector`
+- projection comment includes all intersected canonical targets
+- projection comment without canonical targets is invalid
+- transformed or summarized mapping does not invent an exact source range
+- projection-scoped feedback does not request a canonical change
+- a direct document target with projection scope is invalid
 - agent-context projection omits human-only annotations
 
 ## Planned Change fixtures
@@ -47,6 +52,9 @@ codes, and operation triples where behavior changes state.
 ## Planned Projection Renderer fixtures
 
 - summary segment maps to an existing canonical node
+- reviewable HTML exposes indexed `data-dstar-segment` values
+- a reviewable projection without complete segment mapping is invalid
+- exact, transformed, and summarizes mappings are preserved
 - projection hash matches raw artifact bytes
 - regenerated projection preserves review context
 - missing source node in `derivedFrom` is invalid

@@ -8,8 +8,9 @@ that workflow portable: Markdown lacks durable review state, HTML mixes meaning
 with presentation, and office or workspace applications keep comments and
 suggestions inside proprietary systems.
 
-DSTAR packages canonical content, annotations, proposed changes, sources,
-assets, provenance, and mapped projections as distinct but connected objects.
+DSTAR packages canonical content — the authoritative source of truth — with
+annotations, proposed changes, sources, assets, provenance, and mapped
+projections as distinct but connected objects.
 
 > Agents produce. Humans decide.
 

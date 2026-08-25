@@ -3,12 +3,26 @@
   "$id": "https://dstar.dev/spec/0.1/schemas/annotation.schema.json",
   "title": "DSTAR 0.1 Annotation Thread",
   "type": "object",
-  "required": ["id", "type", "target", "body", "author", "status", "createdAt"],
+  "required": [
+    "id",
+    "type",
+    "scope",
+    "target",
+    "body",
+    "author",
+    "status",
+    "createdAt"
+  ],
   "properties": {
     "id": { "$ref": "#/$defs/id" },
     "type": { "type": "string", "minLength": 1 },
+    "scope": { "enum": ["canonical", "projection", "both"] },
     "target": { "$ref": "#/$defs/target" },
-    "canonicalTarget": { "$ref": "#/$defs/canonicalTarget" },
+    "canonicalTargets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/canonicalTarget" }
+    },
     "body": { "type": "string", "minLength": 1 },
     "author": { "$ref": "#/$defs/actor" },
     "replies": {
@@ -35,15 +49,16 @@
       "if": {
         "properties": {
           "target": {
-            "properties": {
-              "source": { "not": { "const": "document" } }
-            },
+            "properties": { "source": { "const": "document" } },
             "required": ["source"]
           }
         },
         "required": ["target"]
       },
-      "then": { "required": ["canonicalTarget"] }
+      "then": {
+        "properties": { "scope": { "const": "canonical" } }
+      },
+      "else": { "required": ["canonicalTargets"] }
     },
     {
       "if": {
@@ -139,6 +154,29 @@
       },
       "additionalProperties": false
     },
+    "segmentPoint": {
+      "type": "object",
+      "required": ["segment", "offset"],
+      "properties": {
+        "segment": { "$ref": "#/$defs/id" },
+        "offset": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "segmentRangeSelector": {
+      "type": "object",
+      "required": ["type", "start", "end", "unit", "exact"],
+      "properties": {
+        "type": { "const": "SegmentRangeSelector" },
+        "start": { "$ref": "#/$defs/segmentPoint" },
+        "end": { "$ref": "#/$defs/segmentPoint" },
+        "unit": { "const": "unicode-code-point" },
+        "exact": { "type": "string", "minLength": 1 },
+        "prefix": { "type": "string" },
+        "suffix": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
     "target": {
       "type": "object",
       "required": ["source", "revision", "selector"],
@@ -148,7 +186,8 @@
         "selector": {
           "oneOf": [
             { "$ref": "#/$defs/nodeSelector" },
-            { "$ref": "#/$defs/segmentSelector" }
+            { "$ref": "#/$defs/segmentSelector" },
+            { "$ref": "#/$defs/segmentRangeSelector" }
           ]
         }
       },
@@ -163,21 +202,28 @@
             "properties": { "selector": { "$ref": "#/$defs/nodeSelector" } }
           },
           "else": {
-            "properties": { "selector": { "$ref": "#/$defs/segmentSelector" } }
+            "properties": {
+              "selector": {
+                "oneOf": [
+                  { "$ref": "#/$defs/segmentSelector" },
+                  { "$ref": "#/$defs/segmentRangeSelector" }
+                ]
+              }
+            }
           }
         }
       ]
     },
     "canonicalTarget": {
-      "allOf": [
-        { "$ref": "#/$defs/target" },
-        {
-          "properties": {
-            "source": { "const": "document" },
-            "selector": { "$ref": "#/$defs/nodeSelector" }
-          }
-        }
-      ]
+      "type": "object",
+      "required": ["relation", "source", "revision", "selector"],
+      "properties": {
+        "relation": { "enum": ["exact", "transformed", "summarizes"] },
+        "source": { "const": "document" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "selector": { "$ref": "#/$defs/nodeSelector" }
+      },
+      "additionalProperties": false
     },
     "reply": {
       "type": "object",

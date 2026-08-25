@@ -123,6 +123,11 @@ document. A projection may be regenerated, but its version and its mapping to
 canonical nodes are explicit so that review performed on the projection is not
 lost.
 
+A comment made on a projection records both what the person actually saw and
+the canonical sources from which it was derived. That source link preserves
+provenance without assuming that every projection comment requests a change to
+canonical content.
+
 ### Open files and replaceable implementations
 
 A document remains inspectable and recoverable without a hosted DSTAR service.

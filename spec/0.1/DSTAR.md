@@ -22,6 +22,19 @@ DSTAR defines a portable, reviewable document object consisting of:
 DSTAR does not define an editor UI, collaboration transport, database, CRDT,
 model provider, authentication system, or hosting service.
 
+### 1.1. Terminology
+
+- **Canonical document** is the authoritative source of truth stored in
+  `document.json`. “Canonical” describes authority, not a presentation format.
+- **Canonical target** identifies content in that source of truth.
+- **Projection** is a derived view such as HTML, Markdown, a summary, or agent
+  context. A projection can be reviewed but does not replace the canonical
+  document.
+- **Primary target** records what an annotation author actually reviewed.
+
+Implementations MAY use friendlier UI labels such as “original” or “main
+document” while retaining these protocol terms in serialized data.
+
 ## 2. Architecture
 
 A DSTAR package has one canonical document and four connected non-content
@@ -37,7 +50,8 @@ canonical document
 
 Annotations and changes refer to canonical nodes by durable ID. A projection is
 derived, but it has its own ID and revision so a person can review it. Projection
-segments map back to the canonical nodes from which they were derived.
+segments act as a source map back to one or more canonical nodes or ranges, with
+an explicit `exact`, `transformed`, or `summarizes` relationship.
 
 ## 3. Package
 
@@ -158,6 +172,11 @@ An annotation MAY declare an intended audience. This is a context-disclosure
 instruction for conforming tools, not an encryption or filesystem security
 boundary.
 
+An annotation also declares whether its requested work concerns canonical
+content, the reviewed projection, or both. Mapping a projection selection to
+canonical sources records provenance; it does not by itself authorize or request
+a canonical edit.
+
 ## 9. Component specifications
 
 - [Document model](document-model.md)
@@ -205,6 +224,6 @@ backward-incompatible changes.
 - Deterministic ZIP packing rules and a packed media type
 - Asset integrity and its relationship to canonical revision
 - Profile discovery and registry policy
-- Cross-node inline selections
+- Cross-node ranges within the canonical document
 - Event-log and archival representation for complete audit history
 - Conformance fixtures and required error codes for each role
