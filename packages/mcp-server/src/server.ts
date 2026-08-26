@@ -1,5 +1,6 @@
 import {
   McpServer,
+  ResourceTemplate,
   fromJsonSchema,
   type CallToolResult,
   type JsonSchemaType,
@@ -7,6 +8,7 @@ import {
 
 import {
   safeBrokerError,
+  DSTAR_RESOURCE_URI_TEMPLATES,
   type DstarMcpBroker,
   type MCP_TOOL_NAMES,
 } from "./broker.js";
@@ -160,11 +162,91 @@ export function createDstarMcpServer(broker: DstarMcpBroker): McpServer {
   const server = new McpServer(
     { name: "dstar", version: "0.1.0" },
     {
-      capabilities: { tools: {} },
+      capabilities: {
+        tools: {},
+        resources: {
+          listChanged: true,
+          subscribe: broker.resourceSubscriptionsAvailable,
+        },
+      },
       instructions:
-        "DSTAR tools expose one fixed agent scope. They can read delegated context and submit pending agent-authored work, but can never accept canonical content.",
+        "DSTAR exposes one fixed agent scope. Read-only resources are optional; every workflow has a tool-only fallback. Tools can submit pending agent-authored work, but no MCP path can accept canonical content.",
     },
   );
+
+  const resourceDefinitions = [
+    {
+      name: "document-manifest",
+      template: DSTAR_RESOURCE_URI_TEMPLATES[0],
+      description: "Portable manifest for the fixed delegated document.",
+      matches: (uri: string) => uri === "dstar://document/manifest",
+    },
+    {
+      name: "document-node",
+      template: DSTAR_RESOURCE_URI_TEMPLATES[1],
+      description: "Canonical node and ancestor identifiers.",
+      matches: (uri: string) => uri.startsWith("dstar://document/node/"),
+    },
+    {
+      name: "annotation",
+      template: DSTAR_RESOURCE_URI_TEMPLATES[2],
+      description: "Agent-visible portable annotation thread.",
+      matches: (uri: string) => uri.startsWith("dstar://annotation/"),
+    },
+    {
+      name: "source",
+      template: DSTAR_RESOURCE_URI_TEMPLATES[3],
+      description: "Portable source metadata and bounded captured text.",
+      matches: (uri: string) => uri.startsWith("dstar://source/"),
+    },
+    {
+      name: "projection-mapping",
+      template: DSTAR_RESOURCE_URI_TEMPLATES[4],
+      description: "Portable projection-to-canonical mapping metadata.",
+      matches: (uri: string) =>
+        uri.startsWith("dstar://projection/") && uri.endsWith("/mapping"),
+    },
+    {
+      name: "genesis-request",
+      template: DSTAR_RESOURCE_URI_TEMPLATES[5],
+      description: "Fixed human-authored request for a genesis process.",
+      matches: (uri: string) => uri === "dstar://genesis/request",
+    },
+  ] as const;
+
+  for (const definition of resourceDefinitions) {
+    server.registerResource(
+      definition.name,
+      new ResourceTemplate(definition.template, {
+        list: async () => ({
+          resources: (await broker.listResources())
+            .filter((resource) => definition.matches(resource.uri))
+            .map((resource) => ({
+              ...resource,
+              annotations: { audience: ["assistant" as const] },
+            })),
+        }),
+      }),
+      {
+        description: definition.description,
+        mimeType: "application/json",
+        annotations: { audience: ["assistant"] },
+      },
+      async (uri) => ({ contents: [await broker.readResource(uri.href)] }),
+    );
+  }
+
+  const stopWatching = broker.watchResources((change) => {
+    if (change.listChanged) server.sendResourceListChanged();
+    for (const uri of change.uris) {
+      void server.server.sendResourceUpdated({ uri }).catch(() => undefined);
+    }
+  });
+  const previousClose = server.server.onclose;
+  server.server.onclose = () => {
+    stopWatching();
+    previousClose?.();
+  };
 
   server.registerTool(
     "list_tasks",

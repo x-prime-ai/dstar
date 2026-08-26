@@ -28,8 +28,9 @@ import {
   type PackageSnapshot,
 } from "@dstar/node";
 import { randomBytes } from "node:crypto";
+import { unwatchFile, watch, watchFile, type FSWatcher } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export const MCP_TOOL_NAMES = Object.freeze([
   "list_tasks",
@@ -58,6 +59,38 @@ export const DEFAULT_MCP_BUDGETS: McpBudgets = Object.freeze({
   maxReadBytes: 2 * 1024 * 1024,
   maxOutputBytes: 2 * 1024 * 1024,
 });
+
+const MAX_RESOURCE_CATALOG = 4_096;
+const MAX_RESOURCE_WATCH_PATHS = 8_192;
+
+export const DSTAR_RESOURCE_URI_TEMPLATES = Object.freeze([
+  "dstar://document/manifest",
+  "dstar://document/node/{nodeId}",
+  "dstar://annotation/{annotationId}",
+  "dstar://source/{sourceId}",
+  "dstar://projection/{projectionId}/mapping",
+  "dstar://genesis/request",
+] as const);
+
+export interface DstarMcpResourceDescriptor {
+  readonly uri: string;
+  readonly name: string;
+  readonly title: string;
+  readonly description: string;
+  readonly mimeType: "application/json";
+  readonly annotations: { readonly audience: readonly ["assistant"] };
+}
+
+export interface DstarMcpResourceContent {
+  readonly uri: string;
+  readonly mimeType: "application/json";
+  readonly text: string;
+}
+
+export interface DstarMcpResourceChange {
+  readonly uris: readonly string[];
+  readonly listChanged: boolean;
+}
 
 interface BrokerBaseOptions {
   readonly actorId: string;
@@ -160,6 +193,26 @@ function portableId(prefix: string, seed: string): string {
   return `${prefix}_${sha256Hex(new TextEncoder().encode(seed)).slice(0, 24)}`;
 }
 
+function resourceUri(scope: string, id?: string, suffix = ""): string {
+  return `dstar://${scope}${id === undefined ? "" : `/${encodeURIComponent(id)}`}${suffix}`;
+}
+
+function resourceDescriptor(
+  uri: string,
+  name: string,
+  title: string,
+  description: string,
+): DstarMcpResourceDescriptor {
+  return {
+    uri,
+    name,
+    title,
+    description,
+    mimeType: "application/json",
+    annotations: { audience: ["assistant"] },
+  };
+}
+
 function packageError(error: unknown): McpBrokerError {
   if (
     error instanceof PackageOpenError ||
@@ -216,7 +269,12 @@ export class DstarMcpBroker {
   readonly #packageRoot?: string;
   readonly #draftRoot?: string;
   readonly #repository?: PackageRepository;
+  #resourceWatchPaths: readonly string[] = [];
+  #resourcePollPaths: readonly string[] = [];
+  #resourceSubscriptionsAvailable = true;
   #startedTasks = 0;
+  #remainingResourceReads: number;
+  #remainingResourceBytes: number;
 
   private constructor(options: BrokerOptions) {
     this.mode = options.mode;
@@ -237,6 +295,8 @@ export class DstarMcpBroker {
     positiveInteger(this.budgets.maxReadBytes, "maxReadBytes");
     positiveInteger(this.budgets.maxOutputBytes, "maxOutputBytes");
     positiveInteger(this.#taskTtlMs, "taskTtlMs");
+    this.#remainingResourceReads = this.budgets.maxCalls;
+    this.#remainingResourceBytes = this.budgets.maxReadBytes;
     if (!/^[A-Za-z][A-Za-z0-9._:-]{0,254}$/.test(this.actorId)) {
       throw new McpBrokerError(
         "INVALID_ACTOR",
@@ -259,10 +319,44 @@ export class DstarMcpBroker {
 
   static async create(options: BrokerOptions): Promise<DstarMcpBroker> {
     const broker = new DstarMcpBroker(options);
-    if (options.mode === "document")
-      await broker.#repository!.open(broker.#packageRoot!);
-    else await readDraft(broker.#draftRoot!);
+    if (options.mode === "document") {
+      const snapshot = await broker.#repository!.open(broker.#packageRoot!);
+      broker.#resourceWatchPaths = Object.freeze(
+        [
+          ...new Set([
+            broker.#packageRoot!,
+            ...snapshot.inventory.map((file) =>
+              resolve(broker.#packageRoot!, dirname(file.path)),
+            ),
+          ]),
+        ].sort(),
+      );
+      const pollPaths = [
+        ...new Set([
+          ...broker.#resourceWatchPaths,
+          ...snapshot.inventory.map((file) =>
+            resolve(broker.#packageRoot!, file.path),
+          ),
+        ]),
+      ].sort();
+      broker.#resourceSubscriptionsAvailable =
+        pollPaths.length <= MAX_RESOURCE_WATCH_PATHS;
+      broker.#resourcePollPaths = broker.#resourceSubscriptionsAvailable
+        ? Object.freeze(pollPaths)
+        : Object.freeze([]);
+    } else {
+      await readDraft(broker.#draftRoot!);
+      broker.#resourceWatchPaths = Object.freeze([broker.#draftRoot!]);
+      broker.#resourcePollPaths = Object.freeze([
+        broker.#draftRoot!,
+        join(broker.#draftRoot!, "draft.json"),
+      ]);
+    }
     return broker;
+  }
+
+  get resourceSubscriptionsAvailable(): boolean {
+    return this.#resourceSubscriptionsAvailable;
   }
 
   #checkProcess(): void {
@@ -282,6 +376,345 @@ export class DstarMcpBroker {
         "This tool requires document mode",
       );
     return this.#repository!.open(this.#packageRoot!);
+  }
+
+  #genesisResourceDescriptors(
+    draft: GenesisDraft,
+  ): readonly DstarMcpResourceDescriptor[] {
+    const descriptors = [
+      resourceDescriptor(
+        "dstar://genesis/request",
+        "genesis-request",
+        draft.request.title,
+        "Fixed human-authored request for this genesis process.",
+      ),
+      ...(draft.request.sources?.sources.map((source) =>
+        resourceDescriptor(
+          resourceUri("source", source.id),
+          `source-${source.id}`,
+          source.title,
+          "Source metadata admitted to this genesis request.",
+        ),
+      ) ?? []),
+    ];
+    if (descriptors.length > MAX_RESOURCE_CATALOG) {
+      throw new McpBrokerError(
+        "RESOURCE_LIMIT_EXCEEDED",
+        "The resource catalog exceeds the process limit",
+      );
+    }
+    return Object.freeze(descriptors);
+  }
+
+  #documentResourceDescriptors(
+    snapshot: PackageSnapshot,
+  ): readonly DstarMcpResourceDescriptor[] {
+    const annotations = new Map(
+      snapshot.annotations.map((annotation) => [annotation.id, annotation]),
+    );
+    const eligible = snapshot.delegations.filter((delegation) => {
+      const annotation = annotations.get(delegation.annotation);
+      return (
+        delegation.assignee.type === "agent" &&
+        delegation.assignee.id === this.actorId &&
+        (delegation.status === "queued" ||
+          delegation.status === "in_progress") &&
+        annotation !== undefined &&
+        visibleToAgent(annotation)
+      );
+    });
+    if (eligible.length === 0) return Object.freeze([]);
+
+    const visibleAnnotationIds = new Set(
+      eligible.map((delegation) => delegation.annotation),
+    );
+    const index = new DocumentIndex(snapshot.document);
+    const descriptors: DstarMcpResourceDescriptor[] = [
+      resourceDescriptor(
+        "dstar://document/manifest",
+        "document-manifest",
+        snapshot.manifest.title,
+        "Portable manifest for the fixed delegated document.",
+      ),
+      ...index.readingOrder.map((nodeId) =>
+        resourceDescriptor(
+          resourceUri("document/node", nodeId),
+          `node-${nodeId}`,
+          `Node ${nodeId}`,
+          "Canonical node and ancestor identifiers.",
+        ),
+      ),
+      ...snapshot.annotations
+        .filter(
+          (annotation) =>
+            visibleAnnotationIds.has(annotation.id) &&
+            visibleToAgent(annotation),
+        )
+        .map((annotation) =>
+          resourceDescriptor(
+            resourceUri("annotation", annotation.id),
+            `annotation-${annotation.id}`,
+            `Annotation ${annotation.id}`,
+            "Agent-visible portable annotation thread.",
+          ),
+        ),
+      ...(snapshot.sources?.sources.map((source) =>
+        resourceDescriptor(
+          resourceUri("source", source.id),
+          `source-${source.id}`,
+          source.title,
+          "Portable source metadata and bounded captured text when available.",
+        ),
+      ) ?? []),
+      ...(snapshot.projections?.projections.map((projection) =>
+        resourceDescriptor(
+          resourceUri("projection", projection.id, "/mapping"),
+          `projection-${projection.id}-mapping`,
+          `Projection mapping ${projection.id}`,
+          "Portable projection metadata and canonical mapping segments.",
+        ),
+      ) ?? []),
+    ];
+    if (descriptors.length > MAX_RESOURCE_CATALOG) {
+      throw new McpBrokerError(
+        "RESOURCE_LIMIT_EXCEEDED",
+        "The resource catalog exceeds the process limit",
+      );
+    }
+    return Object.freeze(descriptors);
+  }
+
+  async #resourceDescriptors(): Promise<readonly DstarMcpResourceDescriptor[]> {
+    this.#checkProcess();
+    if (this.mode === "genesis") {
+      return this.#genesisResourceDescriptors(
+        await readDraft(this.#draftRoot!),
+      );
+    }
+    return this.#documentResourceDescriptors(await this.#snapshot());
+  }
+
+  async listResources(
+    signal?: AbortSignal,
+  ): Promise<readonly DstarMcpResourceDescriptor[]> {
+    checkAbort(signal);
+    return this.#resourceDescriptors();
+  }
+
+  async readResource(
+    rawUri: string,
+    signal?: AbortSignal,
+  ): Promise<DstarMcpResourceContent> {
+    checkAbort(signal);
+    if (this.#remainingResourceReads <= 0) {
+      throw new McpBrokerError(
+        "BUDGET_EXCEEDED",
+        "The process resource read budget is exhausted",
+      );
+    }
+    this.#remainingResourceReads -= 1;
+    this.#checkProcess();
+    const draft =
+      this.mode === "genesis" ? await readDraft(this.#draftRoot!) : undefined;
+    const snapshot =
+      this.mode === "document" ? await this.#snapshot() : undefined;
+    const descriptors = draft
+      ? this.#genesisResourceDescriptors(draft)
+      : this.#documentResourceDescriptors(snapshot!);
+    if (!descriptors.some((resource) => resource.uri === rawUri)) {
+      throw new McpBrokerError(
+        "CAPABILITY_DENIED",
+        "The resource is unavailable to this process scope",
+      );
+    }
+
+    let value: JsonValue;
+    if (this.mode === "genesis") {
+      const currentDraft = draft!;
+      if (rawUri === "dstar://genesis/request") {
+        value = asJson({
+          format: currentDraft.format,
+          request: {
+            documentId: currentDraft.request.documentId,
+            title: currentDraft.request.title,
+            profiles: currentDraft.request.profiles,
+            actor: currentDraft.request.actor,
+            body: currentDraft.request.body,
+            createdAt: currentDraft.request.createdAt,
+            allowedSourceIds:
+              currentDraft.request.sources?.sources
+                .map((source) => source.id)
+                .sort() ?? [],
+          },
+        });
+      } else {
+        const source = currentDraft.request.sources?.sources.find(
+          (candidate) => resourceUri("source", candidate.id) === rawUri,
+        );
+        if (!source) {
+          throw new McpBrokerError("NOT_FOUND", "The resource does not exist");
+        }
+        value = asJson({ source });
+      }
+    } else {
+      const currentSnapshot = snapshot!;
+      if (rawUri === "dstar://document/manifest") {
+        value = asJson({ manifest: currentSnapshot.manifest });
+      } else {
+        const nodeId = new DocumentIndex(
+          currentSnapshot.document,
+        ).readingOrder.find(
+          (candidate) => resourceUri("document/node", candidate) === rawUri,
+        );
+        if (nodeId) {
+          const index = new DocumentIndex(currentSnapshot.document);
+          value = asJson({
+            node: index.get(nodeId)!,
+            ancestorIds: index.ancestors(nodeId).map((ancestor) => ancestor.id),
+            documentRevision: currentSnapshot.manifest.revision,
+          });
+        } else {
+          const annotation = currentSnapshot.annotations.find(
+            (candidate) => resourceUri("annotation", candidate.id) === rawUri,
+          );
+          if (annotation) {
+            value = asJson({ annotation });
+          } else {
+            const source = currentSnapshot.sources?.sources.find(
+              (candidate) => resourceUri("source", candidate.id) === rawUri,
+            );
+            if (source) {
+              let extract: string | undefined;
+              if (source.type === "file" && source.path) {
+                const bytes = currentSnapshot
+                  .readFile(source.path)
+                  ?.slice(0, 64 * 1024);
+                if (bytes) {
+                  try {
+                    extract = new TextDecoder("utf-8", { fatal: true }).decode(
+                      bytes,
+                    );
+                  } catch {
+                    extract = undefined;
+                  }
+                }
+              }
+              value = asJson({
+                source,
+                ...(extract === undefined ? {} : { extract }),
+              });
+            } else {
+              const projection = currentSnapshot.projections?.projections.find(
+                (candidate) =>
+                  resourceUri("projection", candidate.id, "/mapping") ===
+                  rawUri,
+              );
+              if (!projection) {
+                throw new McpBrokerError(
+                  "NOT_FOUND",
+                  "The resource does not exist",
+                );
+              }
+              value = asJson({
+                projection: {
+                  id: projection.id,
+                  role: projection.role,
+                  mediaType: projection.mediaType,
+                  reviewable: projection.reviewable,
+                  generatedFromRevision: projection.generatedFromRevision,
+                  revision: projection.revision,
+                  segments: projection.segments,
+                },
+              });
+            }
+          }
+        }
+      }
+    }
+
+    const text = JSON.stringify(value);
+    const size = new TextEncoder().encode(text).byteLength;
+    if (size > this.#remainingResourceBytes) {
+      throw new McpBrokerError(
+        "BUDGET_EXCEEDED",
+        "The process resource byte budget is exhausted",
+      );
+    }
+    this.#remainingResourceBytes -= size;
+    return { uri: rawUri, mimeType: "application/json", text };
+  }
+
+  watchResources(
+    listener: (change: DstarMcpResourceChange) => void,
+  ): () => void {
+    if (!this.#resourceSubscriptionsAvailable) return () => undefined;
+    const watchers: FSWatcher[] = [];
+    const polledPaths: string[] = [];
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let previous = new Set<string>();
+    let closed = false;
+    void this.#resourceDescriptors()
+      .then((resources) => {
+        previous = new Set(resources.map((resource) => resource.uri));
+      })
+      .catch(() => undefined);
+    const onChange = () => {
+      if (closed) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = undefined;
+        void this.#resourceDescriptors()
+          .then((resources) => {
+            if (closed) return;
+            const next = new Set(resources.map((resource) => resource.uri));
+            const uris = [...new Set([...previous, ...next])].sort();
+            const listChanged =
+              previous.size !== next.size ||
+              [...previous].some((uri) => !next.has(uri));
+            previous = next;
+            listener({ uris, listChanged });
+          })
+          .catch(() => undefined);
+      }, 50);
+      timer.unref?.();
+    };
+    const pollListener = (
+      current: { mtimeMs: number; size: number },
+      previousStat: { mtimeMs: number; size: number },
+    ) => {
+      if (
+        current.mtimeMs !== previousStat.mtimeMs ||
+        current.size !== previousStat.size
+      ) {
+        onChange();
+      }
+    };
+    const startPolling = () => {
+      if (polledPaths.length > 0 || closed) return;
+      for (const path of this.#resourcePollPaths) {
+        watchFile(path, { interval: 200, persistent: false }, pollListener);
+        polledPaths.push(path);
+      }
+    };
+    for (const path of this.#resourceWatchPaths) {
+      try {
+        const watcher = watch(path, onChange);
+        watcher.on("error", () => {
+          watcher.close();
+          startPolling();
+        });
+        watcher.unref();
+        watchers.push(watcher);
+      } catch {
+        startPolling();
+      }
+    }
+    return () => {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      for (const watcher of watchers) watcher.close();
+      for (const path of polledPaths) unwatchFile(path, pollListener);
+    };
   }
 
   #task(rawToken: string): TaskCapability {

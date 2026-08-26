@@ -12,10 +12,14 @@
     "build": "pnpm --recursive --if-present build",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:consumer": "pnpm --filter @dstar/sdk-consumer build",
+    "check:conformance": "node scripts/run-role-fixtures.mjs && python3 scripts/validate-reference-output.py",
     "check:links": "node scripts/check-markdown-links.mjs",
     "check:node": "node scripts/check-node-version.mjs",
     "check:schema-drift": "node scripts/check-schema-types.mjs",
     "check:spec": "node scripts/check-spec-json.mjs",
+    "check:security": "node scripts/run-security-corpus.mjs",
+    "check:portable-reopen": "node scripts/check-portable-reopen.mjs",
+    "check:release": "node scripts/check-release-packages.mjs",
     "check:xprime": "node scripts/check-xprime-integration.mjs",
     "clean": "pnpm --recursive --if-present clean",
     "format": "prettier --write package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs scripts packages apps tests design/decisions .github",
@@ -24,7 +28,7 @@
     "lint": "eslint scripts packages apps tests",
     "test": "pnpm --recursive --if-present test",
     "typecheck": "pnpm --recursive --if-present typecheck",
-    "verify": "pnpm check:node && pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm check:schema-drift && pnpm check:spec && pnpm check:links && pnpm build && pnpm typecheck && pnpm test && pnpm check:consumer",
+    "verify": "pnpm check:node && pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm check:schema-drift && pnpm check:spec && pnpm check:links && pnpm build && pnpm check:conformance && pnpm check:security && pnpm check:portable-reopen && pnpm check:release && pnpm typecheck && pnpm test && pnpm check:consumer",
     "bootstrap:check": "pnpm install --frozen-lockfile && pnpm verify"
   },
   "devDependencies": {

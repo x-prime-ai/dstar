@@ -1,0 +1,20 @@
+{
+  "format": "dstar-role-fixtures/0.1",
+  "cases": [
+    {
+      "id": "minimal-all-roles",
+      "package": "../../examples/minimal.dstar",
+      "expected": "minimal.reference.json",
+      "profiles": ["dstar:base"],
+      "roles": [
+        "Core Reader",
+        "Version Reader",
+        "Core Writer",
+        "Review Client",
+        "Change Producer",
+        "Change Applier",
+        "Projection Renderer"
+      ]
+    }
+  ]
+}

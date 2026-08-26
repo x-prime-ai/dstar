@@ -1,0 +1,70 @@
+{
+  "format": "dstar-role-output/0.1",
+  "caseId": "minimal-all-roles",
+  "dstar": "0.1",
+  "profiles": ["dstar:base"],
+  "roles": {
+    "Core Reader": {
+      "valid": true,
+      "documentId": "doc_minimal",
+      "documentRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+      "nodeCount": 5
+    },
+    "Version Reader": {
+      "valid": true,
+      "targetChangeId": "change_genesis_0001",
+      "revision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+      "versionCount": 1
+    },
+    "Core Writer": {
+      "applicable": true,
+      "resultRevision": "sha256:7aa21117bea46ceec9381d6239ebee5469a13adeb0e0548bdadb04a176f52ea9",
+      "preservedRootId": "node_root"
+    },
+    "Review Client": {
+      "annotationId": "ann_0001",
+      "targetState": "exact"
+    },
+    "Change Producer": {
+      "valid": true,
+      "authorType": "agent",
+      "status": "proposed",
+      "operationCount": 1
+    },
+    "Change Applier": {
+      "valid": true,
+      "decisionActorType": "human",
+      "resultRevision": "sha256:7aa21117bea46ceec9381d6239ebee5469a13adeb0e0548bdadb04a176f52ea9"
+    },
+    "Projection Renderer": {
+      "canonicalByteLength": 1948,
+      "canonicalNodeOrder": [
+        "node_root",
+        "node_title",
+        "node_promise",
+        "node_resources",
+        "node_architecture"
+      ],
+      "projections": [
+        {
+          "kind": "html",
+          "revision": "sha256:f5537cee3c0232980f718980c34d06b155f7dbfb3871e95ac99edc83e5017264",
+          "reviewable": true,
+          "segmentCount": 4
+        },
+        {
+          "kind": "markdown",
+          "revision": "sha256:99f43f7220620ae1b37c86bbad25f805f43ef7fb8c2be34c7009f04c13ca198a",
+          "reviewable": true,
+          "segmentCount": 4
+        },
+        {
+          "kind": "plain-text",
+          "revision": "sha256:bc757ea89ba6cd8ab61c6775bc62fb00f90e9a5a7a02387f94b11033966809c8",
+          "reviewable": true,
+          "segmentCount": 4
+        }
+      ]
+    }
+  }
+}
