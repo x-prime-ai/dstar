@@ -1,9 +1,11 @@
 import {
   createDiagnostic,
+  parseIJson,
   revisionOf,
   sha256Hex,
   validatePackagePath,
   type Diagnostic,
+  type DstarManifest,
   type JsonValue,
 } from "@dstar/core";
 import {
@@ -174,6 +176,7 @@ function legalForTransaction(
       );
     case "projection":
       return (
+        path === "manifest.json" ||
         path === projectionsPath ||
         isWithin(path, dirname(projectionsPath)) ||
         snapshot.projections?.projections.some(
@@ -366,6 +369,40 @@ export class PackageRepository {
         ...mutation.writes.keys(),
         ...(mutation.deletes ?? []),
       ]);
+      if (
+        mutation.transactionType === "projection" &&
+        targets.has("manifest.json")
+      ) {
+        const manifestBytes = mutation.writes.get("manifest.json");
+        let proposedManifest: DstarManifest | undefined;
+        try {
+          proposedManifest = manifestBytes
+            ? (parseIJson(manifestBytes).value as unknown as DstarManifest)
+            : undefined;
+        } catch {
+          proposedManifest = undefined;
+        }
+        const permittedManifest = {
+          ...current.manifest,
+          projections: "projections/index.json",
+        };
+        if (
+          !proposedManifest ||
+          revisionOf(proposedManifest as unknown as JsonValue) !==
+            revisionOf(permittedManifest as unknown as JsonValue)
+        ) {
+          throw new PackageTransactionError(
+            "Projection transaction cannot modify manifest authority fields",
+            [
+              createDiagnostic("PKG_PATH_INVALID", {
+                summary:
+                  "A projection transaction may only add the projections/index.json manifest entrypoint.",
+                location: { packagePath: "manifest.json" },
+              }),
+            ],
+          );
+        }
+      }
       for (const path of targets) {
         if (!legalForTransaction(mutation.transactionType, path, current)) {
           throw new PackageTransactionError("Illegal mutation path", [

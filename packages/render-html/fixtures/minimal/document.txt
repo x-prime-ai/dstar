@@ -1,0 +1,4 @@
+Hello DSTAR
+Agents author. Humans direct and decide.
+Read the DSTAR specification for details.
+Image: DSTAR review loop connecting human direction, agent proposals, and canonical content.

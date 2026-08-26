@@ -1,11 +1,18 @@
 {
-  "name": "@dstar/cli",
+  "name": "@dstar/render-html",
   "version": "0.0.0",
-  "description": "DSTAR command-line interface",
+  "description": "Deterministic and safe DSTAR renderers",
   "type": "module",
-  "private": true,
-  "bin": {
-    "dstar": "./dist/main.js"
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -15,9 +22,7 @@
   },
   "dependencies": {
     "@dstar/core": "workspace:*",
-    "@dstar/mcp-server": "workspace:*",
-    "@dstar/node": "workspace:*",
-    "@dstar/render-html": "workspace:*"
+    "@dstar/node": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.17.2",

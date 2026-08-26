@@ -60,6 +60,26 @@ describe("dstar CLI", () => {
     ).rejects.toThrow("--yes is not supported");
   });
 
+  it("renders deterministic projections without changing canonical authority", async () => {
+    const { temporary, packageRoot } = await fixture();
+    const runtime = join(temporary, "runtime");
+    const output = capture();
+    expect(
+      await runCli(
+        ["render", packageRoot, "--runtime-root", runtime],
+        output.io,
+      ),
+    ).toBe(0);
+    const result = JSON.parse(output.output.join(""));
+    expect(result.revision).toBe(
+      "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+    );
+    expect(result.projections).toHaveLength(3);
+    expect(result.projections).toEqual(
+      expect.arrayContaining([expect.objectContaining({ reviewable: true })]),
+    );
+  });
+
   it("does not mutate a decision when the human declines confirmation", async () => {
     const { temporary, packageRoot } = await fixture();
     const previousRuntime = process.env.DSTAR_RUNTIME_ROOT;

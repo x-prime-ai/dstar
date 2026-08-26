@@ -1,0 +1,300 @@
+{
+  "html": {
+    "revision": "sha256:8cacefd7386430be63f4b858990b56aa7b3804879181cacfd6a49911faf23a06",
+    "reviewable": true,
+    "segments": [
+      {
+        "id": "segment_projection_node_title",
+        "selectors": [
+          {
+            "type": "FragmentSelector",
+            "value": "segment_projection_node_title"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "Hello DSTAR"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "exact",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_title"
+            }
+          }
+        ]
+      },
+      {
+        "id": "segment_projection_node_promise",
+        "selectors": [
+          {
+            "type": "FragmentSelector",
+            "value": "segment_projection_node_promise"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "Agents author. Humans direct and decide."
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "exact",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_promise"
+            }
+          }
+        ]
+      },
+      {
+        "id": "segment_projection_node_resources",
+        "selectors": [
+          {
+            "type": "FragmentSelector",
+            "value": "segment_projection_node_resources"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "Read the DSTAR specification for details."
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "exact",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_resources"
+            }
+          }
+        ]
+      },
+      {
+        "id": "segment_projection_node_architecture",
+        "selectors": [
+          {
+            "type": "FragmentSelector",
+            "value": "segment_projection_node_architecture"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "DSTAR review loop connecting human direction, agent proposals, and canonical content."
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "transformed",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_architecture"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "markdown": {
+    "revision": "sha256:99f43f7220620ae1b37c86bbad25f805f43ef7fb8c2be34c7009f04c13ca198a",
+    "reviewable": true,
+    "segments": [
+      {
+        "id": "segment_markdown_node_title",
+        "selectors": [
+          {
+            "type": "TextPositionSelector",
+            "start": 0,
+            "end": 13,
+            "unit": "unicode-code-point"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "# Hello DSTAR"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "transformed",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_title"
+            }
+          }
+        ]
+      },
+      {
+        "id": "segment_markdown_node_promise",
+        "selectors": [
+          {
+            "type": "TextPositionSelector",
+            "start": 15,
+            "end": 55,
+            "unit": "unicode-code-point"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "Agents author. Humans direct and decide."
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "exact",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_promise"
+            }
+          }
+        ]
+      },
+      {
+        "id": "segment_markdown_node_resources",
+        "selectors": [
+          {
+            "type": "TextPositionSelector",
+            "start": 57,
+            "end": 133,
+            "unit": "unicode-code-point"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "Read the [**DSTAR specification**](https://dstar.dev/spec/0.1/) for details."
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "transformed",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_resources"
+            }
+          }
+        ]
+      },
+      {
+        "id": "segment_markdown_node_architecture",
+        "selectors": [
+          {
+            "type": "TextPositionSelector",
+            "start": 135,
+            "end": 267,
+            "unit": "unicode-code-point"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "[Image unavailable: DSTAR review loop connecting human direction, agent proposals, and canonical content. (assets/architecture.svg)]"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "transformed",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_architecture"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "plain-text": {
+    "revision": "sha256:bc757ea89ba6cd8ab61c6775bc62fb00f90e9a5a7a02387f94b11033966809c8",
+    "reviewable": true,
+    "segments": [
+      {
+        "id": "segment_plain-text_node_title",
+        "selectors": [
+          {
+            "type": "TextPositionSelector",
+            "start": 0,
+            "end": 11,
+            "unit": "unicode-code-point"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "Hello DSTAR"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "exact",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_title"
+            }
+          }
+        ]
+      },
+      {
+        "id": "segment_plain-text_node_promise",
+        "selectors": [
+          {
+            "type": "TextPositionSelector",
+            "start": 12,
+            "end": 52,
+            "unit": "unicode-code-point"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "Agents author. Humans direct and decide."
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "exact",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_promise"
+            }
+          }
+        ]
+      },
+      {
+        "id": "segment_plain-text_node_resources",
+        "selectors": [
+          {
+            "type": "TextPositionSelector",
+            "start": 53,
+            "end": 94,
+            "unit": "unicode-code-point"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "Read the DSTAR specification for details."
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "exact",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_resources"
+            }
+          }
+        ]
+      },
+      {
+        "id": "segment_plain-text_node_architecture",
+        "selectors": [
+          {
+            "type": "TextPositionSelector",
+            "start": 95,
+            "end": 187,
+            "unit": "unicode-code-point"
+          },
+          {
+            "type": "TextQuoteSelector",
+            "exact": "Image: DSTAR review loop connecting human direction, agent proposals, and canonical content."
+          }
+        ],
+        "derivedFrom": [
+          {
+            "relation": "transformed",
+            "selector": {
+              "type": "NodeSelector",
+              "node": "node_architecture"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

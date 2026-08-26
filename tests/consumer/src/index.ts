@@ -8,6 +8,7 @@ import {
 } from "@dstar/core";
 import { describeNodeRuntimeBoundary } from "@dstar/node";
 import { loadMinimalFixture } from "@dstar/node/testing";
+import { RENDERER_VERSION } from "@dstar/render-html";
 import type { Diagnostic } from "@dstar/core";
 import type { NodeRuntimeBoundary } from "@dstar/node";
 
@@ -15,6 +16,7 @@ export interface ConsumerResult {
   readonly coreStability: "experimental";
   readonly schemaId: string;
   readonly boundary: NodeRuntimeBoundary;
+  readonly rendererVersion: "0.1.0";
   readonly manifest: unknown;
   readonly documentValidation: {
     readonly valid: boolean;
@@ -36,6 +38,7 @@ export async function consumeDocumentFixture(
     coreStability: CORE_SDK_STABILITY,
     schemaId: SCHEMA_IDS.document,
     boundary: describeNodeRuntimeBoundary(),
+    rendererVersion: RENDERER_VERSION,
     manifest: fixture.readJson("manifest.json"),
     documentValidation,
     ...(documentValidation.value

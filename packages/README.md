@@ -6,6 +6,9 @@ The public SDK surface is intentionally small and uses explicit package exports.
   Node.js, and other TypeScript runtimes.
 - `@dstar/node` owns Node-specific integration and depends inward on
   `@dstar/core`.
+- `@dstar/render-html` owns deterministic canonical/projection rendering and
+  safe package-asset response policy. It depends on the core and immutable Node
+  package snapshots, and has no canonical write path.
 
 Every documented export has a stability label:
 

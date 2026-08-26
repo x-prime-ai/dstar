@@ -13,6 +13,7 @@ import {
 } from "@dstar/node";
 import { parseIJson, type DstarActor, type DstarChange } from "@dstar/core";
 import { serveDstarStdio } from "@dstar/mcp-server";
+import { publishProjections } from "@dstar/render-html";
 import { readFile } from "node:fs/promises";
 
 export interface CliIo {
@@ -28,6 +29,7 @@ function usage(): string {
     "  dstar inspect <package>",
     "  dstar history <package>",
     "  dstar show <package> --version <accepted-change-id>",
+    "  dstar render <package> [--projection <id>]",
     "  dstar draft create <request-file>",
     "  dstar accept-genesis <draft>",
     "  dstar accept <package> <change-id>",
@@ -166,6 +168,35 @@ export async function runCli(
     );
     io.write(json(result));
     return result.valid ? 0 : 1;
+  }
+
+  if (verb === "render") {
+    rejectUnknownOptions(rest, ["--projection", "--runtime-root"]);
+    requirePositionalCount(rest, 1);
+    const packageRoot = resolve(required(rest[0], "package"));
+    const repository = new PackageRepository(
+      resolve(option(rest, "--runtime-root") ?? runtimeRoot()),
+    );
+    const snapshot = await repository.open(packageRoot);
+    const projectionId = option(rest, "--projection");
+    const result = await publishProjections(repository, snapshot, {
+      ...(projectionId ? { projectionId } : {}),
+    });
+    io.write(
+      json({
+        snapshotId: result.snapshot.snapshotId,
+        revision: result.snapshot.manifest.revision,
+        projections: result.projections.map((projection) => ({
+          id: projection.id,
+          path: projection.path,
+          projectionRevision: projection.revision,
+          generatedFromRevision: projection.generatedFromRevision,
+          reviewable: projection.reviewable,
+        })),
+        diagnostics: result.diagnostics,
+      }),
+    );
+    return 0;
   }
 
   if (verb === "draft") {

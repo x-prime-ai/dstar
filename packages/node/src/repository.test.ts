@@ -124,6 +124,25 @@ describe("recoverable package repository", () => {
     });
   });
 
+  it("allows projection registration without granting manifest authority", async () => {
+    const { packageRoot, repository } = await workspace();
+    const snapshot = await repository.open(packageRoot);
+    await expect(
+      repository.commit(snapshot, {
+        expectedSnapshotId: snapshot.snapshotId,
+        transactionType: "projection",
+        writes: new Map([
+          [
+            "manifest.json",
+            encodeJson({ ...snapshot.manifest, title: "Unauthorized title" }),
+          ],
+        ]),
+      }),
+    ).rejects.toMatchObject<PackageTransactionError>({
+      diagnostics: [expect.objectContaining({ code: "PKG_PATH_INVALID" })],
+    });
+  });
+
   it("finishes an all-new journal and restores its idempotent result after restart", async () => {
     const { packageRoot, repository } = await workspace();
     const snapshot = await repository.open(packageRoot);

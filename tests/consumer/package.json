@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@dstar/core": "workspace:*",
-    "@dstar/node": "workspace:*"
+    "@dstar/node": "workspace:*",
+    "@dstar/render-html": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.17.2",
