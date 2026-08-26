@@ -1,0 +1,41 @@
+{
+  "name": "dstar",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reference implementation workspace for the DSTAR protocol",
+  "type": "module",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm --recursive --if-present build",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:consumer": "pnpm --filter @dstar/sdk-consumer build",
+    "check:links": "node scripts/check-markdown-links.mjs",
+    "check:node": "node scripts/check-node-version.mjs",
+    "check:schema-drift": "node scripts/check-schema-types.mjs",
+    "check:spec": "node scripts/check-spec-json.mjs",
+    "clean": "pnpm --recursive --if-present clean",
+    "format": "prettier --write package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs scripts packages tests design/decisions .github",
+    "format:check": "prettier --check package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs scripts packages tests design/decisions .github",
+    "generate:schema-types": "node scripts/generate-schema-types.mjs",
+    "lint": "eslint scripts packages tests",
+    "test": "pnpm --recursive --if-present test",
+    "typecheck": "pnpm --recursive --if-present typecheck",
+    "verify": "pnpm check:node && pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm check:schema-drift && pnpm check:spec && pnpm check:links && pnpm build && pnpm typecheck && pnpm test && pnpm check:consumer",
+    "bootstrap:check": "pnpm install --frozen-lockfile && pnpm verify"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.34.0",
+    "@types/node": "^22.17.2",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "eslint": "^9.34.0",
+    "json-schema-to-typescript": "^15.0.4",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.41.0",
+    "vitest": "^3.2.4"
+  }
+}

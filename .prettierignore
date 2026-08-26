@@ -1,0 +1,5 @@
+node_modules/
+dist/
+coverage/
+packages/core/src/schema/generated/
+spec/0.1/examples/minimal.dstar/projections/

@@ -1,0 +1,35 @@
+{
+  "name": "@dstar/node",
+  "version": "0.0.0",
+  "description": "Node-specific runtime boundary for DSTAR",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit --composite false"
+  },
+  "dependencies": {
+    "@dstar/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.17.2",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
