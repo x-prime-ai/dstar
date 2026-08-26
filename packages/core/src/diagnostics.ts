@@ -1,4 +1,14 @@
 export const DIAGNOSTIC_REGISTRY = {
+  PKG_PATH_INVALID: {
+    family: "PKG",
+    defaultSeverity: "error",
+    summary: "A package entry path or file type is unsafe.",
+  },
+  PKG_ENTRY_MISSING: {
+    family: "PKG",
+    defaultSeverity: "error",
+    summary: "A required package entry is missing.",
+  },
   JSON_PARSE_FAILED: {
     family: "JSON",
     defaultSeverity: "error",
@@ -63,6 +73,27 @@ export const DIAGNOSTIC_REGISTRY = {
     family: "LIMIT",
     defaultSeverity: "error",
     summary: "Input exceeded a configured resource limit.",
+  },
+  TXN_SNAPSHOT_STALE: {
+    family: "TXN",
+    defaultSeverity: "error",
+    summary: "The package changed after the command snapshot was created.",
+  },
+  TXN_LOCKED: {
+    family: "TXN",
+    defaultSeverity: "error",
+    summary: "Another package mutation currently owns the write lock.",
+  },
+  TXN_RECOVERY_REQUIRED: {
+    family: "TXN",
+    defaultSeverity: "error",
+    summary:
+      "A package transaction could not be completed or rolled back safely.",
+  },
+  COMMAND_IDEMPOTENCY_MISMATCH: {
+    family: "COMMAND",
+    defaultSeverity: "error",
+    summary: "An idempotency key was reused with different command arguments.",
   },
 } as const;
 

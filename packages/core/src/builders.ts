@@ -31,6 +31,7 @@ export interface GenesisProposalInput {
   readonly author: DstarActor;
   readonly requestActor: DstarActor;
   readonly requestBody: string;
+  readonly requestCreatedAt?: string;
   readonly createdAt: string;
   readonly document: DstarDocument;
   readonly sources?: readonly string[];
@@ -47,7 +48,7 @@ export function buildGenesisProposal(input: GenesisProposalInput): DstarChange {
     request: {
       actor: input.requestActor,
       body: input.requestBody,
-      createdAt: input.createdAt,
+      createdAt: input.requestCreatedAt ?? input.createdAt,
     },
     operations: [
       { id: input.operationId, op: "create_document", value: input.document },
