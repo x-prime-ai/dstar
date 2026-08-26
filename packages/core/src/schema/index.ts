@@ -5,6 +5,7 @@ export * as DocumentSchema from "./generated/document.js";
 export * as ManifestSchema from "./generated/manifest.js";
 export * as ProjectionSchema from "./generated/projection.js";
 export * as SourcesSchema from "./generated/sources.js";
+export { SCHEMA_DOCUMENTS } from "./generated/schema-documents.js";
 
 export const SCHEMA_IDS = {
   annotation: "https://dstar.dev/spec/0.1/schemas/annotation.schema.json",

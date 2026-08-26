@@ -28,6 +28,10 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit --composite false"
   },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
   "devDependencies": {
     "typescript": "catalog:",
     "vitest": "catalog:"

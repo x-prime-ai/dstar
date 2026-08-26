@@ -19,6 +19,11 @@ export const DIAGNOSTIC_REGISTRY = {
     defaultSeverity: "error",
     summary: "A referenced protocol object does not exist.",
   },
+  REF_DUPLICATE_ID: {
+    family: "REF",
+    defaultSeverity: "error",
+    summary: "An identifier is duplicated within its required scope.",
+  },
   REV_MISMATCH: {
     family: "REV",
     defaultSeverity: "error",
@@ -38,6 +43,21 @@ export const DIAGNOSTIC_REGISTRY = {
     family: "AUTH",
     defaultSeverity: "error",
     summary: "Portable proposal decisions must identify an authorized human.",
+  },
+  OP_PRECONDITION_FAILED: {
+    family: "OP",
+    defaultSeverity: "error",
+    summary: "An operation precondition does not match the working document.",
+  },
+  OP_TARGET_MISSING: {
+    family: "OP",
+    defaultSeverity: "error",
+    summary: "An operation target does not exist in the working document.",
+  },
+  OP_INVALID: {
+    family: "OP",
+    defaultSeverity: "error",
+    summary: "An operation cannot be applied with the specified semantics.",
   },
   LIMIT_EXCEEDED: {
     family: "LIMIT",

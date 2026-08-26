@@ -16,9 +16,11 @@ export async function renderSchemaTypes(repositoryRoot) {
     .sort();
 
   const rendered = new Map();
+  const schemaDocuments = {};
   for (const schemaFile of schemaFiles) {
     const source = await readFile(join(schemaDirectory, schemaFile), "utf8");
     const schema = JSON.parse(source);
+    schemaDocuments[schemaFile.replace(/\.schema\.json$/, "")] = schema;
     const outputName = schemaFile.replace(/\.schema\.json$/, ".ts");
     const types = await compile(schema, basename(schemaFile, ".schema.json"), {
       bannerComment,
@@ -37,6 +39,10 @@ export async function renderSchemaTypes(repositoryRoot) {
     });
     rendered.set(outputName, types);
   }
+  rendered.set(
+    "schema-documents.ts",
+    `${bannerComment}\n\nexport const SCHEMA_DOCUMENTS = ${JSON.stringify(schemaDocuments, null, 2)} as const;\n`,
+  );
   return rendered;
 }
 
