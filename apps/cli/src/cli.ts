@@ -12,6 +12,7 @@ import {
   openPackage,
 } from "@dstar/node";
 import { parseIJson, type DstarActor, type DstarChange } from "@dstar/core";
+import { serveDstarStdio } from "@dstar/mcp-server";
 import { readFile } from "node:fs/promises";
 
 export interface CliIo {
@@ -31,6 +32,8 @@ function usage(): string {
     "  dstar accept-genesis <draft>",
     "  dstar accept <package> <change-id>",
     "  dstar reject <package> <change-id>",
+    "  dstar mcp document <package> --actor <agent-id>",
+    "  dstar mcp genesis <draft> --actor <agent-id>",
   ].join("\n");
 }
 
@@ -281,6 +284,40 @@ export async function runCli(
       json({ snapshotId: result.snapshotId, changeId, status: "rejected" }),
     );
     return 0;
+  }
+
+  if (verb === "mcp") {
+    const mode = rest[0];
+    if (mode !== "document" && mode !== "genesis") {
+      throw new Error("MCP mode must be document or genesis");
+    }
+    rejectUnknownOptions(rest.slice(1), ["--actor", "--runtime-root"]);
+    requirePositionalCount(rest.slice(1), 1);
+    const target = resolve(
+      required(rest[1], mode === "document" ? "package" : "draft"),
+    );
+    const actorId = required(option(rest, "--actor"), "--actor");
+    const selectedRuntimeRoot = resolve(
+      option(rest, "--runtime-root") ?? runtimeRoot(),
+    );
+    try {
+      await serveDstarStdio({
+        broker:
+          mode === "document"
+            ? {
+                mode,
+                packageRoot: target,
+                runtimeRoot: selectedRuntimeRoot,
+                actorId,
+              }
+            : { mode, draftRoot: target, actorId },
+        onerror: () => process.stderr.write("DSTAR_MCP_PROTOCOL_ERROR\n"),
+      });
+      return 0;
+    } catch {
+      io.error("DSTAR_MCP_START_FAILED\n");
+      return 1;
+    }
   }
 
   throw new Error(`Unknown command ${verb}\n${usage()}`);

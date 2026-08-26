@@ -16,6 +16,7 @@
     "check:node": "node scripts/check-node-version.mjs",
     "check:schema-drift": "node scripts/check-schema-types.mjs",
     "check:spec": "node scripts/check-spec-json.mjs",
+    "check:xprime": "node scripts/check-xprime-integration.mjs",
     "clean": "pnpm --recursive --if-present clean",
     "format": "prettier --write package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs scripts packages apps tests design/decisions .github",
     "format:check": "prettier --check package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs scripts packages apps tests design/decisions .github",

@@ -40,7 +40,7 @@ export interface CommandIdentity {
 }
 
 export interface ProposalResultInput {
-  readonly change: DstarChange;
+  readonly change?: DstarChange;
   readonly delegationId: string;
   readonly completedBy: DstarActor;
   readonly completedAt: string;
@@ -114,7 +114,9 @@ function updatedDelegation(
     throw new PackageCommandError("Only an active delegation may be completed");
   }
   const results: NonNullable<DstarDelegation["results"]> = [
-    { type: "change", change: input.change.id },
+    ...(input.change
+      ? [{ type: "change" as const, change: input.change.id }]
+      : []),
     ...(input.reply
       ? [
           {
@@ -215,17 +217,24 @@ export class PackageCommands {
         `Delegation ${input.delegationId} does not exist`,
       );
     if (
-      snapshot.changes.some((candidate) => candidate.id === input.change.id)
+      input.change &&
+      snapshot.changes.some((candidate) => candidate.id === input.change?.id)
     ) {
       throw new PackageCommandError(`Change ${input.change.id} already exists`);
     }
+    if (!input.change && !input.reply && !input.reason) {
+      throw new PackageCommandError(
+        "A terminal delegation result requires a proposal, reply, or reason",
+      );
+    }
     if (
-      input.change.kind !== "update" ||
-      input.change.status !== "proposed" ||
-      input.change.author.type !== "agent" ||
-      input.change.author.id !== delegation.assignee.id ||
-      !input.change.fulfills?.includes(delegation.id) ||
-      !input.change.motivatedBy?.includes(delegation.annotation)
+      input.change &&
+      (input.change.kind !== "update" ||
+        input.change.status !== "proposed" ||
+        input.change.author.type !== "agent" ||
+        input.change.author.id !== delegation.assignee.id ||
+        !input.change.fulfills?.includes(delegation.id) ||
+        !input.change.motivatedBy?.includes(delegation.annotation))
     ) {
       throw new PackageCommandError(
         "Proposal result does not preserve delegation provenance",
@@ -233,12 +242,17 @@ export class PackageCommands {
     }
     const nextDelegation = updatedDelegation(input, delegation);
     const writes = new Map<string, Uint8Array>([
-      [changePath(snapshot, input.change.id), encodeJson(asJson(input.change))],
       [
         delegationPath(snapshot, nextDelegation.id),
         encodeJson(asJson(nextDelegation)),
       ],
     ]);
+    if (input.change) {
+      writes.set(
+        changePath(snapshot, input.change.id),
+        encodeJson(asJson(input.change)),
+      );
+    }
     if (input.reply) {
       if (
         input.reply.author.type !== "agent" ||
