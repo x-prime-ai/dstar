@@ -48,6 +48,93 @@ async function workspace() {
 }
 
 describe("atomic package commands", () => {
+  it("keeps human replies, resolution, cancellation, and decisions separate", async () => {
+    const { packageRoot, repository, commands } = await workspace();
+    const opened = await repository.open(packageRoot);
+    const replied = await commands.addHumanReply(
+      opened,
+      {
+        annotationId: "ann_0001",
+        reply: {
+          id: "reply_human_test",
+          body: "Keep this discussion separate from assignment.",
+          author: human,
+          createdAt: "2026-08-26T09:00:00Z",
+        },
+      },
+      {
+        expectedSnapshotId: opened.snapshotId,
+        idempotencyKey: "reply-human-test",
+      },
+    );
+    const resolved = await commands.resolveAnnotation(
+      replied,
+      "ann_0001",
+      human,
+      "2026-08-26T09:01:00Z",
+      {
+        expectedSnapshotId: replied.snapshotId,
+        idempotencyKey: "resolve-human-test",
+      },
+    );
+    expect(resolved.annotations[0]).toMatchObject({
+      status: "resolved",
+      resolvedBy: human,
+    });
+    expect(resolved.delegations[0]?.status).toBe("completed");
+    expect(
+      resolved.changes.find((change) => change.id === "change_0001")?.status,
+    ).toBe("proposed");
+
+    const queued = await commands.createDelegation(
+      resolved,
+      {
+        id: "delegation_cancel_test",
+        annotationId: "ann_0001",
+        assignee: agent,
+        createdBy: human,
+        createdAt: "2026-08-26T09:02:00Z",
+      },
+      {
+        expectedSnapshotId: resolved.snapshotId,
+        idempotencyKey: "queue-cancel-test",
+      },
+    );
+    const cancelled = await commands.cancelDelegation(
+      queued,
+      "delegation_cancel_test",
+      human,
+      "2026-08-26T09:03:00Z",
+      "No longer needed.",
+      {
+        expectedSnapshotId: queued.snapshotId,
+        idempotencyKey: "cancel-human-test",
+      },
+    );
+    expect(
+      cancelled.delegations.find(
+        (delegation) => delegation.id === "delegation_cancel_test",
+      )?.status,
+    ).toBe("cancelled");
+    expect(cancelled.annotations[0]?.status).toBe("resolved");
+
+    const superseded = await commands.supersedeChange(
+      cancelled,
+      "change_0001",
+      human,
+      "2026-08-26T09:04:00Z",
+      "A new request will replace it.",
+      {
+        expectedSnapshotId: cancelled.snapshotId,
+        idempotencyKey: "supersede-human-test",
+      },
+    );
+    expect(
+      superseded.changes.find((change) => change.id === "change_0001")?.status,
+    ).toBe("superseded");
+    expect(superseded.manifest.revision).toBe(opened.manifest.revision);
+  });
+
   it("creates a delegation and records an agent proposal without accepting content", async () => {
     const { packageRoot, repository, commands } = await workspace();
     const opened = await repository.open(packageRoot);

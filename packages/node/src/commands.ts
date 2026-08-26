@@ -48,6 +48,11 @@ export interface ProposalResultInput {
   readonly reason?: string;
 }
 
+export interface AnnotationReplyInput {
+  readonly annotationId: string;
+  readonly reply: NonNullable<DstarAnnotation["replies"]>[number];
+}
+
 export interface GenesisDraftRequest {
   readonly output: string;
   readonly documentId: string;
@@ -201,6 +206,130 @@ export class PackageCommands {
         "create-delegation",
         asJson(input),
       ),
+    });
+  }
+
+  async addHumanReply(
+    snapshot: PackageSnapshot,
+    input: AnnotationReplyInput,
+    identity: CommandIdentity,
+  ): Promise<PackageSnapshot> {
+    const annotation = snapshot.annotations.find(
+      (candidate) => candidate.id === input.annotationId,
+    );
+    if (!annotation)
+      throw new PackageCommandError(
+        `Annotation ${input.annotationId} does not exist`,
+      );
+    if (input.reply.author.type !== "human" || input.reply.body.length === 0)
+      throw new PackageCommandError(
+        "A direct review reply must be non-empty and human-authored",
+      );
+    if (
+      (annotation.replies ?? []).some(
+        (candidate) => candidate.id === input.reply.id,
+      )
+    )
+      throw new PackageCommandError(`Reply ${input.reply.id} already exists`);
+    const updated: DstarAnnotation = {
+      ...annotation,
+      replies: [...(annotation.replies ?? []), input.reply],
+    };
+    return this.repository.commit(snapshot, {
+      expectedSnapshotId: identity.expectedSnapshotId,
+      transactionType: "annotation",
+      writes: new Map([
+        [annotationPath(snapshot, annotation.id), encodeJson(asJson(updated))],
+      ]),
+      idempotency: command(
+        identity.idempotencyKey,
+        "add-human-reply",
+        asJson(input),
+      ),
+    });
+  }
+
+  async resolveAnnotation(
+    snapshot: PackageSnapshot,
+    annotationId: string,
+    actor: DstarActor,
+    resolvedAt: string,
+    identity: CommandIdentity,
+  ): Promise<PackageSnapshot> {
+    const annotation = snapshot.annotations.find(
+      (candidate) => candidate.id === annotationId,
+    );
+    if (!annotation)
+      throw new PackageCommandError(
+        `Annotation ${annotationId} does not exist`,
+      );
+    if (actor.type !== "human")
+      throw new PackageCommandError("Only a human may resolve an annotation");
+    if (annotation.status !== "open")
+      throw new PackageCommandError("Only an open annotation may be resolved");
+    const resolved: DstarAnnotation = {
+      ...annotation,
+      status: "resolved",
+      resolvedAt,
+      resolvedBy: actor as NonNullable<DstarAnnotation["resolvedBy"]>,
+    };
+    return this.repository.commit(snapshot, {
+      expectedSnapshotId: identity.expectedSnapshotId,
+      transactionType: "annotation",
+      writes: new Map([
+        [annotationPath(snapshot, annotation.id), encodeJson(asJson(resolved))],
+      ]),
+      idempotency: command(identity.idempotencyKey, "resolve-annotation", {
+        annotationId,
+        actor: asJson(actor),
+        resolvedAt,
+      }),
+    });
+  }
+
+  async cancelDelegation(
+    snapshot: PackageSnapshot,
+    delegationId: string,
+    actor: DstarActor,
+    cancelledAt: string,
+    reason: string | undefined,
+    identity: CommandIdentity,
+  ): Promise<PackageSnapshot> {
+    const delegation = snapshot.delegations.find(
+      (candidate) => candidate.id === delegationId,
+    );
+    if (!delegation)
+      throw new PackageCommandError(
+        `Delegation ${delegationId} does not exist`,
+      );
+    if (actor.type !== "human")
+      throw new PackageCommandError("Only a human may cancel a delegation");
+    if (delegation.status !== "queued" && delegation.status !== "in_progress")
+      throw new PackageCommandError(
+        "Only an active delegation may be cancelled",
+      );
+    const cancelled: DstarDelegation = {
+      ...delegation,
+      status: "cancelled",
+      completedAt: cancelledAt,
+      completedBy: actor,
+      ...(reason ? { reason } : {}),
+    };
+    return this.repository.commit(snapshot, {
+      expectedSnapshotId: identity.expectedSnapshotId,
+      transactionType: "delegation",
+      writes: new Map([
+        [
+          delegationPath(snapshot, delegation.id),
+          encodeJson(asJson(cancelled)),
+        ],
+      ]),
+      idempotency: command(identity.idempotencyKey, "cancel-delegation", {
+        delegationId,
+        actor: asJson(actor),
+        cancelledAt,
+        ...(reason ? { reason } : {}),
+      }),
     });
   }
 
@@ -379,6 +508,49 @@ export class PackageCommands {
         [changePath(snapshot, changeId), encodeJson(asJson(rejected))],
       ]),
       idempotency: command(identity.idempotencyKey, "reject-change", {
+        changeId,
+        actor: asJson(actor),
+        decidedAt,
+        ...(reason ? { reason } : {}),
+      }),
+    });
+  }
+
+  async supersedeChange(
+    snapshot: PackageSnapshot,
+    changeId: string,
+    actor: DstarActor,
+    decidedAt: string,
+    reason: string | undefined,
+    identity: CommandIdentity,
+  ): Promise<PackageSnapshot> {
+    const decision = rejectOrSupersedeChange(
+      snapshot,
+      changeId,
+      "superseded",
+      actor,
+      decidedAt,
+      reason,
+    );
+    if (!decision.valid || !decision.package)
+      throw new PackageCommandError(
+        "Change cannot be superseded",
+        decision.diagnostics,
+      );
+    const superseded = decision.package.changes.find(
+      (change) => change.id === changeId,
+    );
+    if (!superseded)
+      throw new PackageCommandError(
+        "Superseded change is missing from decision result",
+      );
+    return this.repository.commit(snapshot, {
+      expectedSnapshotId: identity.expectedSnapshotId,
+      transactionType: "decision",
+      writes: new Map([
+        [changePath(snapshot, changeId), encodeJson(asJson(superseded))],
+      ]),
+      idempotency: command(identity.idempotencyKey, "supersede-change", {
         changeId,
         actor: asJson(actor),
         decidedAt,

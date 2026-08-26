@@ -1,11 +1,14 @@
 {
-  "name": "@dstar/cli",
+  "name": "@dstar/workspace-server",
   "version": "0.0.0",
-  "description": "DSTAR command-line interface",
+  "description": "Loopback-only DSTAR review API",
   "type": "module",
   "private": true,
-  "bin": {
-    "dstar": "./dist/main.js"
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -15,10 +18,8 @@
   },
   "dependencies": {
     "@dstar/core": "workspace:*",
-    "@dstar/mcp-server": "workspace:*",
     "@dstar/node": "workspace:*",
-    "@dstar/render-html": "workspace:*",
-    "@dstar/workspace-server": "workspace:*"
+    "@dstar/render-html": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.17.2",

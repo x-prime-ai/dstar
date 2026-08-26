@@ -27,6 +27,10 @@ const mcpClient = await import(
 const dstarNode = await import(
   pathToFileURL(join(repositoryRoot, "packages/node/dist/index.js")).href
 );
+const workspaceServer = await import(
+  pathToFileURL(join(repositoryRoot, "apps/workspace-server/dist/index.js"))
+    .href
+);
 
 const temporary = await mkdtemp(join(tmpdir(), "dstar-xprime-integration-"));
 const packageRoot = join(temporary, "fixture.dstar");
@@ -35,23 +39,83 @@ await cp(join(repositoryRoot, "spec/0.1/examples/minimal.dstar"), packageRoot, {
   recursive: true,
 });
 const repository = new dstarNode.PackageRepository(runtimeRoot);
-const commands = new dstarNode.PackageCommands(repository);
-const opened = await repository.open(packageRoot);
-await commands.createDelegation(
-  opened,
+const human = { type: "human", id: "human_xprime_test" };
+let reviewServer = await workspaceServer.startWorkspaceServer({
+  packageRoot,
+  runtimeRoot,
+  human,
+  now: () => "2026-08-26T15:00:00Z",
+});
+
+const apiHeaders = (mutation = false) => ({
+  Authorization: `Bearer ${reviewServer.token}`,
+  Origin: reviewServer.origin,
+  ...(mutation
+    ? {
+        "Content-Type": "application/json",
+        "X-DSTAR-CSRF": reviewServer.csrfToken,
+      }
+    : {}),
+});
+const api = async (path, init = {}) => {
+  const response = await globalThis.fetch(
+    `${reviewServer.origin}/api/v1${path}`,
+    {
+      ...init,
+      headers: {
+        ...apiHeaders(init.method === "POST"),
+        ...init.headers,
+      },
+    },
+  );
+  const value = await response.json();
+  assert.equal(
+    response.ok,
+    true,
+    `workspace ${path} failed: ${JSON.stringify(value)}`,
+  );
+  return value;
+};
+const mutation = (path, expectedSnapshotId, idempotencyKey, input) =>
+  api(path, {
+    method: "POST",
+    body: JSON.stringify({ expectedSnapshotId, idempotencyKey, ...input }),
+  });
+
+const initialSnapshot = await api("/snapshot");
+const annotationWrite = await mutation(
+  "/annotations",
+  initialSnapshot.snapshotId,
+  "xprime-ui-comment",
   {
-    id: "delegation_xprime_real",
-    annotationId: "ann_0001",
-    assignee: { type: "agent", id: "agent_demo" },
-    createdBy: { type: "human", id: "human_xprime_test" },
-    createdAt: "2026-08-26T15:00:00Z",
-    instruction: "Propose the requested wording clarification.",
-  },
-  {
-    expectedSnapshotId: opened.snapshotId,
-    idempotencyKey: "xprime-real-delegation",
+    purpose: "change-request",
+    scope: "canonical",
+    target: {
+      source: "document",
+      revision: initialSnapshot.manifest.revision,
+      selector: { type: "NodeSelector", node: "node_promise" },
+    },
+    body: "Clarify the human review responsibility.",
+    audience: ["human", "agent"],
   },
 );
+const annotationId = (await api("/annotations")).find(
+  (item) => item.annotation.body === "Clarify the human review responsibility.",
+).annotation.id;
+const delegationWrite = await mutation(
+  "/delegations",
+  annotationWrite.snapshotId,
+  "xprime-ui-delegation",
+  {
+    annotationId,
+    assigneeId: "agent_demo",
+    instruction: "Propose the requested wording clarification.",
+  },
+);
+assert.equal(typeof delegationWrite.snapshotId, "string");
+const delegationId = (await api("/delegations")).find(
+  (delegation) => delegation.annotation === annotationId,
+).id;
 
 const runtime = await harness.HarnessRuntime.create({
   state: new harness.MemoryStateAdapter(),
@@ -148,9 +212,9 @@ const model = new harness.FakeModelAdapter([
   },
   (request) => {
     const tasks = toolValue(request);
-    assert.equal(tasks[0].delegationId, "delegation_xprime_real");
+    assert.equal(tasks[0].delegationId, delegationId);
     return toolCall("call-start", "start_task", {
-      delegationId: "delegation_xprime_real",
+      delegationId,
     });
   },
   (request) => {
@@ -159,7 +223,7 @@ const model = new harness.FakeModelAdapter([
     return toolCall("call-task", "get_task", { taskToken });
   },
   (request) => {
-    assert.equal(toolValue(request).delegation.id, "delegation_xprime_real");
+    assert.equal(toolValue(request).delegation.id, delegationId);
     return toolCall("call-manifest", "get_manifest", { taskToken });
   },
   (request) => {
@@ -180,11 +244,11 @@ const model = new harness.FakeModelAdapter([
     assert.equal(toolValue(request).results[0].nodeId, "node_promise");
     return toolCall("call-annotation", "get_annotation", {
       taskToken,
-      annotationId: "ann_0001",
+      annotationId,
     });
   },
   (request) => {
-    assert.equal(toolValue(request).annotation.id, "ann_0001");
+    assert.equal(toolValue(request).annotation.id, annotationId);
     return toolCall("call-source", "get_source", {
       taskToken,
       sourceId: "source_dstar_spec",
@@ -239,10 +303,35 @@ try {
   );
   assert.equal(proposed?.status, "proposed");
   assert.equal(finalPackage.manifest.headChange, "change_genesis_0001");
+  await reviewServer.close();
+  reviewServer = await workspaceServer.startWorkspaceServer({
+    packageRoot,
+    runtimeRoot,
+    human,
+    now: () => "2026-08-26T15:05:00Z",
+  });
+  const reopenedSnapshot = await api("/snapshot");
+  const simulation = await api(`/changes/${proposed.id}/simulation`);
+  assert.equal(simulation.applicability, "applicable");
+  assert.equal(typeof simulation.afterHtml, "string");
+  await mutation(
+    `/changes/${proposed.id}/accept`,
+    reopenedSnapshot.snapshotId,
+    "xprime-ui-human-accept",
+    { expectedResultRevision: simulation.resultRevision },
+  );
+  const acceptedPackage = await repository.open(packageRoot);
+  const accepted = acceptedPackage.changes.find(
+    (change) => change.id === proposed.id,
+  );
+  assert.equal(accepted?.status, "accepted");
+  assert.deepEqual(accepted?.decision?.actor, human);
+  assert.equal(acceptedPackage.manifest.headChange, proposed.id);
   console.log(
-    `Real xPrime deterministic Session passed: ${proposed.id} remains proposed at ${finalPackage.manifest.revision}.`,
+    `Real xPrime review loop passed: UI service delegated ${delegationId}, xPrime proposed ${proposed.id}, and human ${human.id} accepted ${acceptedPackage.manifest.revision}.`,
   );
 } finally {
+  await reviewServer.close().catch(() => undefined);
   await graph.dispose();
   await runtime.dispose();
 }

@@ -14,7 +14,9 @@ import {
 import { parseIJson, type DstarActor, type DstarChange } from "@dstar/core";
 import { serveDstarStdio } from "@dstar/mcp-server";
 import { publishProjections } from "@dstar/render-html";
+import { startWorkspaceServer } from "@dstar/workspace-server";
 import { readFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 
 export interface CliIo {
   readonly write: (message: string) => void;
@@ -30,6 +32,7 @@ function usage(): string {
     "  dstar history <package>",
     "  dstar show <package> --version <accepted-change-id>",
     "  dstar render <package> [--projection <id>]",
+    "  dstar serve <package> [--actor <human-id>] [--no-open]",
     "  dstar draft create <request-file>",
     "  dstar accept-genesis <draft>",
     "  dstar accept <package> <change-id>",
@@ -196,6 +199,33 @@ export async function runCli(
         diagnostics: result.diagnostics,
       }),
     );
+    return 0;
+  }
+
+  if (verb === "serve") {
+    rejectUnknownOptions(rest, ["--actor", "--runtime-root", "--no-open"]);
+    requirePositionalCount(rest, 1);
+    const packageRoot = resolve(required(rest[0], "package"));
+    const noOpen = rest.includes("--no-open");
+    const server = await startWorkspaceServer({
+      packageRoot,
+      runtimeRoot: resolve(option(rest, "--runtime-root") ?? runtimeRoot()),
+      human: humanActor(option(rest, "--actor")),
+      webRoot: resolve(import.meta.dirname, "../../review-web/dist"),
+    });
+    if (noOpen) io.write(`${server.launchUrl}\n`);
+    else {
+      spawn("open", [server.launchUrl], {
+        detached: true,
+        stdio: "ignore",
+      }).unref();
+      io.write(`${server.origin}\n`);
+    }
+    await new Promise<void>((accept) => {
+      process.once("SIGINT", accept);
+      process.once("SIGTERM", accept);
+    });
+    await server.close();
     return 0;
   }
 
