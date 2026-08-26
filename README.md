@@ -10,9 +10,9 @@ automation inside proprietary systems.
 
 DSTAR packages agent-authored canonical content — the authoritative semantic
 source of truth — with comments, delegations, proposals, sources, assets,
-provenance, and mapped projections as distinct but connected objects. A rich
-HTML view, summary, and agent context can serve different needs without becoming
-different documents.
+provenance, accepted version history, and mapped projections as distinct but
+connected objects. A rich HTML view, summary, and agent context can serve
+different needs without becoming different documents.
 
 > Agents author. Humans direct and decide.
 
@@ -27,20 +27,14 @@ goal is to specify and test one complete authoring and review workflow:
 4. An agent returns a structured, conflict-aware proposal.
 5. An authorized human accepts or rejects the proposal.
 6. Views regenerate without silently losing review provenance.
+7. Any accepted canonical version can be materialized from portable history.
 
 ## Repository layout
 
 ```text
-spec/0.1/
-├── DSTAR.md              Normative entry point and conformance
-├── document-model.md     Nodes, identity, profiles, and revisions
-├── annotations.md        Threads and durable multi-selector targets
-├── changes.md            Agent creation and update proposals
-├── delegations.md        Optional assignment of comments to agents
-├── projections.md        Addressable views and source mappings
-├── schemas/              Machine-readable structural rules
-├── examples/             Documents for learning and testing
-└── tests/                Conformance fixtures
+├── VISION.md             Product intent and authority principles
+├── spec/0.1/             Normative protocol, schemas, examples, and fixtures
+└── design/               Non-normative reference implementation design
 ```
 
 Implementations will be added only after the core 0.1 model is coherent. The
@@ -63,3 +57,5 @@ applications defines the protocol by itself.
 - Provenance and graceful degradation by default
 
 See [VISION.md](VISION.md) and [spec/0.1/DSTAR.md](spec/0.1/DSTAR.md).
+The non-normative reference implementation design starts at
+[design/README.md](design/README.md).

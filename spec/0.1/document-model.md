@@ -123,8 +123,9 @@ grapheme cluster. Adapters for editors that use UTF-16 or another coordinate
 system MUST convert at the protocol boundary.
 
 Canonical selections may cross nodes through `NodeRangeSelector`. Its endpoints
-remain offsets in the individual node text streams; DSTAR does not create a
-single concatenated cross-node canonical text stream.
+remain offsets in the individual node text streams. LF-normalized range
+quotation provides redundant evidence but does not create a global concatenated
+offset coordinate space.
 
 ## Identity across accepted transformations
 

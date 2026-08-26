@@ -44,6 +44,8 @@ With DSTAR, a person should be able to:
 - inspect the agent's local, source-backed proposal before it is committed;
 - understand which sources, comments, delegations, and actors motivated a
   change;
+- inspect accepted history and recover canonical content at any accepted
+  version;
 - retain review provenance when content or a derived view changes; and
 - move the document, its collaboration state, and its decision history to
   another conforming tool.
@@ -67,8 +69,8 @@ DSTAR separates five connected layers:
    IDs.
 2. **Collaboration state** — comments, replies, delegations, and their lifecycle
    outside canonical content.
-3. **Changes** — agent-authored, revision-aware proposals that require a human
-   decision.
+3. **Changes** — agent-authored, revision-aware proposals, human decisions, and
+   accepted canonical version history.
 4. **Evidence and provenance** — sources, actors, generators, and motivations.
 5. **Projections** — addressable human and agent views with mappings back to
    canonical content.
@@ -253,7 +255,9 @@ DSTAR 0.1 will prove one interoperable creation and review loop:
    original payload.
 8. Regenerate affected views while preserving original review provenance and
    surfacing ambiguous targets for human confirmation.
-9. Validate the same package with an independent conforming implementation.
+9. Materialize and validate an earlier accepted canonical version from the
+   portable change chain.
+10. Validate the same package with an independent conforming implementation.
 
 Conflict detection is in scope for 0.1. A conflicting proposal remains
 unapplied and may be rejected, superseded, or replaced by an explicit rebased

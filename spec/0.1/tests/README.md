@@ -4,6 +4,7 @@ These fixtures will test behavior that JSON Schema alone cannot express.
 
 ```text
 core-reader/          Package and canonical document behavior
+version-reader/       Historical canonical materialization and verification
 core-writer/          Accepted genesis/update materialization and preservation
 review-client/        Target resolution and thread lifecycle
 delegation-client/    Explicit assignment and independent lifecycle behavior
@@ -30,6 +31,20 @@ codes, and operation triples where behavior changes state.
 - accepted change chain branches or contains an accepted change off-chain
 - accepted change chain contains a cycle or a missing `baseChange`
 - a no-op or content-reverting update remains ordered by change ID
+
+## Planned Version Reader fixtures
+
+- genesis materializes as the first canonical version
+- an intermediate accepted update materializes independently of the head
+- the materialized head equals `document.json` and the manifest revision/head
+- repeated content revisions remain distinct versions by accepted change ID
+- corrupted historical operation preconditions fail materialization
+- an intermediate result revision mismatch fails before later updates run
+- a proposed, rejected, superseded, off-chain, or missing target is not a
+  canonical version
+- deleting implementation checkpoints does not affect materialized output
+- current annotations, delegations, sources, assets, and projections are not
+  presented as reconstructed historical package state
 
 ## Planned Review Client fixtures
 

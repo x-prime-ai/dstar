@@ -86,6 +86,49 @@ provenance. This requirement makes declared authorship and decisions available
 to another tool; it does not provide cryptographic proof against out-of-band
 file modification.
 
+## Canonical versions and materialization
+
+Each accepted change identifies one canonical version. The change ID is the
+version identity and its decision's `resultRevision` is the content identity.
+A content revision alone MUST NOT be used as a history position because
+multiple accepted changes may produce the same revision.
+
+To materialize an accepted target change, a Version Reader MUST:
+
+1. Follow the package's accepted chain from the target change back to genesis,
+   then order that prefix from genesis through the target.
+2. Require the genesis `create_document` value to satisfy every declared
+   profile, compute its revision, and verify that it equals the genesis
+   decision's `resultRevision`.
+3. For each accepted update in order, require its `baseChange` to equal the
+   preceding accepted change ID and its `baseRevision` to equal the current
+   materialized revision.
+4. Apply the update's operations in serialized order using the same
+   precondition, identity, containment, and profile rules used for acceptance.
+5. Compute the result revision and require it to equal that update decision's
+   `resultRevision` before continuing.
+6. Return the resulting canonical tree together with the target change ID and
+   result revision.
+
+Materializing a historical version is read-only. It MUST NOT change the
+manifest, `document.json`, proposal status, decisions, annotations,
+delegations, sources, assets, or projections. The materialized head version
+MUST be semantically identical to `document.json`; its change ID and revision
+MUST equal the manifest's `headChange` and `revision`.
+
+A Version Reader MAY cache intermediate materializations or create local
+checkpoints. Such caches are non-authoritative, need not be portable, and MUST
+be discardable without losing the ability to materialize any accepted version
+from the package.
+
+Canonical version history covers the semantic document tree and its change
+provenance. DSTAR 0.1 does not define a historical snapshot of the entire
+package as it appeared at that time. In particular, materializing a canonical
+version does not reconstruct the then-current lifecycle state of annotations,
+delegations, sources, assets, or projections. Those objects retain their own
+separate package representation and rules; complete historical package state is
+not implied.
+
 ## Update operations
 
 Every update operation has a stable operation ID, an operation type, and

@@ -17,6 +17,7 @@ consisting of:
 - a directory package encoding;
 - durable annotation threads and explicit delegations;
 - agent-authored creation and revision-aware update proposals;
+- portable accepted canonical version history;
 - sources, actors, assets, and provenance; and
 - addressable projections with mappings to canonical content.
 
@@ -28,6 +29,8 @@ model provider, authentication system, or hosting service.
 - **Canonical document** is the authoritative source of truth stored in
   `document.json`. “Canonical” describes authority, not a presentation format.
 - **Canonical target** identifies content in that source of truth.
+- **Canonical version** is one accepted point in document history, identified by
+  its accepted change ID and associated with an exact content revision.
 - **Canonical view** is a faithful, read-only rendering of the current canonical
   document. A selection in that view targets canonical content directly.
 - **Projection** is a derived view such as HTML, Markdown, a summary, or agent
@@ -48,7 +51,7 @@ layers:
 ```text
 canonical document
     <- annotations, replies, and delegations
-    <- agent proposals and human decisions
+    <- agent proposals, human decisions, and accepted version history
     <- sources and provenance
     <- projections and source mappings
 ```
@@ -150,7 +153,7 @@ SHOULD be globally unique URIs when published by third parties.
 An implementation that does not understand a declared profile MUST report that
 limitation. A lossless processor MUST preserve unknown profile content.
 
-## 7. Revisions
+## 7. Revisions and canonical versions
 
 A canonical document revision identifies the exact `document.json` value.
 DSTAR 0.1 revision identifiers use this algorithm:
@@ -165,6 +168,19 @@ DSTAR 0.1 revision identifiers use this algorithm:
 Formatting-only changes to `document.json` therefore do not change its
 revision. An asset has separate integrity and is not included in the 0.1
 document revision unless its digest is represented in canonical node data.
+
+A **canonical version** is one accepted point in document history and is
+identified by its accepted change ID. Its `resultRevision` identifies the
+canonical content at that point. Change identity and content identity are
+distinct: two accepted changes MAY have the same result revision, including a
+no-op or a later return to earlier content, while remaining different canonical
+versions with different provenance.
+
+The current canonical version is the pair formed by the manifest's
+`headChange` and `revision`. Proposed, rejected, and superseded changes are
+review history but do not identify canonical versions. Historical canonical
+versions are materialized from the retained accepted change chain as defined in
+[Changes](changes.md).
 
 An update change MUST declare both the accepted head change and canonical
 revision against which it was authored. An implementation MUST NOT silently
@@ -224,6 +240,8 @@ execution.
 An implementation MAY claim one or more roles:
 
 - **Core Reader** — reads and validates the manifest and canonical document.
+- **Version Reader** — materializes and validates historical canonical versions
+  from the accepted change chain.
 - **Core Writer** — materializes an accepted genesis or update change while
   preserving stable identity and unknown declared-profile content.
 - **Review Client** — reads and writes annotations and delegations and resolves
@@ -261,9 +279,10 @@ backward-incompatible changes.
 ## 13. Open issues
 
 - Deterministic ZIP packing rules and a packed media type
-- Asset integrity and its relationship to canonical revision
+- Asset integrity, update-time asset mutations, and their relationship to
+  canonical revision
 - Profile discovery and registry policy
-- Cross-node ranges within the canonical document
+- Portable archival representation and retention for prior projection revisions
 - Portable identity lineage for node splits, merges, and structural rewrites
 - Portable diagnostics for failed or conflicting change-application attempts
 - Portable envelope for an unaccepted genesis proposal
