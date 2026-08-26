@@ -16,8 +16,10 @@
     "id": { "$ref": "#/$defs/id" },
     "kind": { "enum": ["genesis", "update"] },
     "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "baseChange": { "$ref": "#/$defs/id" },
     "baseRevision": { "$ref": "#/$defs/revision" },
     "author": { "$ref": "#/$defs/agentActor" },
+    "request": { "$ref": "#/$defs/request" },
     "operations": {
       "type": "array",
       "minItems": 1,
@@ -57,8 +59,7 @@
         "properties": { "status": { "const": "proposed" } },
         "required": ["status"]
       },
-      "then": { "not": { "required": ["decision"] } },
-      "else": { "required": ["decision"] }
+      "then": { "not": { "required": ["decision"] } }
     },
     {
       "if": {
@@ -66,8 +67,42 @@
         "required": ["status"]
       },
       "then": {
+        "required": ["decision"],
         "properties": {
-          "decision": { "required": ["resultRevision"] }
+          "decision": {
+            "required": ["resultRevision"],
+            "properties": { "status": { "const": "accepted" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "rejected" } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "not": { "required": ["resultRevision"] },
+            "properties": { "status": { "const": "rejected" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "superseded" } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "not": { "required": ["resultRevision"] },
+            "properties": { "status": { "const": "superseded" } }
+          }
         }
       }
     },
@@ -77,7 +112,13 @@
         "required": ["kind"]
       },
       "then": {
-        "not": { "required": ["baseRevision"] },
+        "required": ["request"],
+        "not": {
+          "anyOf": [
+            { "required": ["baseChange"] },
+            { "required": ["baseRevision"] }
+          ]
+        },
         "properties": {
           "operations": {
             "minItems": 1,
@@ -87,7 +128,7 @@
         }
       },
       "else": {
-        "required": ["baseRevision"],
+        "required": ["baseChange", "baseRevision"],
         "properties": {
           "operations": {
             "items": { "$ref": "#/$defs/updateOperation" }
@@ -140,6 +181,19 @@
         }
       ]
     },
+    "request": {
+      "type": "object",
+      "required": ["actor", "body", "createdAt"],
+      "properties": {
+        "actor": { "$ref": "#/$defs/humanActor" },
+        "body": { "type": "string", "minLength": 1 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false
+    },
     "target": {
       "type": "object",
       "required": ["node"],
@@ -148,12 +202,28 @@
       },
       "additionalProperties": false
     },
-    "precondition": {
+    "origin": {
+      "type": "object",
+      "required": ["parent"],
+      "properties": {
+        "parent": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "nodePrecondition": {
       "type": "object",
       "required": ["nodeRevision"],
       "properties": {
         "nodeRevision": { "$ref": "#/$defs/revision" },
         "expectedText": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "parentPrecondition": {
+      "type": "object",
+      "required": ["nodeRevision"],
+      "properties": {
+        "nodeRevision": { "$ref": "#/$defs/revision" }
       },
       "additionalProperties": false
     },
@@ -176,6 +246,13 @@
         "after": { "$ref": "#/$defs/id" },
         "index": { "type": "integer", "minimum": 0 }
       },
+      "not": {
+        "anyOf": [
+          { "required": ["before", "after"] },
+          { "required": ["before", "index"] },
+          { "required": ["after", "index"] }
+        ]
+      },
       "additionalProperties": false
     },
     "createDocumentOperation": {
@@ -188,56 +265,110 @@
       },
       "additionalProperties": false
     },
-    "updateOperation": {
+    "replaceTextOperation": {
       "type": "object",
-      "required": ["id", "op", "target", "precondition"],
+      "required": ["id", "op", "target", "precondition", "range", "value"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "op": {
-          "enum": ["replace_text", "insert_node", "delete_node", "move_node", "set_attrs"]
-        },
+        "op": { "const": "replace_text" },
         "target": { "$ref": "#/$defs/target" },
-        "precondition": { "$ref": "#/$defs/precondition" },
+        "precondition": { "$ref": "#/$defs/nodePrecondition" },
         "range": { "$ref": "#/$defs/range" },
-        "value": {},
-        "destination": { "$ref": "#/$defs/destination" }
+        "value": { "type": "string" }
       },
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "properties": { "op": { "const": "replace_text" } },
-            "required": ["op"]
-          },
-          "then": {
-            "required": ["range", "value"],
-            "properties": { "value": { "type": "string" } }
-          }
-        },
-        {
-          "if": {
-            "properties": { "op": { "const": "insert_node" } },
-            "required": ["op"]
-          },
-          "then": { "required": ["destination", "value"] }
-        },
-        {
-          "if": {
-            "properties": { "op": { "const": "move_node" } },
-            "required": ["op"]
-          },
-          "then": { "required": ["destination"] }
-        },
-        {
-          "if": {
-            "properties": { "op": { "const": "set_attrs" } },
-            "required": ["op"]
-          },
-          "then": {
-            "required": ["value"],
-            "properties": { "value": { "type": "object" } }
-          }
+      "additionalProperties": false
+    },
+    "replaceInlineOperation": {
+      "type": "object",
+      "required": ["id", "op", "target", "precondition", "value"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "op": { "const": "replace_inline" },
+        "target": { "$ref": "#/$defs/target" },
+        "precondition": { "$ref": "#/$defs/nodePrecondition" },
+        "value": {
+          "type": "array",
+          "items": { "$ref": "document.schema.json#/$defs/inline" }
         }
+      },
+      "additionalProperties": false
+    },
+    "insertNodeOperation": {
+      "type": "object",
+      "required": ["id", "op", "destination", "destinationPrecondition", "value"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "op": { "const": "insert_node" },
+        "destination": { "$ref": "#/$defs/destination" },
+        "destinationPrecondition": { "$ref": "#/$defs/parentPrecondition" },
+        "value": { "$ref": "document.schema.json#/$defs/node" }
+      },
+      "additionalProperties": false
+    },
+    "deleteNodeOperation": {
+      "type": "object",
+      "required": [
+        "id",
+        "op",
+        "target",
+        "precondition",
+        "origin",
+        "originPrecondition"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "op": { "const": "delete_node" },
+        "target": { "$ref": "#/$defs/target" },
+        "precondition": { "$ref": "#/$defs/nodePrecondition" },
+        "origin": { "$ref": "#/$defs/origin" },
+        "originPrecondition": { "$ref": "#/$defs/parentPrecondition" }
+      },
+      "additionalProperties": false
+    },
+    "moveNodeOperation": {
+      "type": "object",
+      "required": [
+        "id",
+        "op",
+        "target",
+        "precondition",
+        "origin",
+        "originPrecondition",
+        "destination",
+        "destinationPrecondition"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "op": { "const": "move_node" },
+        "target": { "$ref": "#/$defs/target" },
+        "precondition": { "$ref": "#/$defs/nodePrecondition" },
+        "origin": { "$ref": "#/$defs/origin" },
+        "originPrecondition": { "$ref": "#/$defs/parentPrecondition" },
+        "destination": { "$ref": "#/$defs/destination" },
+        "destinationPrecondition": { "$ref": "#/$defs/parentPrecondition" }
+      },
+      "additionalProperties": false
+    },
+    "setAttrsOperation": {
+      "type": "object",
+      "required": ["id", "op", "target", "precondition", "value"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "op": { "const": "set_attrs" },
+        "target": { "$ref": "#/$defs/target" },
+        "precondition": { "$ref": "#/$defs/nodePrecondition" },
+        "value": { "type": ["object", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "updateOperation": {
+      "oneOf": [
+        { "$ref": "#/$defs/replaceTextOperation" },
+        { "$ref": "#/$defs/replaceInlineOperation" },
+        { "$ref": "#/$defs/insertNodeOperation" },
+        { "$ref": "#/$defs/deleteNodeOperation" },
+        { "$ref": "#/$defs/moveNodeOperation" },
+        { "$ref": "#/$defs/setAttrsOperation" }
       ]
     },
     "decision": {

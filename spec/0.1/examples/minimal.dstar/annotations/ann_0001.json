@@ -1,10 +1,11 @@
 {
   "id": "ann_0001",
   "type": "comment",
+  "purpose": "change-request",
   "scope": "canonical",
   "target": {
     "source": "projection_html",
-    "revision": "sha256:8a11b8bc7b118c4dc27eb8b9716267387392bf0ac45dad0f0b3279a03055209d",
+    "revision": "sha256:eb1754989600896af2cbdc7f55ceaeee5d14d20c64d66140f04cd88ad1486a1a",
     "selector": {
       "type": "SegmentSelector",
       "segment": "segment_html_promise",
@@ -28,7 +29,7 @@
     {
       "relation": "exact",
       "source": "document",
-      "revision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
+      "revision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
       "selector": {
         "type": "NodeSelector",
         "node": "node_promise",

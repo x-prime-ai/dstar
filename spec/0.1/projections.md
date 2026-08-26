@@ -59,11 +59,16 @@ source-of-truth content.
 A projection segment identifies a range or semantic unit within a projection
 and lists one or more canonical targets in `derivedFrom`.
 
-Each source mapping declares a relationship:
+Each source mapping contains a canonical `NodeSelector` or
+`NodeRangeSelector` and declares a relationship:
 
 - `exact` — projection text is directly traceable to canonical text;
 - `transformed` — source content has been structurally or textually transformed;
 - `summarizes` — the projection synthesizes or summarizes source content.
+
+`NodeRangeSelector` uses the canonical LF-normalized range text defined in
+[Annotations](annotations.md). A projection renderer MAY additionally retain
+`viewExact` when its presentation uses different visible separators.
 
 For plain-text formats, a segment uses position and quotation selectors over
 decoded projection text. For HTML, a segment SHOULD use a `FragmentSelector`
@@ -79,9 +84,10 @@ Segments MUST be ordered by projection reading order. This makes a
 
 ## Mapping granularity
 
-An exact mapping SHOULD identify the smallest canonical node and range that can
-be translated without changing meaning. A transformed mapping SHOULD identify
-the smallest reliable source container without inventing an exact range.
+An exact mapping SHOULD identify the smallest canonical node or node range that
+can be translated without changing meaning. A transformed mapping SHOULD
+identify the smallest reliable source container without inventing an exact
+range.
 
 Summary claims SHOULD map to all canonical nodes that support them. When a
 statement combines several sections, `derivedFrom` contains one `summarizes`
@@ -91,12 +97,14 @@ entry for each relevant source target.
 
 A comment created while viewing a projection records the projection revision
 and either a `SegmentSelector` or `SegmentRangeSelector`. The Review Client also
-copies every intersected source mapping into the annotation's
-`canonicalTargets`.
+copies every intersected source mapping's relation and canonical selector into
+the annotation's `canonicalTargets`, adding source `document` and the
+projection's `generatedFromRevision`.
 
-The annotation `scope` determines whether subsequent work should change the
-canonical document, the projection or its generator, or both. Source mappings
-do not imply edit intent.
+The annotation `scope` records whether the discussion concerns the canonical
+document, the projection or its generator, or both. Its `purpose` records why
+the comment exists. Neither field invokes an agent, and source mappings do not
+imply edit intent.
 
 After regeneration, a client MAY use canonical targets and the new source map
 to show the annotation in the new view only when the mapping is unique and

@@ -24,6 +24,43 @@
           "text": "Agents author. Humans direct and decide."
         }
       ]
+    },
+    {
+      "id": "node_resources",
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Read the "
+        },
+        {
+          "type": "text",
+          "text": "DSTAR specification",
+          "marks": [
+            {
+              "type": "strong"
+            },
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://dstar.dev/spec/0.1/"
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " for details."
+        }
+      ]
+    },
+    {
+      "id": "node_architecture",
+      "type": "image",
+      "attrs": {
+        "src": "assets/architecture.svg",
+        "alt": "DSTAR review loop connecting human direction, agent proposals, and canonical content."
+      }
     }
   ]
 }

@@ -1,4 +1,11 @@
 {
-  "sources": []
+  "sources": [
+    {
+      "id": "source_dstar_spec",
+      "type": "url",
+      "title": "DSTAR 0.1 specification",
+      "url": "https://dstar.dev/spec/0.1/",
+      "accessedAt": "2026-08-23T23:58:00Z"
+    }
+  ]
 }
-

@@ -12,7 +12,7 @@ thread contains:
 
 - a stable annotation ID;
 - an annotation type;
-- the scope of the requested review;
+- its discussion purpose and subject scope;
 - a primary target representing what the author actually reviewed;
 - zero or more canonical targets representing relevant source-of-truth content;
 - an initial body and author;
@@ -20,8 +20,9 @@ thread contains:
 - a status and lifecycle metadata; and
 - an optional intended audience.
 
-The base annotation type is `comment`. The base statuses are `open` and
-`resolved`. Every reply has its own stable ID, body, author, and timestamp.
+The base annotation type is `comment`. The base purposes are `discussion`,
+`question`, and `change-request`. The base statuses are `open` and `resolved`.
+Every reply has its own stable ID, body, author, and timestamp.
 
 The thread file represents current portable state. A future event-log profile
 may preserve every edit, reopen, and moderation action, but snapshot and event
@@ -29,11 +30,21 @@ semantics are not mixed in `annotations/`.
 
 ## Scope
 
-`scope` states what the annotation asks a reviewer or agent to change:
+`scope` states what the annotation is about, not what an agent is authorized or
+required to change:
 
-- `canonical` — review or change source-of-truth content;
-- `projection` — review only the selected view or its generator; or
-- `both` — review canonical content and the selected projection.
+- `canonical` — canonical source-of-truth content;
+- `projection` — the selected view or its generator; or
+- `both` — canonical content and the selected projection.
+
+`purpose` states why the annotation exists:
+
+- `discussion` — an observation or topic with no implied action;
+- `question` — a request for information or clarification; or
+- `change-request` — feedback that may lead to a content proposal.
+
+Neither `scope` nor `purpose` invokes an agent. Only an explicit delegation
+requests agent execution.
 
 A link to canonical content is provenance, not an instruction to edit it. For
 example, “this summary is too verbose” has projection scope even though the
@@ -102,6 +113,37 @@ and optional prefix/suffix provide validation and recovery after changes.
 
 Node-level comments omit `refinedBy`.
 
+A canonical selection crossing nodes uses `NodeRangeSelector`. Its endpoints
+use node-local Unicode-code-point offsets. `exact` preserves a deterministic
+canonical quote; `viewExact` MAY additionally preserve the visible text the
+person selected when rendering whitespace differs:
+
+```json
+{
+  "type": "NodeRangeSelector",
+  "start": { "node": "node_a", "offset": 7 },
+  "end": { "node": "node_c", "offset": 12 },
+  "unit": "unicode-code-point",
+  "exact": "canonical text\nacross nodes",
+  "viewExact": "canonical text across nodes"
+}
+```
+
+The start node MUST precede or equal the end node in depth-first document
+reading order. When both endpoints use the same node, the start offset MUST be
+less than or equal to the end offset. Each endpoint is validated against its
+own node text stream.
+
+The canonical range text is constructed in reading order from the suffix of
+the start node's text stream, every non-empty intermediate node text stream,
+and the prefix of the end node's text stream, joined with one U+000A LINE FEED.
+Empty components are omitted. For a same-node range it is simply the selected
+substring. `exact` MUST equal this canonical range text. Optional `prefix` and
+`suffix` are node-local context immediately before the start offset and after
+the end offset. `viewExact`, when present, records the browser or native
+selection text before canonical normalization; it is provenance and MUST NOT
+replace `exact` during recovery.
+
 ## Projection selection
 
 A selection contained within one mapped projection segment uses
@@ -166,6 +208,24 @@ in effect when the review was created.
 
 ## HTML selection
 
+### Canonical HTML
+
+A selectable canonical HTML view SHOULD emit `data-dstar-node` on the smallest
+practical DOM element corresponding to each canonical node. A Review Client
+converts a browser `Range` contained within one node into `NodeSelector`; a range
+crossing nodes becomes `NodeRangeSelector`.
+
+The visible text inside each mapped element MUST preserve the node text-stream
+order. Whitespace introduced only for layout is not part of node offsets. A
+renderer MUST store `viewExact` whenever browser whitespace normalization makes
+the visible cross-node selection differ from the canonical range text.
+
+`data-dstar-node` is a lookup aid, not an alternative identifier. The stored
+target remains the node ID, document revision, node-local offsets, and quotation
+evidence.
+
+### Projection HTML
+
 A reviewable HTML renderer SHOULD emit `data-dstar-segment` on the smallest
 practical DOM elements that correspond to indexed projection segments. When a
 person makes a browser selection, a Review Client:
@@ -174,7 +234,9 @@ person makes a browser selection, a Review Client:
 2. finds the containing or intersected DSTAR segments;
 3. converts the visible selection to segment-relative Unicode-code-point
    offsets and quotation evidence;
-4. copies intersected `derivedFrom` entries into `canonicalTargets`; and
+4. copies intersected `derivedFrom` relations and selectors into
+   `canonicalTargets`, adding source `document` and the projection's
+   `generatedFromRevision`; and
 5. stores the annotation outside the HTML artifact.
 
 Embedded segment attributes are navigation aids. `projections/index.json` and
@@ -235,6 +297,9 @@ A semantically valid annotation MUST satisfy:
 - canonical targets refer to the canonical revision used to generate the
   reviewed projection;
 - position selectors have `start <= end` and valid code-point boundaries;
+- a node range follows canonical document reading order and has valid endpoint
+  offsets, including ordered offsets when both endpoints use the same node;
 - a segment range follows projection reading order;
 - replies have unique IDs within the thread; and
-- resolved threads include `resolvedAt` and `resolvedBy`.
+- resolved threads include `resolvedAt` and a human `resolvedBy`; open threads
+  include neither lifecycle field.

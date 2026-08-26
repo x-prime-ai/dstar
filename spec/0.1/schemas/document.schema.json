@@ -17,6 +17,10 @@
       "maxLength": 255,
       "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$"
     },
+    "packageRelativePath": {
+      "type": "string",
+      "pattern": "^(?:(?!\\.\\.?(?:/|$))[^/:\\\\\\u0000]+/)*(?!\\.\\.?$)[^/:\\\\\\u0000]+$"
+    },
     "mark": {
       "type": "object",
       "required": ["type"],
@@ -95,7 +99,75 @@
       "patternProperties": {
         "^x-": true
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "document" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["children"],
+            "not": { "required": ["content"] }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "heading" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["attrs", "content"],
+            "properties": {
+              "attrs": {
+                "type": "object",
+                "required": ["level"],
+                "properties": {
+                  "level": { "type": "integer", "minimum": 1, "maximum": 6 }
+                },
+                "additionalProperties": false
+              }
+            },
+            "not": { "required": ["children"] }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "paragraph" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["content"],
+            "not": { "required": ["children"] }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "image" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["attrs"],
+            "properties": {
+              "attrs": {
+                "type": "object",
+                "required": ["src", "alt"],
+                "properties": {
+                  "src": { "$ref": "#/$defs/packageRelativePath" },
+                  "alt": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+              }
+            },
+            "not": {
+              "anyOf": [
+                { "required": ["content"] },
+                { "required": ["children"] }
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

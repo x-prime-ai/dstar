@@ -25,6 +25,10 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "packageRelativePath": {
+      "type": "string",
+      "pattern": "^(?:(?!\\.\\.?(?:/|$))[^/:\\\\\\u0000]+/)*(?!\\.\\.?$)[^/:\\\\\\u0000]+$"
+    },
     "actor": {
       "type": "object",
       "required": ["type", "id"],
@@ -91,21 +95,61 @@
         { "$ref": "#/$defs/fragmentSelector" }
       ]
     },
-    "canonicalTarget": {
+    "nodeSelector": {
       "type": "object",
-      "required": ["relation", "node"],
+      "required": ["type", "node"],
       "properties": {
-        "relation": { "enum": ["exact", "transformed", "summarizes"] },
+        "type": { "const": "NodeSelector" },
         "node": { "$ref": "#/$defs/id" },
         "refinedBy": {
           "type": "array",
           "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
           "items": {
             "oneOf": [
               { "$ref": "#/$defs/textPositionSelector" },
               { "$ref": "#/$defs/textQuoteSelector" }
             ]
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "nodePoint": {
+      "type": "object",
+      "required": ["node", "offset"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "offset": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "nodeRangeSelector": {
+      "type": "object",
+      "required": ["type", "start", "end", "unit", "exact"],
+      "properties": {
+        "type": { "const": "NodeRangeSelector" },
+        "start": { "$ref": "#/$defs/nodePoint" },
+        "end": { "$ref": "#/$defs/nodePoint" },
+        "unit": { "const": "unicode-code-point" },
+        "exact": { "type": "string", "minLength": 1 },
+        "viewExact": { "type": "string", "minLength": 1 },
+        "prefix": { "type": "string" },
+        "suffix": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "canonicalTarget": {
+      "type": "object",
+      "required": ["relation", "selector"],
+      "properties": {
+        "relation": { "enum": ["exact", "transformed", "summarizes"] },
+        "selector": {
+          "oneOf": [
+            { "$ref": "#/$defs/nodeSelector" },
+            { "$ref": "#/$defs/nodeRangeSelector" }
+          ]
         }
       },
       "additionalProperties": false
@@ -149,11 +193,7 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$"
         },
-        "path": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "^(?!/)(?!.*\\.\\./).+$"
-        },
+        "path": { "$ref": "#/$defs/packageRelativePath" },
         "reviewable": { "type": "boolean" },
         "generatedFromRevision": { "$ref": "#/$defs/revision" },
         "revision": { "$ref": "#/$defs/revision" },

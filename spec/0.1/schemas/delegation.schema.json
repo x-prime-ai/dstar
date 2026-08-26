@@ -22,10 +22,11 @@
     },
     "createdAt": { "type": "string", "format": "date-time" },
     "completedAt": { "type": "string", "format": "date-time" },
+    "completedBy": { "$ref": "#/$defs/actor" },
     "reason": { "type": "string" },
-    "resultChanges": {
+    "results": {
       "type": "array",
-      "items": { "$ref": "#/$defs/id" },
+      "items": { "$ref": "#/$defs/result" },
       "uniqueItems": true
     }
   },
@@ -41,8 +42,15 @@
         },
         "required": ["status"]
       },
-      "then": { "required": ["completedAt"] },
-      "else": { "not": { "required": ["completedAt"] } }
+      "then": { "required": ["completedAt", "completedBy"] },
+      "else": {
+        "not": {
+          "anyOf": [
+            { "required": ["completedAt"] },
+            { "required": ["completedBy"] }
+          ]
+        }
+      }
     }
   ],
   "$defs": {
@@ -83,6 +91,31 @@
           "properties": { "type": { "const": "human" } },
           "required": ["type"]
         }
+      ]
+    },
+    "changeResult": {
+      "type": "object",
+      "required": ["type", "change"],
+      "properties": {
+        "type": { "const": "change" },
+        "change": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "replyResult": {
+      "type": "object",
+      "required": ["type", "annotation", "reply"],
+      "properties": {
+        "type": { "const": "reply" },
+        "annotation": { "$ref": "#/$defs/id" },
+        "reply": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "oneOf": [
+        { "$ref": "#/$defs/changeResult" },
+        { "$ref": "#/$defs/replyResult" }
       ]
     }
   }

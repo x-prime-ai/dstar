@@ -2,7 +2,8 @@
   "id": "change_0001",
   "kind": "update",
   "idempotencyKey": "example-change-0001",
-  "baseRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
+  "baseChange": "change_genesis_0001",
+  "baseRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
   "author": {
     "type": "agent",
     "id": "agent_demo",

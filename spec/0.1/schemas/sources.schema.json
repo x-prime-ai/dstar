@@ -20,7 +20,7 @@
           "type": { "enum": ["url", "file", "citation"] },
           "title": { "type": "string" },
           "url": { "type": "string", "format": "uri" },
-          "path": { "type": "string" },
+          "path": { "$ref": "#/$defs/packageRelativePath" },
           "accessedAt": { "type": "string", "format": "date-time" }
         },
         "patternProperties": {
@@ -30,6 +30,11 @@
       }
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "packageRelativePath": {
+      "type": "string",
+      "pattern": "^(?:(?!\\.\\.?(?:/|$))[^/:\\\\\\u0000]+/)*(?!\\.\\.?$)[^/:\\\\\\u0000]+$"
+    }
+  }
 }
-

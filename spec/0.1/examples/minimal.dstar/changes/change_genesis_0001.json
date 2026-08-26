@@ -7,6 +7,15 @@
     "id": "agent_demo",
     "name": "Demo agent"
   },
+  "request": {
+    "actor": {
+      "type": "human",
+      "id": "human_demo",
+      "name": "Demo reviewer"
+    },
+    "body": "Create a small DSTAR document that explains the authority boundary and demonstrates rich content.",
+    "createdAt": "2026-08-23T23:58:30Z"
+  },
   "operations": [
     {
       "id": "operation_genesis_0001",
@@ -37,6 +46,43 @@
                 "text": "Agents author. Humans direct and decide."
               }
             ]
+          },
+          {
+            "id": "node_resources",
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Read the "
+              },
+              {
+                "type": "text",
+                "text": "DSTAR specification",
+                "marks": [
+                  {
+                    "type": "strong"
+                  },
+                  {
+                    "type": "link",
+                    "attrs": {
+                      "href": "https://dstar.dev/spec/0.1/"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": " for details."
+              }
+            ]
+          },
+          {
+            "id": "node_architecture",
+            "type": "image",
+            "attrs": {
+              "src": "assets/architecture.svg",
+              "alt": "DSTAR review loop connecting human direction, agent proposals, and canonical content."
+            }
           }
         ]
       }
@@ -44,6 +90,7 @@
   ],
   "status": "accepted",
   "createdAt": "2026-08-23T23:59:00Z",
+  "sources": ["source_dstar_spec"],
   "decision": {
     "status": "accepted",
     "actor": {
@@ -52,6 +99,6 @@
       "name": "Demo reviewer"
     },
     "at": "2026-08-23T23:59:30Z",
-    "resultRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799"
+    "resultRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a"
   }
 }

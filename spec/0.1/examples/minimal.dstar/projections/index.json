@@ -6,8 +6,8 @@
       "mediaType": "text/markdown",
       "path": "projections/document.md",
       "reviewable": true,
-      "generatedFromRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
-      "revision": "sha256:6a951338ff903e3891ccdd2aa843d3c83f9f643f6638e3ffa55c275c1b503af5",
+      "generatedFromRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+      "revision": "sha256:7d9be07e04e2bba117571114f5c1406b9b69bd6f71a60a9b9971481852048d09",
       "generator": {
         "actor": {
           "type": "service",
@@ -18,6 +18,30 @@
         "createdAt": "2026-08-24T00:00:00Z"
       },
       "segments": [
+        {
+          "id": "segment_markdown_title",
+          "selectors": [
+            {
+              "type": "TextPositionSelector",
+              "start": 0,
+              "end": 13,
+              "unit": "unicode-code-point"
+            },
+            {
+              "type": "TextQuoteSelector",
+              "exact": "# Hello DSTAR"
+            }
+          ],
+          "derivedFrom": [
+            {
+              "relation": "transformed",
+              "selector": {
+                "type": "NodeSelector",
+                "node": "node_title"
+              }
+            }
+          ]
+        },
         {
           "id": "segment_markdown_promise",
           "selectors": [
@@ -35,7 +59,58 @@
           "derivedFrom": [
             {
               "relation": "exact",
-              "node": "node_promise"
+              "selector": {
+                "type": "NodeSelector",
+                "node": "node_promise"
+              }
+            }
+          ]
+        },
+        {
+          "id": "segment_markdown_resources",
+          "selectors": [
+            {
+              "type": "TextPositionSelector",
+              "start": 57,
+              "end": 133,
+              "unit": "unicode-code-point"
+            },
+            {
+              "type": "TextQuoteSelector",
+              "exact": "Read the [**DSTAR specification**](https://dstar.dev/spec/0.1/) for details."
+            }
+          ],
+          "derivedFrom": [
+            {
+              "relation": "transformed",
+              "selector": {
+                "type": "NodeSelector",
+                "node": "node_resources"
+              }
+            }
+          ]
+        },
+        {
+          "id": "segment_markdown_architecture",
+          "selectors": [
+            {
+              "type": "TextPositionSelector",
+              "start": 135,
+              "end": 251,
+              "unit": "unicode-code-point"
+            },
+            {
+              "type": "TextQuoteSelector",
+              "exact": "![DSTAR review loop connecting human direction, agent proposals, and canonical content.](../assets/architecture.svg)"
+            }
+          ],
+          "derivedFrom": [
+            {
+              "relation": "transformed",
+              "selector": {
+                "type": "NodeSelector",
+                "node": "node_architecture"
+              }
             }
           ]
         }
@@ -47,7 +122,7 @@
       "mediaType": "text/markdown",
       "path": "projections/summary.md",
       "reviewable": true,
-      "generatedFromRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
+      "generatedFromRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
       "revision": "sha256:c16a9a47ff1342393d4a110d9e8d09384d839911230e7d9bb7fde62aee70c0a8",
       "generator": {
         "actor": {
@@ -75,7 +150,57 @@
           "derivedFrom": [
             {
               "relation": "summarizes",
-              "node": "node_promise"
+              "selector": {
+                "type": "NodeSelector",
+                "node": "node_promise"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "projection_excerpt",
+      "role": "plain-text",
+      "mediaType": "text/plain",
+      "path": "projections/excerpt.txt",
+      "reviewable": true,
+      "generatedFromRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+      "revision": "sha256:354190720a82f0ec2a846699ec1e42540d8a79d39c3b181970dbe33e33b986c4",
+      "generator": {
+        "actor": {
+          "type": "service",
+          "id": "service_renderer",
+          "name": "DSTAR example renderer"
+        },
+        "version": "0.1",
+        "createdAt": "2026-08-24T00:00:00Z"
+      },
+      "segments": [
+        {
+          "id": "segment_excerpt_intro",
+          "selectors": [
+            {
+              "type": "TextPositionSelector",
+              "start": 0,
+              "end": 52,
+              "unit": "unicode-code-point"
+            },
+            {
+              "type": "TextQuoteSelector",
+              "exact": "Hello DSTAR\nAgents author. Humans direct and decide."
+            }
+          ],
+          "derivedFrom": [
+            {
+              "relation": "exact",
+              "selector": {
+                "type": "NodeRangeSelector",
+                "start": { "node": "node_title", "offset": 0 },
+                "end": { "node": "node_promise", "offset": 40 },
+                "unit": "unicode-code-point",
+                "exact": "Hello DSTAR\nAgents author. Humans direct and decide."
+              }
             }
           ]
         }
@@ -87,8 +212,8 @@
       "mediaType": "text/html",
       "path": "projections/document.html",
       "reviewable": true,
-      "generatedFromRevision": "sha256:f6384ac32c61e714ff5fecb769877c1795a1308b330503e6ab428188debb0799",
-      "revision": "sha256:8a11b8bc7b118c4dc27eb8b9716267387392bf0ac45dad0f0b3279a03055209d",
+      "generatedFromRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+      "revision": "sha256:eb1754989600896af2cbdc7f55ceaeee5d14d20c64d66140f04cd88ad1486a1a",
       "generator": {
         "actor": {
           "type": "service",
@@ -114,7 +239,10 @@
           "derivedFrom": [
             {
               "relation": "exact",
-              "node": "node_title"
+              "selector": {
+                "type": "NodeSelector",
+                "node": "node_title"
+              }
             }
           ]
         },
@@ -133,7 +261,50 @@
           "derivedFrom": [
             {
               "relation": "exact",
-              "node": "node_promise"
+              "selector": {
+                "type": "NodeSelector",
+                "node": "node_promise"
+              }
+            }
+          ]
+        },
+        {
+          "id": "segment_html_resources",
+          "selectors": [
+            {
+              "type": "FragmentSelector",
+              "value": "segment_html_resources"
+            },
+            {
+              "type": "TextQuoteSelector",
+              "exact": "Read the DSTAR specification for details."
+            }
+          ],
+          "derivedFrom": [
+            {
+              "relation": "exact",
+              "selector": {
+                "type": "NodeSelector",
+                "node": "node_resources"
+              }
+            }
+          ]
+        },
+        {
+          "id": "segment_html_architecture",
+          "selectors": [
+            {
+              "type": "FragmentSelector",
+              "value": "segment_html_architecture"
+            }
+          ],
+          "derivedFrom": [
+            {
+              "relation": "transformed",
+              "selector": {
+                "type": "NodeSelector",
+                "node": "node_architecture"
+              }
             }
           ]
         }

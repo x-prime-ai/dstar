@@ -84,14 +84,16 @@ example.dstar/
 Required entries:
 
 - `manifest.json` identifies the specification version, content profiles,
-  current canonical revision, and package entry points.
+  current canonical revision, accepted head change, and package entry points.
 - `document.json` contains the canonical document tree.
+- `changes/` contains the accepted genesis record, the accepted update chain to
+  the current canonical revision, and any retained pending or decided
+  proposals.
 
 Optional entries:
 
 - `annotations/` contains one annotation thread per JSON file.
 - `delegations/` contains one agent assignment per JSON file.
-- `changes/` contains one proposed or decided change per JSON file.
 - `sources.json` contains source records.
 - `assets/` contains package-local binary or textual resources.
 - `projections/` contains derived views; when present it MUST contain
@@ -101,8 +103,9 @@ The working representation is the directory package. A ZIP transfer encoding
 MAY use the filename suffix `.dstar.zip`; its deterministic packing rules are
 not yet normative in 0.1.
 
-Package paths MUST be relative, use `/` as the serialized separator, and MUST
-NOT escape the package root. Implementations MUST NOT follow package-local
+Package paths MUST contain one or more non-empty `/`-separated segments. They
+MUST NOT begin with `/`, contain `.` or `..` segments, contain `\\`, contain
+`:`, or escape the package root. Implementations MUST NOT follow package-local
 links that escape the root while validating or extracting a package.
 
 ## 4. Structural and semantic validity
@@ -113,6 +116,12 @@ A semantically valid package additionally satisfies all cross-object and
 behavioral requirements in this specification, including identifier uniqueness,
 reference integrity, projection mapping integrity, revision preconditions, and
 authority rules.
+
+Every package MUST contain exactly one accepted genesis change. Accepted
+changes MUST form an unbroken change-ID chain ending at the manifest's
+`headChange`; the head's result revision MUST equal the manifest's current
+canonical revision. This is declared portable provenance, not proof that
+package files were never modified outside a conforming tool.
 
 The JSON Schemas are authoritative for structural validity. The normative prose
 is authoritative for semantics and behavior.
@@ -157,15 +166,15 @@ Formatting-only changes to `document.json` therefore do not change its
 revision. An asset has separate integrity and is not included in the 0.1
 document revision unless its digest is represented in canonical node data.
 
-An update change MUST declare the canonical revision against which it was
-authored. An implementation MUST NOT silently apply it to a different revision.
-Update operations also carry local preconditions so a processor can report
-precise conflicts.
+An update change MUST declare both the accepted head change and canonical
+revision against which it was authored. An implementation MUST NOT silently
+apply it to a different head or revision. Update operations also carry local
+preconditions so a processor can report precise conflicts.
 
-A genesis change creates the first canonical revision and therefore has no base
-revision. Its single `create_document` operation contains the proposed root
-document. Genesis and update changes share the proposal and human-decision flow
-in Section 8.
+A genesis change creates the first canonical revision and accepted history head,
+and therefore has neither base field. Its single `create_document` operation
+contains the proposed root document. Genesis and update changes share the
+proposal and human-decision flow in Section 8.
 
 Projection revisions use the same `sha256:` encoding over the projection's raw
 file bytes. They are distinct from canonical document revisions.
@@ -197,10 +206,10 @@ An annotation MAY declare an intended audience. This is a context-disclosure
 instruction for conforming tools, not an encryption or filesystem security
 boundary.
 
-An annotation also declares whether its requested work concerns canonical
-content, the reviewed projection, or both. Mapping a projection selection to
-canonical sources records provenance; it does not by itself authorize or request
-a canonical edit.
+An annotation declares a subject scope and discussion purpose. Neither field
+invokes an agent or authorizes a change. Mapping a projection selection to
+canonical sources records provenance; only a separate delegation requests agent
+execution.
 
 ## 9. Component specifications
 

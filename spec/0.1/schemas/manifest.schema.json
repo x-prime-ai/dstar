@@ -3,11 +3,21 @@
   "$id": "https://dstar.dev/spec/0.1/schemas/manifest.schema.json",
   "title": "DSTAR 0.1 Manifest",
   "type": "object",
-  "required": ["dstar", "id", "revision", "title", "profiles", "document"],
+  "required": [
+    "dstar",
+    "id",
+    "revision",
+    "headChange",
+    "title",
+    "profiles",
+    "document",
+    "changes"
+  ],
   "properties": {
     "dstar": { "const": "0.1" },
     "id": { "$ref": "#/$defs/id" },
     "revision": { "$ref": "#/$defs/revision" },
+    "headChange": { "$ref": "#/$defs/id" },
     "title": { "type": "string" },
     "profiles": {
       "type": "array",

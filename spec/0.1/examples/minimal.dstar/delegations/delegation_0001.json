@@ -15,5 +15,15 @@
   "status": "completed",
   "createdAt": "2026-08-24T00:00:30Z",
   "completedAt": "2026-08-24T00:01:00Z",
-  "resultChanges": ["change_0001"]
+  "completedBy": {
+    "type": "agent",
+    "id": "agent_demo",
+    "name": "Demo agent"
+  },
+  "results": [
+    {
+      "type": "change",
+      "change": "change_0001"
+    }
+  ]
 }

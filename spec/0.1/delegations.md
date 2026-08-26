@@ -23,7 +23,7 @@ contains:
 - the human who created the assignment;
 - an optional instruction that supplements, but does not replace, the comment;
 - a lifecycle status and timestamps; and
-- optional change IDs produced as results.
+- optional typed outputs produced as results.
 
 The annotation remains the portable record of what the person saw and selected.
 The delegation MUST NOT replace its target with a natural-language location or
@@ -38,8 +38,8 @@ queued -> in_progress -> completed
 ```
 
 The initial status is `queued`. `completed`, `failed`, and `cancelled` are
-terminal. A terminal delegation records `completedAt`. A failed delegation
-SHOULD include a diagnostic reason.
+terminal. A terminal delegation records `completedAt` and `completedBy`. A
+failed delegation SHOULD include a diagnostic reason.
 
 Completing a delegation means the assigned execution has ended. It does not
 accept a resulting proposal and does not resolve the source annotation. A human
@@ -51,10 +51,15 @@ mutated; only lifecycle and result metadata may be added.
 
 ## Results
 
-`resultChanges` lists zero or more change IDs produced by the assigned agent. A
-completed delegation may have no result change when the agent replies with an
-explanation, determines that no valid modification is possible, or requests
-more direction.
+`results` lists zero or more typed outputs:
+
+- `change` references a change proposal; and
+- `reply` references a reply in the source annotation thread.
+
+A completed delegation may have no result when the agent determines that no
+valid action is possible. In that case it SHOULD include a reason. A reply
+result represents an explanation, a request for more direction, or another
+non-change outcome.
 
 A resulting change SHOULD include the delegation ID in its `fulfills` field and
 the source annotation ID in `motivatedBy`. These reciprocal links make the path
@@ -68,7 +73,9 @@ A semantically valid delegation MUST satisfy:
 - `annotation` identifies an existing annotation in the package;
 - `assignee.type` is `agent`;
 - `createdBy.type` is `human`;
-- every `resultChanges` entry identifies an existing change authored by the
-  assigned agent;
-- a terminal status includes `completedAt`; and
-- a non-terminal status does not include `completedAt`.
+- every change result identifies an existing change authored by the assigned
+  agent;
+- every reply result identifies an existing reply in the source annotation
+  authored by the assigned agent;
+- a terminal status includes `completedAt` and `completedBy`; and
+- a non-terminal status includes neither completion field.

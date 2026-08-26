@@ -57,9 +57,19 @@ DSTAR 0.1 reserves these types in the `dstar:base` profile:
 - `image`
 - `embed`
 
-The root MUST have type `document`. The initial conformance examples exercise
-only `document`, `heading`, and `paragraph`; detailed containment rules for the
-remaining types are still pre-draft.
+The root MUST have type `document`. DSTAR 0.1 initially defines complete
+containment and attributes only for the types exercised by the first vertical
+slice:
+
+- `document` contains ordered block children;
+- `heading` contains inline content and has an integer `level` from 1 through 6;
+- `paragraph` contains inline content; and
+- `image` is a leaf with package-relative `src` and human-readable `alt`
+  attributes.
+
+Detailed containment rules for the remaining reserved types are still
+pre-draft. A base-profile writer MUST NOT emit one until its 0.1 rules are
+defined; a third-party profile may define a namespaced alternative.
 
 ## Authoring boundary
 
@@ -112,7 +122,9 @@ end offset is exclusive. Producers SHOULD NOT create a range boundary inside a
 grapheme cluster. Adapters for editors that use UTF-16 or another coordinate
 system MUST convert at the protocol boundary.
 
-Cross-node text ranges are not part of the base 0.1 profile.
+Canonical selections may cross nodes through `NodeRangeSelector`. Its endpoints
+remain offsets in the individual node text streams; DSTAR does not create a
+single concatenated cross-node canonical text stream.
 
 ## Identity across accepted transformations
 

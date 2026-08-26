@@ -6,6 +6,7 @@
   "required": [
     "id",
     "type",
+    "purpose",
     "scope",
     "target",
     "body",
@@ -16,6 +17,7 @@
   "properties": {
     "id": { "$ref": "#/$defs/id" },
     "type": { "type": "string", "minLength": 1 },
+    "purpose": { "enum": ["discussion", "question", "change-request"] },
     "scope": { "enum": ["canonical", "projection", "both"] },
     "target": { "$ref": "#/$defs/target" },
     "canonicalTargets": {
@@ -38,7 +40,7 @@
     "status": { "enum": ["open", "resolved"] },
     "createdAt": { "type": "string", "format": "date-time" },
     "resolvedAt": { "type": "string", "format": "date-time" },
-    "resolvedBy": { "$ref": "#/$defs/actor" }
+    "resolvedBy": { "$ref": "#/$defs/humanActor" }
   },
   "patternProperties": {
     "^x-": true
@@ -65,7 +67,15 @@
         "properties": { "status": { "const": "resolved" } },
         "required": ["status"]
       },
-      "then": { "required": ["resolvedAt", "resolvedBy"] }
+      "then": { "required": ["resolvedAt", "resolvedBy"] },
+      "else": {
+        "not": {
+          "anyOf": [
+            { "required": ["resolvedAt"] },
+            { "required": ["resolvedBy"] }
+          ]
+        }
+      }
     }
   ],
   "$defs": {
@@ -93,6 +103,15 @@
         "^x-": true
       },
       "additionalProperties": false
+    },
+    "humanActor": {
+      "allOf": [
+        { "$ref": "#/$defs/actor" },
+        {
+          "properties": { "type": { "const": "human" } },
+          "required": ["type"]
+        }
+      ]
     },
     "textPositionSelector": {
       "type": "object",
@@ -135,6 +154,30 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/refinedSelector" }
         }
+      },
+      "additionalProperties": false
+    },
+    "nodePoint": {
+      "type": "object",
+      "required": ["node", "offset"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "offset": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "nodeRangeSelector": {
+      "type": "object",
+      "required": ["type", "start", "end", "unit", "exact"],
+      "properties": {
+        "type": { "const": "NodeRangeSelector" },
+        "start": { "$ref": "#/$defs/nodePoint" },
+        "end": { "$ref": "#/$defs/nodePoint" },
+        "unit": { "const": "unicode-code-point" },
+        "exact": { "type": "string", "minLength": 1 },
+        "viewExact": { "type": "string", "minLength": 1 },
+        "prefix": { "type": "string" },
+        "suffix": { "type": "string" }
       },
       "additionalProperties": false
     },
@@ -186,6 +229,7 @@
         "selector": {
           "oneOf": [
             { "$ref": "#/$defs/nodeSelector" },
+            { "$ref": "#/$defs/nodeRangeSelector" },
             { "$ref": "#/$defs/segmentSelector" },
             { "$ref": "#/$defs/segmentRangeSelector" }
           ]
@@ -199,7 +243,14 @@
             "required": ["source"]
           },
           "then": {
-            "properties": { "selector": { "$ref": "#/$defs/nodeSelector" } }
+            "properties": {
+              "selector": {
+                "oneOf": [
+                  { "$ref": "#/$defs/nodeSelector" },
+                  { "$ref": "#/$defs/nodeRangeSelector" }
+                ]
+              }
+            }
           },
           "else": {
             "properties": {
@@ -221,7 +272,12 @@
         "relation": { "enum": ["exact", "transformed", "summarizes"] },
         "source": { "const": "document" },
         "revision": { "$ref": "#/$defs/revision" },
-        "selector": { "$ref": "#/$defs/nodeSelector" }
+        "selector": {
+          "oneOf": [
+            { "$ref": "#/$defs/nodeSelector" },
+            { "$ref": "#/$defs/nodeRangeSelector" }
+          ]
+        }
       },
       "additionalProperties": false
     },
