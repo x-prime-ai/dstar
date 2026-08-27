@@ -16,18 +16,18 @@
             "id": "op_conformance_replace",
             "op": "replace_text",
             "target": { "node": "node_promise" },
-            "expectedText": "direct",
+            "expectedText": "review",
             "range": {
               "start": 22,
               "end": 28,
               "unit": "unicode-code-point"
             },
-            "value": "guide"
+            "value": "inspect"
           },
           "proposal": {
             "id": "change_conformance_update",
             "idempotencyKey": "conformance-update",
-            "author": { "type": "agent", "id": "agent_conformance" },
+            "author": { "type": "human", "id": "human_conformance" },
             "createdAt": "2026-08-26T00:00:00Z",
             "motivatedBy": ["ann_0001"]
           },

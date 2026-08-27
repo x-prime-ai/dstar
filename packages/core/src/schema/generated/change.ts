@@ -12,7 +12,7 @@ kind: ("genesis" | "update")
 idempotencyKey: string
 baseChange?: Id
 baseRevision?: Revision
-author: AgentActor
+author: Actor
 request?: Request
 /**
  * @minItems 1
@@ -21,7 +21,6 @@ operations: [(CreateDocumentOperation | UpdateOperation), ...((CreateDocumentOpe
 status: ("proposed" | "accepted" | "rejected" | "superseded")
 createdAt: string
 motivatedBy?: Id[]
-fulfills?: Id[]
 sources?: Id[]
 decision?: Decision
 /**
@@ -40,14 +39,6 @@ export type Id = string
  * via the `definition` "revision".
  */
 export type Revision = string
-/**
- * This interface was referenced by `undefined`'s JSON-Schema
- * via the `definition` "agentActor".
- */
-export type AgentActor = (Actor & {
-type: "agent"
-[k: string]: unknown
-})
 /**
  * This interface was referenced by `undefined`'s JSON-Schema
  * via the `definition` "humanActor".
@@ -115,11 +106,9 @@ export type UpdateOperation = (ReplaceTextOperation | ReplaceInlineOperation | I
  * via the `definition` "actor".
  */
 export interface Actor {
-type: ("human" | "agent" | "service")
+type: ("human" | "service")
 id: Id
 name?: string
-model?: string
-provider?: string
 /**
  * This interface was referenced by `Actor`'s JSON-Schema definition
  * via the `patternProperty` "^x-".

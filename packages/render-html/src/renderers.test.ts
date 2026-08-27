@@ -38,7 +38,6 @@ function memorySnapshot(
     manifest,
     document,
     annotations: [],
-    delegations: [],
     changes: [],
   };
   return new PackageSnapshot({

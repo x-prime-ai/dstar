@@ -1,19 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildAnnotation,
-  buildDelegation,
-  buildGenesisProposal,
-} from "./builders.js";
+import { buildAnnotation, buildGenesisProposal } from "./builders.js";
 import type { DstarActor, DstarDocument } from "./protocol.js";
 
 const human: DstarActor = { type: "human", id: "human" };
-const agent: DstarActor = { type: "agent", id: "agent" };
 const service: DstarActor = { type: "service", id: "service" };
 const createdAt = "2026-01-01T00:00:00.000Z";
 
 describe("in-memory protocol builders", () => {
-  it("creates an open comment without inferring a delegation", () => {
+  it("creates an open comment without requiring assignment", () => {
     const annotation = buildAnnotation({
       id: "ann",
       purpose: "change-request",
@@ -28,37 +23,36 @@ describe("in-memory protocol builders", () => {
       createdAt,
     });
     expect(annotation.status).toBe("open");
-    expect("delegation" in annotation).toBe(false);
+    expect(annotation.assignee).toBeUndefined();
     expect(Object.isFrozen(annotation)).toBe(true);
   });
 
-  it("creates delegation separately with human creator and agent assignee", () => {
-    const delegation = buildDelegation({
-      id: "delegation",
-      annotationId: "ann",
-      assignee: agent,
-      createdBy: human,
-      createdAt,
-    });
-    expect(delegation.status).toBe("queued");
+  it("allows only a human annotation assignee", () => {
     expect(() =>
-      buildDelegation({
-        id: "invalid",
-        annotationId: "ann",
+      buildAnnotation({
+        id: "ann",
+        purpose: "discussion",
+        scope: "canonical",
+        target: {
+          source: "document",
+          revision: "sha256:" + "0".repeat(64),
+          selector: { type: "NodeSelector", node: "p" },
+        },
+        body: "Discuss",
+        author: human,
         assignee: service,
-        createdBy: human,
         createdAt,
       }),
-    ).toThrowError("assignee must be an agent actor");
+    ).toThrowError("assignee must be a human actor");
   });
 
-  it("never lets a human be serialized as a canonical author", () => {
+  it("builds a caller-independent proposal with a human author", () => {
     const document: DstarDocument = {
       id: "doc",
       type: "document",
       children: [],
     };
-    expect(() =>
+    expect(
       buildGenesisProposal({
         id: "genesis",
         operationId: "create",
@@ -68,7 +62,7 @@ describe("in-memory protocol builders", () => {
         requestBody: "Create",
         createdAt,
         document,
-      }),
-    ).toThrowError("author must be an agent actor");
+      }).author,
+    ).toEqual(human);
   });
 });

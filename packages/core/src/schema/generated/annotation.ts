@@ -18,11 +18,12 @@ target: Target
 canonicalTargets?: [CanonicalTarget, ...(CanonicalTarget)[]]
 body: string
 author: Actor
+assignee?: HumanActor
 replies?: Reply[]
 /**
  * @minItems 1
  */
-audience?: [("human" | "agent" | "service"), ...(("human" | "agent" | "service"))[]]
+audience?: [("human" | "service"), ...(("human" | "service"))[]]
 status: ("open" | "resolved")
 createdAt: string
 resolvedAt?: string
@@ -172,11 +173,9 @@ selector: (NodeSelector | NodeRangeSelector)
  * via the `definition` "actor".
  */
 export interface Actor {
-type: ("human" | "agent" | "service")
+type: ("human" | "service")
 id: Id
 name?: string
-model?: string
-provider?: string
 /**
  * This interface was referenced by `Actor`'s JSON-Schema definition
  * via the `patternProperty` "^x-".

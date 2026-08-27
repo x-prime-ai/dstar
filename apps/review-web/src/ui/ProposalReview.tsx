@@ -14,7 +14,6 @@ export function ProposalReview({
   api,
   changes,
   onDecision,
-  onRebase,
 }: {
   readonly api: WorkspaceApi;
   readonly changes: readonly DstarChange[];
@@ -23,7 +22,6 @@ export function ProposalReview({
     decision: "accept" | "reject" | "supersede",
     simulation?: Record<string, unknown>,
   ) => Promise<void>;
-  readonly onRebase: (id: string, agentId: string) => Promise<void>;
 }) {
   const proposals = changes.filter((change) => change.kind === "update");
   const [selectedId, setSelectedId] = useState(proposals[0]?.id ?? "");
@@ -89,7 +87,7 @@ export function ProposalReview({
               <span className="status">
                 {String(simulation?.applicability ?? "loading")}
               </span>
-              <span>Agent-authored</span>
+              <span>Pending review</span>
             </div>
             <h3>{selected.id}</h3>
             {simulationError ? (
@@ -180,15 +178,6 @@ export function ProposalReview({
               >
                 Supersede
               </button>
-              {simulation?.applicability === "stale-base" ? (
-                <button
-                  className="button button-accent"
-                  onClick={() => void onRebase(selected.id, selected.author.id)}
-                  type="button"
-                >
-                  Request rebase
-                </button>
-              ) : null}
             </div>
           </article>
         ) : (

@@ -42,7 +42,6 @@ describe("protocol identifier scopes", () => {
         ],
       },
       annotations: [annotation("ann_1"), annotation("ann_2")],
-      delegations: [],
       changes: [],
     } as unknown as InMemoryPackage;
 

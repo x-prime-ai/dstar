@@ -72,7 +72,7 @@ describe("dstar CLI", () => {
     ).toBe(0);
     const result = JSON.parse(output.output.join(""));
     expect(result.revision).toBe(
-      "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+      "sha256:a59754cb50e1960f8ee58a98a90caebfc3d78e4e44429740f9c2f6cd03d100e8",
     );
     expect(result.projections).toHaveLength(3);
     expect(result.projections).toEqual(
@@ -91,7 +91,7 @@ describe("dstar CLI", () => {
       const validation = capture();
       await runCli(["validate", packageRoot], validation.io);
       expect(JSON.parse(validation.output.join("")).revision).toBe(
-        "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+        "sha256:a59754cb50e1960f8ee58a98a90caebfc3d78e4e44429740f9c2f6cd03d100e8",
       );
     } finally {
       if (previousRuntime === undefined) delete process.env.DSTAR_RUNTIME_ROOT;

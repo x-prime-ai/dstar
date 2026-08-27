@@ -13,13 +13,13 @@ on IDs built into a runner:
 - `review` selects an annotation and canonical target;
 - `update.operation` supplies an operation template whose `nodeRevision` is
   computed from the input package;
-- `update.proposal` fixes the agent author, provenance, and deterministic time;
+- `update.proposal` fixes the proposal author, provenance, and deterministic time;
 - `update.decision` fixes a separate human decision actor and time; and
 - `projections` lists the deterministic renderer kinds to exercise.
 
 Runners MUST reject unknown roles, missing exercise inputs, profile mismatches,
-or unavailable targets. They MUST NOT replace the declared agent author or
-human decision actor with a single authority principal.
+or unavailable targets. They MUST preserve the declared proposal author and
+human decision actor independently.
 
 The reference TypeScript runner is `scripts/run-role-fixtures.mjs`. The
 independent Python validator recomputes the normalized output, including the
@@ -32,5 +32,5 @@ node scripts/run-role-fixtures.mjs
 python3 scripts/validate-reference-output.py
 ```
 
-The fixture intentionally checks authority provenance: proposal authors are
-agents and accepting decision actors are humans.
+The fixture intentionally checks authority provenance: proposal submission and
+acceptance remain distinct records, and accepting decision actors are humans.

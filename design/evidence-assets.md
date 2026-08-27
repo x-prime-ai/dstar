@@ -4,7 +4,7 @@ Status: **Draft**
 
 ## 1. Purpose
 
-Sources explain where claims or agent work came from. Assets provide
+Sources explain where claims or proposed work came from. Assets provide
 package-local resources used by canonical content or projections. Both are
 portable, but neither is canonical document content by itself.
 
@@ -14,7 +14,7 @@ The first implementation must distinguish:
 - capturing a durable source file;
 - adding a presentation/content asset;
 - referencing evidence from a proposal; and
-- fetching external content for an agent job.
+- fetching external content in the calling host application.
 
 None of these actions implicitly accepts a canonical change.
 
@@ -70,9 +70,9 @@ proposal. The current portable source schema does not record who registered a
 source; the local command audit records that actor until the spec gains source
 provenance fields.
 
-## 4. Agent source access
+## 4. Caller source access
 
-Agents can read only source IDs admitted by context policy or returned through
+Callers can read only source IDs admitted by context policy or returned through
 an authorized search/read tool. Source content is labeled untrusted and bounded.
 
 The first implementation allows proposals to reference only source IDs already
@@ -103,7 +103,7 @@ derived metadata is disposable and not portable authority.
 
 ### Genesis
 
-Human-selected or agent-generated assets are staged with the genesis draft.
+Human-selected or externally generated assets are staged with the genesis draft.
 Acceptance materializes the files together with the first canonical document.
 The preview uses staged assets through opaque runtime URLs.
 

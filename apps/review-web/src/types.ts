@@ -3,7 +3,6 @@ import type {
   DstarActor,
   DstarAnnotation,
   DstarChange,
-  DstarDelegation,
   DstarManifest,
   DstarProjection,
   DstarTarget,
@@ -16,7 +15,7 @@ export interface SnapshotView {
   readonly capabilities: {
     readonly canonicalEditing: false;
     readonly comment: true;
-    readonly delegate: true;
+    readonly assign: true;
     readonly humanDecision: true;
     readonly embeddedModelRuntime: false;
   };
@@ -78,7 +77,6 @@ export interface WorkspaceState {
   readonly snapshot: SnapshotView;
   readonly document: DocumentView;
   readonly annotations: readonly AnnotationView[];
-  readonly delegations: readonly DstarDelegation[];
   readonly changes: readonly DstarChange[];
   readonly versions: readonly CanonicalVersionSummary[];
   readonly sources: { readonly sources: readonly unknown[] };

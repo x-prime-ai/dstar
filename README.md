@@ -1,30 +1,31 @@
 # dstar
 
-**DSTAR is an open, portable protocol for AI-native collaborative documents.**
+**DSTAR is an open, portable protocol for collaborative documents.**
 
-Humans and agents increasingly create and maintain documents together. Existing
-formats do not make that collaboration portable: Markdown has limited
+Documents are increasingly read and modified through many applications and
+automation tools. Existing formats do not make that collaboration portable: Markdown has limited
 expressive power and no durable review state, HTML mixes meaning with
 presentation, and office or workspace applications keep content, comments, and
 automation inside proprietary systems.
 
-DSTAR packages agent-authored canonical content — the authoritative semantic
-source of truth — with comments, delegations, proposals, sources, assets,
+DSTAR packages canonical content — the authoritative semantic source of truth
+— with comments, human assignment, proposals, sources, assets,
 provenance, accepted version history, and mapped projections as distinct but
-connected objects. A rich HTML view, summary, and agent context can serve
+connected objects. A rich HTML view, summary, and machine-readable context can serve
 different needs without becoming different documents.
 
-> Agents author. Humans direct and decide.
+> Tools propose. Humans review and decide.
 
 ## Status
 
 DSTAR 0.1 is a pre-draft. Nothing in this repository is stable yet. The first
 goal is to specify and test one complete authoring and review workflow:
 
-1. An agent proposes the initial semantic document and a human accepts it.
+1. A caller proposes the initial semantic document and a human accepts it.
 2. A person reads and comments through a rich web experience.
-3. The comment remains open for discussion or is explicitly delegated.
-4. An agent returns a structured, conflict-aware proposal.
+3. The comment remains open for discussion and may be assigned to a human.
+4. An authorized caller returns a structured, conflict-aware proposal on that
+   human's behalf.
 5. An authorized human accepts or rejects the proposal.
 6. Views regenerate without silently losing review provenance.
 7. Any accepted canonical version can be materialized from portable history.
@@ -38,14 +39,14 @@ goal is to specify and test one complete authoring and review workflow:
 ```
 
 Implementations will be added only after the core 0.1 model is coherent. The
-planned reference implementation will include a validator, rich web reader,
-renderer, CLI, MCP server, and review UI, but none of those
-applications defines the protocol by itself.
+reference roadmap is SDK-first: protocol core, safe Node package runtime, MCP
+server and xPrime integration, deterministic renderer, then the comment/review
+UI. None of those applications defines the protocol by itself.
 
 ## Design principles
 
-- Agents author canonical content; humans direct and decide
-- Direct human comments, with delegation as a separate action
+- Caller-independent protocol and SDK boundaries
+- Direct comments with optional human-only assignment
 - Portable collaboration state over application-owned metadata
 - Stable semantic identity with redundant anchors
 - Local proposals over whole-document rewrites after genesis

@@ -8,12 +8,7 @@
     "dstar://projection/{projectionId}/mapping",
     "dstar://genesis/request"
   ],
-  "minimalDocumentActor": "agent_demo",
-  "legacySubscriptionMethods": ["resources/subscribe", "resources/unsubscribe"],
-  "notificationCapabilities": {
-    "available": { "listChanged": true, "subscribe": true },
-    "unavailable": { "listChanged": false, "subscribe": false }
-  },
+  "minimalDocumentPrincipal": "human_demo",
   "resources": [
     "dstar://document/manifest",
     "dstar://document/node/node_root",

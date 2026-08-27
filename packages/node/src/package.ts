@@ -9,7 +9,6 @@ import {
   type Diagnostic,
   type DstarAnnotation,
   type DstarChange,
-  type DstarDelegation,
   type DstarDocument,
   type DstarManifest,
   type DstarNode,
@@ -68,7 +67,6 @@ export class PackageSnapshot implements InMemoryPackage {
   readonly manifest: DstarManifest;
   readonly document: DstarDocument;
   readonly annotations: readonly DstarAnnotation[];
-  readonly delegations: readonly DstarDelegation[];
   readonly changes: readonly DstarChange[];
   readonly sources?: DstarSources;
   readonly projections?: DstarProjectionIndex;
@@ -90,7 +88,6 @@ export class PackageSnapshot implements InMemoryPackage {
     this.manifest = input.pkg.manifest;
     this.document = input.pkg.document;
     this.annotations = Object.freeze([...input.pkg.annotations]);
-    this.delegations = Object.freeze([...input.pkg.delegations]);
     this.changes = Object.freeze([...input.pkg.changes]);
     if (input.pkg.sources) this.sources = input.pkg.sources;
     if (input.pkg.projections) this.projections = input.pkg.projections;
@@ -294,16 +291,6 @@ function validateNodeFileNames(
       );
     }
   }
-  for (const delegation of pkg.delegations) {
-    if (!bytes.has(`delegations/${delegation.id}.json`)) {
-      diagnostics.push(
-        createDiagnostic("REF_MISSING", {
-          summary: "Delegation filename must match its ID.",
-          location: { objectId: delegation.id },
-        }),
-      );
-    }
-  }
   for (const change of pkg.changes) {
     if (!bytes.has(`changes/${change.id}.json`)) {
       diagnostics.push(
@@ -412,10 +399,6 @@ export async function openPackage(
     bytes,
     manifest.annotations ?? "annotations",
   );
-  const delegations = jsonObjectsIn<DstarDelegation>(
-    bytes,
-    manifest.delegations ?? "delegations",
-  );
   const changes = jsonObjectsIn<DstarChange>(bytes, manifest.changes);
   const sources = bytes.has(manifest.sources ?? "sources.json")
     ? parseJson<DstarSources>(
@@ -435,7 +418,6 @@ export async function openPackage(
     manifest,
     document,
     annotations,
-    delegations,
     changes,
     ...(sources ? { sources } : {}),
     ...(projections ? { projections } : {}),

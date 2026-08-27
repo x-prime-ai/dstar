@@ -7,13 +7,12 @@ import type {
   SessionView,
   WorkspaceState,
 } from "../types.js";
-import { AgentActivity } from "./AgentActivity.js";
 import { Inspector } from "./Inspector.js";
 import { ProposalReview } from "./ProposalReview.js";
 import { ReaderPanel } from "./ReaderPanel.js";
 import { ReviewRail } from "./ReviewRail.js";
 
-type Surface = "review" | "agents" | "proposals" | "inspector";
+type Surface = "review" | "proposals" | "inspector";
 
 export function App() {
   const api = useMemo(() => new WorkspaceApi(tokenFromLocation()), []);
@@ -162,7 +161,7 @@ export function App() {
       <header className="topbar">
         <div className="brand-mark">D*</div>
         <div className="document-title">
-          <p className="eyebrow">Agents author · Humans direct and decide</p>
+          <p className="eyebrow">Portable documents · Human decisions</p>
           <h1>{state.snapshot.manifest.title}</h1>
         </div>
         <div className="identity">
@@ -171,19 +170,17 @@ export function App() {
         </div>
       </header>
       <nav className="surface-tabs" aria-label="Review surfaces">
-        {(["review", "agents", "proposals", "inspector"] as const).map(
-          (item) => (
-            <button
-              aria-current={surface === item ? "page" : undefined}
-              className={surface === item ? "active" : ""}
-              key={item}
-              onClick={() => setSurface(item)}
-              type="button"
-            >
-              {item}
-            </button>
-          ),
-        )}
+        {(["review", "proposals", "inspector"] as const).map((item) => (
+          <button
+            aria-current={surface === item ? "page" : undefined}
+            className={surface === item ? "active" : ""}
+            key={item}
+            onClick={() => setSurface(item)}
+            type="button"
+          >
+            {item}
+          </button>
+        ))}
       </nav>
       {error ? (
         <div className="error-banner" role="alert">
@@ -210,8 +207,8 @@ export function App() {
                 <p className="eyebrow">Inspection only</p>
                 <h2>Historical version</h2>
                 <p>
-                  Comments, delegations, proposal decisions, and projection
-                  regeneration apply only to the current package snapshot.
+                  Comments, proposal decisions, and projection regeneration
+                  apply only to the current package snapshot.
                 </p>
                 <button
                   className="button button-primary"
@@ -234,26 +231,14 @@ export function App() {
                   mutation(`/annotations/${id}/replies`, { body })
                 }
                 onResolve={(id) => mutation(`/annotations/${id}/resolve`, {})}
-                onDelegate={(annotationId, assigneeId, instruction) =>
-                  mutation("/delegations", {
-                    annotationId,
+                onAssign={(annotationId, assigneeId) =>
+                  mutation(`/annotations/${annotationId}/assign`, {
                     assigneeId,
-                    ...(instruction ? { instruction } : {}),
                   })
                 }
               />
             )}
           </div>
-        ) : null}
-        {surface === "agents" ? (
-          <AgentActivity
-            delegations={state.delegations}
-            onCancel={(id) =>
-              window.confirm(`Cancel delegation ${id}?`)
-                ? mutation(`/delegations/${id}/cancel`, {})
-                : Promise.resolve(false)
-            }
-          />
         ) : null}
         {surface === "proposals" ? (
           <ProposalReview
@@ -265,7 +250,7 @@ export function App() {
                 if (
                   !revision ||
                   !window.confirm(
-                    `Accept agent proposal ${id} by ${state.changes.find((change) => change.id === id)?.author.id ?? "unknown"} as human ${session.human.id}?\n\nAffected objects: ${JSON.stringify(simulation?.semanticDiff ?? {})}\n\nResult revision: ${revision}`,
+                    `Accept proposal ${id} by ${state.changes.find((change) => change.id === id)?.author.id ?? "unknown"} as human ${session.human.id}?\n\nAffected objects: ${JSON.stringify(simulation?.semanticDiff ?? {})}\n\nResult revision: ${revision}`,
                   )
                 )
                   return;
@@ -282,11 +267,6 @@ export function App() {
                 ...(reason ? { reason } : {}),
               });
             }}
-            onRebase={(id, assigneeId) =>
-              mutation(`/changes/${id}/request-rebase`, {
-                assigneeId,
-              }).then(() => undefined)
-            }
           />
         ) : null}
         {surface === "inspector" ? (

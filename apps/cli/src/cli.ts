@@ -37,8 +37,8 @@ function usage(): string {
     "  dstar accept-genesis <draft>",
     "  dstar accept <package> <change-id>",
     "  dstar reject <package> <change-id>",
-    "  dstar mcp document <package> --actor <agent-id>",
-    "  dstar mcp genesis <draft> --actor <agent-id>",
+    "  dstar mcp document <package> --principal <human-id>",
+    "  dstar mcp genesis <draft> --principal <human-id>",
   ].join("\n");
 }
 
@@ -352,12 +352,12 @@ export async function runCli(
     if (mode !== "document" && mode !== "genesis") {
       throw new Error("MCP mode must be document or genesis");
     }
-    rejectUnknownOptions(rest.slice(1), ["--actor", "--runtime-root"]);
+    rejectUnknownOptions(rest.slice(1), ["--principal", "--runtime-root"]);
     requirePositionalCount(rest.slice(1), 1);
     const target = resolve(
       required(rest[1], mode === "document" ? "package" : "draft"),
     );
-    const actorId = required(option(rest, "--actor"), "--actor");
+    const principalId = required(option(rest, "--principal"), "--principal");
     const selectedRuntimeRoot = resolve(
       option(rest, "--runtime-root") ?? runtimeRoot(),
     );
@@ -369,9 +369,9 @@ export async function runCli(
                 mode,
                 packageRoot: target,
                 runtimeRoot: selectedRuntimeRoot,
-                actorId,
+                principalId,
               }
-            : { mode, draftRoot: target, actorId },
+            : { mode, draftRoot: target, principalId },
         onerror: () => process.stderr.write("DSTAR_MCP_PROTOCOL_ERROR\n"),
       });
       return 0;

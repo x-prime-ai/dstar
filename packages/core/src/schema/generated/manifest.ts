@@ -27,7 +27,6 @@ title: string
 profiles: [string, ...(string)[]]
 document: "document.json"
 annotations?: "annotations"
-delegations?: "delegations"
 sources?: "sources.json"
 changes: "changes"
 assets?: "assets"

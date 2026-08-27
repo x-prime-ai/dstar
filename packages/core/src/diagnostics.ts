@@ -44,15 +44,15 @@ export const DIAGNOSTIC_REGISTRY = {
     defaultSeverity: "error",
     summary: "The accepted change chain is incomplete or inconsistent.",
   },
-  AUTH_CHANGE_AUTHOR_NOT_AGENT: {
-    family: "AUTH",
-    defaultSeverity: "error",
-    summary: "Canonical content proposals must be authored by an agent.",
-  },
   AUTH_DECISION_ACTOR_NOT_HUMAN: {
     family: "AUTH",
     defaultSeverity: "error",
     summary: "Portable proposal decisions must identify an authorized human.",
+  },
+  AUTH_ANNOTATION_ASSIGNEE_NOT_HUMAN: {
+    family: "AUTH",
+    defaultSeverity: "error",
+    summary: "Portable annotation assignment must identify a human.",
   },
   OP_PRECONDITION_FAILED: {
     family: "OP",

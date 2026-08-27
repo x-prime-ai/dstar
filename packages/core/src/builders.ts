@@ -3,21 +3,15 @@ import type {
   DstarActor,
   DstarAnnotation,
   DstarChange,
-  DstarDelegation,
   DstarDocument,
   DstarTarget,
   DstarUpdateOperation,
   JsonValue,
 } from "./protocol.js";
 
-function requireActor(
-  actor: DstarActor,
-  type: "agent" | "human",
-  field: string,
-): void {
-  const article = type === "agent" ? "an" : "a";
+function requireActor(actor: DstarActor, type: "human", field: string): void {
   if (actor.type !== type)
-    throw new TypeError(`${field} must be ${article} ${type} actor`);
+    throw new TypeError(`${field} must be a ${type} actor`);
 }
 
 function freezeProtocol<T>(value: T): T {
@@ -38,7 +32,6 @@ export interface GenesisProposalInput {
 }
 
 export function buildGenesisProposal(input: GenesisProposalInput): DstarChange {
-  requireActor(input.author, "agent", "Genesis author");
   requireActor(input.requestActor, "human", "Genesis request actor");
   return freezeProtocol({
     id: input.id,
@@ -68,12 +61,10 @@ export interface UpdateProposalInput {
   readonly operations: readonly DstarUpdateOperation[];
   readonly createdAt: string;
   readonly motivatedBy?: readonly string[];
-  readonly fulfills?: readonly string[];
   readonly sources?: readonly string[];
 }
 
 export function buildUpdateProposal(input: UpdateProposalInput): DstarChange {
-  requireActor(input.author, "agent", "Update author");
   if (input.operations.length === 0)
     throw new TypeError("An update proposal requires at least one operation");
   return freezeProtocol({
@@ -87,7 +78,6 @@ export function buildUpdateProposal(input: UpdateProposalInput): DstarChange {
     status: "proposed",
     createdAt: input.createdAt,
     ...(input.motivatedBy ? { motivatedBy: [...input.motivatedBy] } : {}),
-    ...(input.fulfills ? { fulfills: [...input.fulfills] } : {}),
     ...(input.sources ? { sources: [...input.sources] } : {}),
   }) as DstarChange;
 }
@@ -100,15 +90,18 @@ export interface AnnotationInput {
   readonly canonicalTargets?: DstarAnnotation["canonicalTargets"];
   readonly body: string;
   readonly author: DstarActor;
+  readonly assignee?: DstarActor;
   readonly createdAt: string;
   readonly audience?: readonly [
-    "human" | "agent" | "service",
-    ...("human" | "agent" | "service")[],
+    "human" | "service",
+    ...("human" | "service")[],
   ];
 }
 
 export function buildAnnotation(input: AnnotationInput): DstarAnnotation {
   requireActor(input.author, "human", "Annotation author");
+  if (input.assignee)
+    requireActor(input.assignee, "human", "Annotation assignee");
   if (input.body.length === 0)
     throw new TypeError("Annotation body must not be empty");
   return freezeProtocol({
@@ -122,32 +115,10 @@ export function buildAnnotation(input: AnnotationInput): DstarAnnotation {
       : {}),
     body: input.body,
     author: input.author,
+    ...(input.assignee ? { assignee: input.assignee } : {}),
     replies: [],
     status: "open",
     createdAt: input.createdAt,
     ...(input.audience ? { audience: [...input.audience] } : {}),
   }) as unknown as DstarAnnotation;
-}
-
-export interface DelegationInput {
-  readonly id: string;
-  readonly annotationId: string;
-  readonly assignee: DstarActor;
-  readonly createdBy: DstarActor;
-  readonly createdAt: string;
-  readonly instruction?: string;
-}
-
-export function buildDelegation(input: DelegationInput): DstarDelegation {
-  requireActor(input.assignee, "agent", "Delegation assignee");
-  requireActor(input.createdBy, "human", "Delegation creator");
-  return freezeProtocol({
-    id: input.id,
-    annotation: input.annotationId,
-    assignee: input.assignee,
-    createdBy: input.createdBy,
-    status: "queued",
-    createdAt: input.createdAt,
-    ...(input.instruction ? { instruction: input.instruction } : {}),
-  }) as DstarDelegation;
 }

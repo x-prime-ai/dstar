@@ -18,7 +18,7 @@
     "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 255 },
     "baseChange": { "$ref": "#/$defs/id" },
     "baseRevision": { "$ref": "#/$defs/revision" },
-    "author": { "$ref": "#/$defs/agentActor" },
+    "author": { "$ref": "#/$defs/actor" },
     "request": { "$ref": "#/$defs/request" },
     "operations": {
       "type": "array",
@@ -33,11 +33,6 @@
     "status": { "enum": ["proposed", "accepted", "rejected", "superseded"] },
     "createdAt": { "type": "string", "format": "date-time" },
     "motivatedBy": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/id" },
-      "uniqueItems": true
-    },
-    "fulfills": {
       "type": "array",
       "items": { "$ref": "#/$defs/id" },
       "uniqueItems": true
@@ -152,25 +147,14 @@
       "type": "object",
       "required": ["type", "id"],
       "properties": {
-        "type": { "enum": ["human", "agent", "service"] },
+        "type": { "enum": ["human", "service"] },
         "id": { "$ref": "#/$defs/id" },
-        "name": { "type": "string" },
-        "model": { "type": "string" },
-        "provider": { "type": "string" }
+        "name": { "type": "string" }
       },
       "patternProperties": {
         "^x-": true
       },
       "additionalProperties": false
-    },
-    "agentActor": {
-      "allOf": [
-        { "$ref": "#/$defs/actor" },
-        {
-          "properties": { "type": { "const": "agent" } },
-          "required": ["type"]
-        }
-      ]
     },
     "humanActor": {
       "allOf": [

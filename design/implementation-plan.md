@@ -1,385 +1,239 @@
-# Implementation Plan
+# SDK-First Implementation Roadmap
 
 Status: **Draft**
 
-## 1. Delivery strategy
-
-Build one end-to-end vertical slice before expanding content types or provider
-features:
+## 1. Delivery thesis
 
 ```text
-open + validate package
-    -> render canonical view
-    -> create anchored comment
-    -> delegate to deterministic fake agent
-    -> persist proposed replace_text change
-    -> simulate and review
-    -> human accept
-    -> regenerate projection
-    -> resolve original comment against new view
+portable spec
+    -> platform-neutral SDK
+    -> safe Node package runtime
+    -> generic MCP adapter
+    -> deterministic HTML renderer
+    -> comment and proposal-review UI
+    -> Resources, App packaging, and hardening
 ```
 
-Every milestone ends in executable tests and a usable thin workflow. Protocol
-changes discovered during implementation are made in `spec/0.1` with fixtures
-before code relies on them.
+DSTAR owns document semantics, validation, collaboration records, proposals,
+decisions, and rendering. It does not own or model the software that invokes
+its SDK/MCP interfaces. Protocol changes discovered during implementation land
+in `spec/0.1` and fixtures before code depends on them.
 
-## 2. Proposed repository layout
+## 2. Product proof
 
 ```text
-apps/
-├── cli/                    dstar command-line interface
-├── workspace-server/       loopback application/API service
-├── review-web/             React review application
-└── mcp-server/             scoped MCP adapter for agent sessions
+human creates a genesis draft
+    -> any SDK or MCP client stages a proposal for that human
+    -> human accepts genesis through an interactive decision path
+    -> DSTAR renders canonical HTML
+    -> human creates a comment and optionally assigns it to another human
+    -> assignee may use any external tools to read/reply/propose on their behalf
+    -> DSTAR simulates and displays the proposal
+    -> human accepts or rejects
+```
 
+Assignment never starts software and the package contains no executor task
+state. Proposal surfaces cannot accept canonical content.
+
+## 3. Public packages
+
+```text
 packages/
-├── protocol/               generated types, IDs, canonicalization, revisions
-├── validator/              schema, profile, semantic, conformance validation
-├── package-fs/             safe repository, snapshot, lock, transaction/recovery
-├── profile-base/           dstar:base validation and semantic adapters
-├── render-core/            RenderTree and mapping collector
-├── render-html/            canonical and stored HTML renderers
-├── render-text/            Markdown/plain-text renderers
-├── evidence-core/          source registration and asset reference policy
-├── review-core/            selectors, resolution, annotation/delegation commands
-├── change-applier/         simulation, diff, decisions
-├── agent-runtime/          jobs, context, tools, provider port
-├── provider-fake/          deterministic test agent
-├── local-api/              versioned transport contracts/client
-└── test-kit/               builders, fixtures, crash/fault injection
+├── core/          @dstar/core — protocol and pure algorithms
+├── node/          @dstar/node — safe package runtime and commands
+├── mcp-server/    @dstar/mcp-server — generic scoped adapter
+└── render-html/   @dstar/render-html — deterministic rendering
 
-spec/                       normative protocol and conformance fixtures
-design/                     reference implementation design
-tests/
-├── conformance/            role fixtures consumed by multiple implementations
-├── integration/            package/service workflows
-└── e2e/                    browser north-star workflows
+apps/
+├── cli/
+├── workspace-server/
+└── review-web/
 ```
 
-Dependency direction is enforced:
+`@dstar/core` has no Node, React, filesystem, network, MCP, model, or provider
+dependency. `@dstar/node` owns filesystem and transaction behavior. The MCP
+package adapts public SDK commands and implements no document semantics.
+
+## 4. Tooling baseline
+
+- Node.js 22+, pnpm workspace, strict TypeScript, and ESM.
+- Vitest for unit and integration tests.
+- JSON Schema Draft 2020-12 with generated types checked for drift.
+- RFC 8785 revision vectors and independent conformance verification.
+- Boundary, formatting, Markdown-link, security, and release checks in CI.
+
+## 5. Milestone 0 — Repository and SDK contract
+
+Deliverables:
+
+- workspace build/lint/test/CI skeleton;
+- `@dstar/core` and `@dstar/node` dependency boundary;
+- schema-to-types generation and drift checking;
+- diagnostic registry and `minimal.dstar` fixture loader; and
+- ADR template.
+
+Exit criteria:
+
+- clean checkout verifies with one command;
+- browser-safe imports cannot reach Node dependencies;
+- JSON, schemas, links, and public imports validate.
+
+## 6. Milestone 1 — `@dstar/core`
+
+Deliverables:
+
+- duplicate-key-aware I-JSON parsing and limits;
+- RFC 8785 document/node/projection revisions;
+- immutable indexes and base-profile validation;
+- manifest, history, annotation, assignment, source, and projection validation;
+- selectors and target resolution;
+- all six ordered update operations and semantic diff;
+- accepted-version materialization; and
+- in-memory builders for genesis, annotations, and proposals.
+
+Exit criteria:
+
+- Reader, Version Reader, Review Client, Change Producer, and pure Change
+  Applier fixtures pass without opening files;
+- independent revision vectors agree;
+- unknown declared-profile data survives lossless processing; and
+- accepted history materializes deterministically.
+
+## 7. Milestone 2 — `@dstar/node` and CLI
+
+Deliverables:
+
+- safe inventory and immutable snapshots;
+- external locks, journal, backup, recovery, and idempotency ledger;
+- atomic commands for genesis, annotation/reply/assignment, proposal, decision,
+  and version reads; and
+- CLI validation, inspection, history, draft, decision, and render commands.
+
+Human decision commands require an interactive terminal. There is no
+scriptable confirmation bypass.
+
+Exit criteria:
+
+- fault injection yields the old or new valid package, never a hybrid;
+- reopening package files rebuilds authoritative state;
+- idempotent retries do not duplicate effects; and
+- historical materialization works after cache deletion.
+
+## 8. Milestone 3 — Generic MCP adapter
+
+Modes:
 
 ```text
-protocol
-  <- validator, profile-base, render-core, review-core, change-applier
-  <- package-fs, render adapters, agent-runtime, local-api
-  <- apps
+dstar mcp document <document.dstar> --principal <human-id>
+dstar mcp genesis <draft> --principal <human-id>
 ```
 
-`protocol` must not depend on Node, React, filesystem, HTTP, SQLite, or provider
-SDKs. Cycles between packages fail CI.
+Tools:
 
-## 3. Tooling baseline
+```text
+get_manifest
+list_comments
+get_node
+search_document
+get_annotation
+get_source
+simulate_update
+submit_proposal
+reply_comment
+submit_genesis
+```
 
-- `pnpm` workspace with one lockfile.
-- TypeScript strict mode with project references.
-- ESM packages and explicit public exports.
-- Vitest for unit/integration tests.
-- fast-check or equivalent for property tests.
-- Playwright for browser selection and end-to-end tests.
-- JSON Schema Draft 2020-12 runtime validation.
-- Generated TypeScript protocol types from the normative schemas; generated
-  files are checked for drift in CI and are not edited manually.
-- Formatter, linter, dependency-boundary checks, and Markdown link checks.
+The process fixes document/draft and human principal. There are no executor
+actors, task tokens, task discovery, or delegation lifecycle. Update calls
+supply explicit bases. MCP provides no accept/reject/supersede/resolve/path,
+shell, or unrestricted network operation.
 
-Third-party library choices for canonicalization, schema validation,
-sanitization, SQLite, and HTTP must pass focused compatibility/security spikes
-before becoming architecture dependencies.
+Exit criteria:
 
-## 4. Milestone 0 — Repository foundation
+- generic MCP clients start the server without schema projection errors;
+- a client reads, simulates, replies, and submits a pending proposal directly;
+- comments assigned to the principal can be filtered without creating tasks;
+- another document or principal cannot be selected through arguments;
+- canonical head stays unchanged until a separate human decision; and
+- duplicate write calls do not create duplicate portable objects.
 
-### Deliverables
+## 9. Milestone 4 — Deterministic HTML rendering
 
-- Workspace/package skeleton and CI.
-- Shared TypeScript, lint, test, and build configuration.
-- Schema-to-types generation with drift check.
-- Diagnostic type and stable code registry.
-- Fixture loader for `minimal.dstar`.
-- Architecture decision record template under `design/decisions/`.
+Deliverables:
 
-### Exit criteria
+- base RenderTree and profile registry;
+- canonical HTML with stable node/text-run descriptors;
+- HTML, Markdown, and plain-text projections with mappings;
+- safe asset serving, sanitization, CSP, and visible fallbacks; and
+- `dstar render` plus static reader.
 
-- Clean checkout installs, builds, lints, and tests with one documented command.
-- Protocol packages cannot import forbidden platform dependencies.
-- Existing minimal JSON and Markdown links validate in CI.
-- No application code duplicates normative schema definitions manually.
+Exit criteria:
 
-## 5. Milestone 1 — Core reader and validator
+- deterministic renders are byte-identical;
+- projection hashes and mappings verify;
+- unsafe HTML/URL/SVG/assets cannot execute active content; and
+- unsupported meaningful content remains visible and preserved.
 
-### Deliverables
+## 10. Milestone 5 — Comment and proposal-review UI
 
-- I-JSON parser with duplicate-key detection and limits.
-- RFC 8785 document/node revisions and raw projection hashes.
-- Safe in-memory package loader, followed by read-only filesystem inventory.
-- Immutable tree and cross-object indexes.
-- Structural schema validation.
-- Base profile validation for document, heading, paragraph, image, text, and
-  current marks.
-- Manifest/head/change-chain validation.
-- Accepted canonical-version index and history inspection.
-- Projection/annotation/delegation/source reference validation.
-- `dstar validate`, `dstar inspect`, and `dstar history`.
+Deliverables:
 
-### Fixtures promoted from plan
+- loopback workspace service with token/CSRF protection and invalidation;
+- reader, review rail, diagnostics, sources, and history;
+- DOM Range conversion to portable selectors;
+- comment, reply, human assignment, and resolve flows; and
+- proposal simulation plus human decisions.
 
-- minimal valid package;
-- document/hash/head mismatch;
-- duplicate IDs and broken references;
-- unsafe paths and links;
-- invalid accepted chain including A -> B -> A history;
-- invalid selectors/mappings; and
-- unsupported declared profile preservation.
+Exit criteria:
 
-### Exit criteria
+- selections create exact portable targets across Unicode and mapped elements;
+- comments and assignment survive refresh/reopen;
+- ambiguous targets never attach silently;
+- canonical content has no direct-edit path; and
+- SDK/MCP proposals remain pending until explicit human review.
 
-- Minimal package opens with zero errors.
-- Every planned Core Reader fixture has a stable expected diagnostic code.
-- The loader can inspect a malformed package without unsafe path access.
-- Independent revision vectors match a second implementation or external test
-  vectors.
+## 11. Milestone 6 — Resources, App packaging, and hardening
 
-## 6. Milestone 2 — Package writer and deterministic renderer
+Deliverables:
 
-### Deliverables
+- MCP Resource discovery/read/subscription;
+- review surface packaged as an MCP App when host support exists;
+- tool-only fallback;
+- reusable role-fixture runner and independent validator;
+- security corpus, scale limits, determinism, and release packaging; and
+- compatibility matrix for multiple MCP clients.
 
-- External runtime-root layout and SQLite adapter.
-- Snapshot IDs, package lock, transaction journal, backups, and recovery.
-- Fault injection at each transaction boundary.
-- Base `RenderTree`, canonical React renderer, and DOM text-run descriptors.
-- Deterministic HTML, Markdown, and plain-text projection plugins.
-- Segment/source-map collector and reviewability validator.
-- Safe asset route and HTML sanitizer.
-- `dstar render`.
+Exit criteria:
 
-### Exit criteria
+- unsupported capabilities degrade explicitly;
+- standalone and embedded surfaces share package and authority rules;
+- a second implementation validates reference output; and
+- deleting runtime state leaves portable content, comments, assignments,
+  proposals, decisions, and history usable.
 
-- Repeated deterministic renders are byte-identical across CI platforms.
-- Crash injection leaves either old or new valid package after recovery.
-- Canonical renderer produces stable node and text-run maps.
-- Projection hashes, fragments, visible quotes, and canonical selectors verify.
-- Unsafe HTML/assets have golden safe fallbacks.
+## 12. Test layers
 
-## 7. Milestone 3 — Review client and annotations
+- Unit/property: JSON, hashes, paths, Unicode, selectors, operations, history.
+- Golden/conformance: packages, diagnostics, operations, MCP schemas, renders.
+- Integration: locking, recovery, idempotency, MCP stdio, scope isolation.
+- Browser: selection, comment, human assignment, review, history, accessibility.
 
-### Deliverables
+## 13. Risks
 
-- Loopback workspace server, token authentication, API v1, and invalidation
-  stream.
-- React reader, review rail, document inspector, and diagnostics.
-- Canonical and projection view adapters.
-- DOM Range to Node/Segment selector conversion.
-- Annotation creation, replies, resolve, audience, and computed resolution
-  inbox.
-- Human URL/file/citation source registration and safe source preview.
-- File watching and stale snapshot handling.
-
-### Exit criteria
-
-- Playwright selects marked text, Unicode astral text, and cross-node text and
-  creates the expected portable selectors.
-- Comments survive refresh and package reopen without browser-only state.
-- Projection comments copy canonical mappings exactly.
-- Ambiguous/orphaned targets never receive a silent inline attachment.
-- Canonical content has no direct edit path in DOM, API, or keyboard commands.
-
-## 8. Milestone 4 — Change simulation and human decisions
-
-### Deliverables
-
-- Working-copy tree index and all six update operations.
-- Historical version materializer using the same operation engine.
-- Ordered preconditions and semantic diff.
-- Applicable/stale/local-conflict/invalid simulation results.
-- Proposal review UI.
-- Human accept, reject, and supersede commands.
-- `dstar show --version` and read-only version API endpoints.
-- Canonical acceptance transaction and idempotency ledger.
-- Projection invalidation and asynchronous regeneration.
-
-### Exit criteria
-
-- Every operation has golden before/change/after fixtures.
-- Multi-operation failure mutates no portable file.
-- Delete/move detect changed origin context.
-- Same-parent move and Unicode text replacement behave identically across
-  platforms.
-- Human confirmation binds to exact snapshot and result revision.
-- A successful accept advances `headChange`, preserves provenance, and leaves
-  its motivating annotation open.
-- Genesis and multi-update histories materialize every accepted version, detect
-  corrupted intermediate results, and verify the head against `document.json`.
-
-## 9. Milestone 5 — Agent runtime and genesis
-
-### Deliverables
-
-- Durable local jobs and provider-neutral adapter.
-- Deterministic fake provider for tests.
-- Context assembler with audience and semantic-neighborhood filtering.
-- Brokered read and output tools.
-- MCP stdio adapter with task-scoped resources and tools.
-- Delegation queued/in-progress/terminal lifecycle.
-- Proposal, reply, no-result, failure, cancellation, and repair paths.
-- Local genesis draft, preview, rejection, and accepted materialization.
-- Rebase-request agent flow.
-
-### Exit criteria
-
-- An agent cannot access filesystem, decisions, excluded comments, or network
-  without a brokered capability.
-- Model-supplied actor/status/hash values cannot override runtime values.
-- MCP sessions cannot discover or invoke human decision commands or escape
-  their package, actor, audience, task, snapshot, and budget capability.
-- Delegation result and proposal/reply are persisted atomically.
-- Stale inference output becomes a stale proposal, never an applied change.
-- Genesis creates no completed package until explicit human acceptance.
-- End-to-end north-star flow passes with the deterministic fake provider.
-
-## 10. Milestone 6 — Interoperability and hardening
-
-### Deliverables
-
-- All planned conformance role fixtures as machine-readable cases.
-- A fixture runner reusable by another implementation.
-- Complete local API diagnostic documentation.
-- MCP compatibility tests against a generic client and supported negotiated
-  protocol versions.
-- Referenced projection retention and regeneration recovery.
-- Security corpus for paths, XSS, SVG/media, CSRF, prompt injection, and limits.
-- Performance/scale measurements and configured limits.
-- Provider adapter for the first real model behind the existing port.
-- Release packaging and reproducible build documentation.
-
-### Exit criteria
-
-- A second independent reader validates the produced minimal package.
-- The reference implementation passes every claimed role fixture.
-- Security tests produce safe diagnostics without execution or package mutation.
-- The north-star browser workflow passes with fake and real provider adapters.
-- A package remains usable after runtime cache/database deletion.
-
-## 11. Test layers
-
-### Unit
-
-- canonicalization, hashes, code-point conversions;
-- path parser and IDs;
-- tree indexes and operation algorithms;
-- selector construction/resolution;
-- profile rules and diagnostics; and
-- mapping collector.
-
-### Property
-
-- parse/serialize preservation of unknown content;
-- arbitrary safe paths never escape root;
-- incremental tree index equals full rebuild;
-- operation apply either returns a fully valid result or no result;
-- target resolver never reports exact for non-matching quotation; and
-- accepted change-ID chains remain ordered with repeated revisions; and
-- historical materialization is deterministic with or without local
-  checkpoints.
-
-### Golden/conformance
-
-- package fixtures with expected diagnostic codes;
-- operation before/change/after triples;
-- accepted-chain genesis/intermediate/head materialization results;
-- renderer artifact bytes and indexes; and
-- API read models for exact/recovered/ambiguous states.
-
-### Integration
-
-- lock, transaction, recovery, and external file watcher;
-- annotation/delegation/proposal multi-file workflows;
-- provider job persistence and cancellation; and
-- render regeneration with referenced old projections.
-
-### Browser E2E
-
-- selection and comment on canonical/HTML views;
-- discussion without delegation;
-- delegation through proposed change;
-- stale/conflict proposal UX;
-- accept/reject/supersede/rebase paths; and
-- accessibility keyboard flows.
-
-## 12. CI gates
-
-Every pull request must pass:
-
-1. format and Markdown link check;
-2. generated schema/type drift check;
-3. lint and dependency-boundary check;
-4. typecheck;
-5. unit/property tests;
-6. conformance fixtures for affected roles;
-7. package integration tests; and
-8. browser smoke tests when UI changes.
-
-Nightly or release CI adds cross-platform renderer determinism, crash matrix,
-full browser suite, dependency/security scan, fuzz corpus, and real-provider
-contract smoke tests with spending limits.
-
-## 13. First implementation backlog
-
-The first build sequence after design approval is:
-
-1. Create workspace and protocol package boundaries.
-2. Generate TypeScript types from current schemas.
-3. Implement I-JSON and RFC 8785 revision vectors.
-4. Load `minimal.dstar` into an immutable in-memory snapshot.
-5. Implement semantic node/history/reference validation.
-6. Expose `dstar validate` with stable diagnostics.
-7. Implement base canonical render tree and HTML output.
-8. Implement canonical DOM text-run mapping.
-9. Implement read-only workspace server and reader page.
-10. Add canonical selection -> annotation as the first writable feature.
-
-No real model provider is added before deterministic proposal fixtures and the
-human decision boundary work end to end.
-
-## 14. Risk register
-
-| Risk | Early mitigation |
+| Risk | Mitigation |
 | --- | --- |
-| Spec churn creates duplicate code models | Schema-generated types and fixture-first changes |
-| Browser selection differs across renderers | Explicit DOM text maps and Playwright corpus |
-| Multi-file writes leave partial package | External journal, recovery, crash injection |
-| Rich content expands base scope too quickly | Implement only spec-complete types; profile adapters |
-| Agent framework drives protocol design | Fake provider and narrow provider port first |
-| Prompt injection bypasses task scope | Brokered tools, least context, deterministic validation |
-| Projection provenance grows package indefinitely | Conservative retention now; design archive in spec later |
-| Local-only assumptions leak into protocol | Runtime state outside package and dependency boundaries |
+| Runtime concepts leak into protocol | No executor/task/provider fields in schemas or portable fixtures |
+| MCP client differences shape protocol | Keep adapter schemas non-normative |
+| Long-lived MCP scope is broad | Fix document/draft and principal at launch; apply budgets |
+| Caller fabricates authority | Launcher fixes principal; decision methods are absent |
+| Silent proposal rebase | Require explicit base change and revision |
+| Multi-file partial writes | Journal, recovery, and crash injection |
+| Browser selection drift | Explicit semantic DOM maps and browser corpus |
 
-## 15. Decisions required before coding
+## 14. Complete definition
 
-These are implementation choices, not protocol questions:
-
-- exact HTTP server library;
-- SQLite adapter and supported native-build policy;
-- JSON Schema/type-generation toolchain;
-- RFC 8785 library versus audited local implementation;
-- HTML sanitizer and SVG handling library;
-- React build/application shell; and
-- first real provider adapter.
-
-Each choice gets a short ADR comparing security, portability, maintenance, and
-bundle/runtime cost. None should delay pure core and fixture work.
-
-## 16. Definition of 0.1 reference implementation complete
-
-The implementation is complete when:
-
-- it passes claimed Core Reader, Version Reader, Core Writer, Review Client,
-  Delegation Client, Change Producer, Change Applier, and Projection Renderer
-  fixtures;
-- the full north-star workflow works from genesis through a second accepted
-  update;
-- every accepted canonical version in that workflow can be materialized and
-  verified after deleting local caches;
-- comments remain portable and safely unresolved through target ambiguity;
-- deleting the runtime store does not lose portable state;
-- a second implementation reads and validates its output;
-- no direct human canonical editing path exists;
-- documented security and crash tests pass; and
-- unsupported capabilities are explicit rather than silently degraded.
+The 0.1 reference implementation is complete when public packages and claimed
+roles pass, generic SDK/MCP clients can submit pending proposals, deterministic
+HTML and portable comments work, every accepted version materializes without
+runtime state, a second implementation validates output, and no proposal-only
+surface can directly decide canonical content.

@@ -2,344 +2,90 @@
 
 Status: **Draft**
 
-## 1. Responsibilities
+## Boundary
 
-The package runtime is the reference implementation's trusted filesystem
-boundary. It is responsible for:
+`@dstar/node` is the filesystem boundary around the pure `@dstar/core`. It
+opens untrusted package trees into immutable snapshots and applies validated,
+recoverable mutations. It contains no model/provider integration, executor
+registry, task scheduler, or portable workflow engine.
 
-- opening an unpacked `.dstar` directory without following unsafe paths;
-- producing immutable, validated snapshots;
-- preserving unknown declared-profile and `x-` data;
-- serializing package writes;
-- making multi-file mutations recoverable;
-- detecting out-of-band changes; and
-- keeping non-portable runtime data outside the package.
+Opening a package performs a bounded inventory, rejects links and special
+files, parses duplicate-key-aware I-JSON, validates schemas and profiles,
+checks references and revisions, and validates the accepted history chain.
+Unknown optional profile content remains inspectable but makes mutation
+read-only when safe semantics are unavailable.
 
-No other component reads or writes package paths directly.
-
-## 2. Filesystem model
-
-The runtime accepts an absolute path to a directory ending in `.dstar`. Before
-reading protocol data it resolves and records the package root itself, then
-uses descriptor-relative operations where the platform permits.
-
-For every package entry it:
-
-1. parses the serialized path using DSTAR package-path rules;
-2. rejects absolute paths, URI-like paths, drive prefixes, backslashes, empty
-   segments, and `.` or `..` segments;
-3. checks every existing path component with `lstat`;
-4. rejects symbolic links, junctions, device nodes, sockets, and named pipes;
-5. opens only regular files and directories below the recorded root; and
-6. verifies the resolved target remains below the root before use.
-
-Symlinks are rejected even when they currently resolve inside the package. This
-avoids time-of-check/time-of-use changes and keeps archives portable.
-
-## 3. Runtime limits
-
-Limits are configurable but the reference defaults are:
-
-| Resource | Default |
-| --- | ---: |
-| Total unpacked package size | 256 MiB |
-| Single JSON file | 8 MiB |
-| Single projection artifact | 32 MiB |
-| Single asset | 128 MiB |
-| JSON nesting depth | 128 |
-| Canonical nodes | 100,000 |
-| Annotation threads | 50,000 |
-| Replies per thread | 10,000 |
-| Changes/delegations | 50,000 each |
-| Package path length | 1,024 bytes |
-
-Opening above a limit produces a diagnostic and no writable snapshot. A CLI
-flag may raise limits for trusted packages; the browser never raises them
-implicitly.
-
-## 4. Open pipeline
-
-```text
-resolve package root
-    -> safe recursive inventory
-    -> locate manifest and required entries
-    -> read bounded bytes
-    -> parse JSON as I-JSON
-    -> structural schema validation
-    -> construct indexes
-    -> profile + semantic validation
-    -> verify revisions/history/references
-    -> produce immutable PackageSnapshot
-```
-
-### 4.1 I-JSON parsing
-
-The parser rejects:
-
-- duplicate object keys;
-- invalid Unicode scalar sequences;
-- non-finite or out-of-range JSON numbers;
-- trailing non-whitespace bytes; and
-- a byte-order mark unless the spec later permits one.
-
-Objects retain their parsed value for protocol logic and their original bytes
-when lossless copying of unknown content is required. New or modified JSON is
-written as UTF-8 with two-space indentation and a trailing newline; revisions
-still use RFC 8785 canonical bytes.
-
-### 4.2 Indexes
-
-The snapshot builds immutable maps for:
-
-- nodes and parent/sibling relationships;
-- annotation and reply IDs;
-- delegation IDs;
-- change IDs and accepted-chain links;
-- projection and segment IDs;
-- sources; and
-- asset paths.
-
-Duplicate IDs are reported before references are resolved so diagnostics remain
-deterministic.
-
-### 4.3 Validation modes
-
-- `strict` opens only semantically valid packages for mutation.
-- `inspect` returns a read-only snapshot with diagnostics where safe parsing is
-  possible.
-- `repair-preview` may propose explicit repairs but never writes them.
-
-The browser uses `strict` for commands and may use `inspect` to show a damaged
-package. Agent execution and change acceptance require `strict`.
-
-## 5. Snapshot identity
-
-`snapshotId` is runtime-only. It is SHA-256 over a sorted inventory of each
-portable file's normalized relative path, file type, size, and raw-byte hash.
-It includes assets and projection artifacts, not only canonical content.
-
-Two snapshots with the same canonical revision can therefore differ when a
-comment, delegation, proposal, projection, or asset changes. Commands carry the
-snapshot ID they were created from to prevent lost updates at the application
-layer.
-
-The manifest `revision` and `headChange` remain the protocol-level canonical
-state. `snapshotId` is never serialized into a `.dstar` package.
-
-## 6. Local runtime store
-
-Each opened package receives a runtime key derived from its resolved root and
-manifest document ID. Under `<runtime-root>/packages/<runtime-key>/`, the
-implementation stores:
-
-```text
-runtime-key/
-├── lock.json
-├── transactions/
-├── backups/
-├── cache/
-└── runtime.sqlite
-```
-
-`runtime.sqlite` uses WAL mode and contains:
-
-- durable agent jobs and attempts;
-- provider request IDs and usage metadata;
-- command/idempotency execution records;
-- verified historical-version materialization cache metadata;
-- render and validation cache metadata;
-- package-open history needed for recovery; and
-- redacted structured events.
-
-Portable objects are not authoritative database rows. The database may cache
-their indexes, but reopening and validating package files can rebuild them.
-
-Historical canonical materializations are cached by document ID, target
-accepted change ID, result revision, and accepted-chain fingerprint. A cache
-hit is usable only after the target remains on the validated accepted chain and
-the cached tree recomputes to the recorded result revision. Cache deletion never
-removes portable version history.
-
-## 7. Locking
-
-Package writes use an exclusive advisory lock stored in the runtime store, not
-inside the package. Lock acquisition uses an atomic create or platform lock and
-records:
-
-- runtime key and package root;
-- random lock token;
-- process ID and process-start fingerprint;
-- creation and heartbeat times; and
-- intended command and transaction ID.
-
-A lock is not considered stale from time alone. The runtime confirms that the
-recorded process no longer exists or cannot own the process-start fingerprint
-before recovery. Breaking an unverifiable lock requires explicit user action.
-
-Readers use immutable snapshots without retaining the lock. Immediately after
-acquiring a write lock, the repository reopens the inventory and verifies the
-command's `expectedSnapshotId`.
-
-## 8. Mutation model
-
-Application services submit logical mutations rather than paths:
+## Snapshot
 
 ```ts
-interface PackageCommit {
-  expectedSnapshotId: SnapshotId;
-  transactionType:
-    | "genesis"
-    | "annotation"
-    | "delegation"
-    | "evidence"
-    | "proposal"
-    | "decision"
-    | "accept-change"
-    | "projection";
-  writes: ReadonlyMap<PackagePath, Uint8Array>;
-  deletes: ReadonlySet<PackagePath>;
-  expectedCurrentHashes: ReadonlyMap<PackagePath, Sha256 | "absent">;
+interface PackageSnapshot extends InMemoryPackage {
+  root: string;
+  snapshotId: SnapshotId;
+  inventory: readonly InventoryEntry[];
+  diagnostics: readonly Diagnostic[];
+  writable: boolean;
 }
 ```
 
-The repository independently verifies that the requested path set is legal for
-the transaction type. For example, an annotation transaction cannot write
-`document.json`, and only an accepted-change transaction may change canonical
-content and `manifest.headChange` together.
+`snapshotId` hashes the complete safe inventory and is runtime-only. Manifest
+`revision` and `headChange` remain the portable canonical state. A comment,
+proposal, projection, or asset write may change the snapshot without changing
+the canonical revision.
 
-## 9. Recoverable multi-file commit
+## Commands and transactions
 
-Portable filesystems do not provide an atomic rename of a populated directory.
-The runtime therefore implements a journaled transaction and treats atomicity
-as a conforming-reader guarantee: cooperating readers never receive a partial
-snapshot, and a crash is recovered before the package is reopened.
+Public commands express logical mutations rather than arbitrary paths. The
+repository independently restricts each transaction type:
 
-### 9.1 Prepare
-
-1. Acquire the package lock.
-2. Reopen and compare `expectedSnapshotId` and expected file hashes.
-3. Validate every proposed new byte sequence in an in-memory candidate snapshot.
-4. Create a transaction directory in the external runtime store.
-5. Write staged new files, original-file backups, and a journal containing
-   target paths plus old/new SHA-256 hashes.
-6. Flush staged files and the journal to durable storage when supported.
-
-### 9.2 Install
-
-1. Mark the journal `installing`.
-2. Rename each existing target to its transaction backup.
-3. Rename each staged file to its target; install the manifest last for a
-   canonical acceptance transaction.
-4. Apply declared deletions by moving them to the backup area.
-5. Flush affected directories.
-6. Reopen and validate the installed package.
-7. Mark the journal `committed`, record the new snapshot ID, and release lock.
-
-The service publishes the new snapshot only after step 6. Projection
-regeneration is a separate transaction and is not part of canonical acceptance.
-
-### 9.3 Recovery
-
-On package open, any non-terminal journal is recovered before validation:
-
-- If every target has its recorded new hash, finish the commit and validate.
-- If every target has its recorded old hash, mark the transaction rolled back.
-- Otherwise restore all old files from backups, verify their hashes, and mark
-  the transaction rolled back.
-- If neither completion nor rollback can be verified, refuse writes and emit a
-  recovery-required diagnostic with the journal location.
-
-Backups are retained until the new package has been reopened successfully at
-least once. Cleanup never runs while a lock or recovery journal is active.
-
-## 10. Single-object updates
-
-Annotations, delegations, proposals, and decisions still use the transaction
-machinery even when only one file changes. The runtime writes a complete new
-snapshot file and renames it; it never edits JSON in place.
-
-Reply creation and annotation resolution both compare the current annotation
-file hash so concurrent snapshot edits fail rather than overwrite each other.
-DSTAR 0.1 has no automatic merge for two annotation snapshots.
-
-## 11. Canonical acceptance transaction
-
-An accepted update transaction must include exactly:
-
-- the new `document.json`;
-- the same change record with terminal human decision metadata;
-- `manifest.json` with matching `revision` and `headChange`.
-
-The candidate snapshot must prove:
-
-- the old manifest matches the proposal bases;
-- ordered operation simulation produces the proposed document;
-- the proposed result revision matches the decision;
-- the accepted change extends the current accepted head;
-- every declared profile validates; and
-- all asset references resolve after the candidate transaction.
-
-The 0.1 update vocabulary cannot add or delete asset files. Genesis may stage
-initial assets; later asset mutation waits for a portable spec operation.
-
-Projection artifacts are allowed to remain at their previous
-`generatedFromRevision` temporarily. They are exposed as stale, never as current.
-
-## 12. File watching and external edits
-
-The watcher observes the package root but does not trust event payloads. After a
-debounce it builds a new safe inventory.
-
-- Events caused by the active transaction are coalesced into its new snapshot.
-- A valid external edit creates a new snapshot and invalidates browser commands.
-- A semantically invalid edit puts the workspace in read-only inspect mode.
-- A changed `document.json` without a matching accepted head is reported as an
-  authority/provenance violation; the runtime does not synthesize a change.
-- Running agent inference may finish, but its output retains its original bases
-  and will be stale when submitted.
-
-The runtime never watches or serves paths reached through symlinks.
-
-## 13. Caching
-
-Cache keys include all semantic dependencies:
-
-- validation: snapshot ID + validator version + supported profiles;
-- canonical render: document revision + renderer/profile/theme versions;
-- projection render: canonical revision + projection request + renderer version;
-- target resolution: target value + current revision + mapping revision; and
-- agent context: starting snapshot ID + task + context-policy version.
-
-Cache output is disposable. A cache hit never bypasses current path, authority,
-or precondition validation before a write.
-
-## 14. Diagnostics
-
-Package diagnostics use stable families:
-
-```text
-PKG_PATH_*       unsafe or missing filesystem entry
-JSON_*           parsing or I-JSON violation
-SCHEMA_*         structural schema failure
-PROFILE_*        unsupported or invalid content profile
-REF_*            missing or inconsistent cross-object reference
-REV_*            revision/hash mismatch
-HISTORY_*        invalid accepted change chain
-AUTH_*           actor or authority violation
-TXN_*            lock, commit, or recovery failure
-LIMIT_*          configured resource limit exceeded
+```ts
+type TransactionType =
+  | "genesis" | "annotation" | "evidence" | "proposal"
+  | "decision" | "accept-change" | "projection";
 ```
 
-Diagnostics include protocol object IDs and JSON Pointers where safe. Absolute
-local paths appear only in local logs, not portable package records.
+Annotation commands create threads, append direct human replies, resolve, or
+set an optional human assignee. Proposal commands may add a proposed update or
+reply but cannot write the canonical document or manifest head. Decision and
+accepted-change commands require human authority at the command layer.
 
-## 15. Test strategy
+Every mutation carries an expected snapshot ID and idempotency key. Repeating
+the same command returns its already-current result; reusing a key with
+different arguments fails. Callers that need stable retry after later package
+advancement use deterministic portable IDs and compare existing objects.
 
-- Golden package inventories for valid and invalid path structures.
-- Property tests for path parsing and root containment.
-- Crash injection after every transaction step.
-- Concurrent writer tests using stale snapshot IDs and file hashes.
-- Round-trip tests preserving unknown profile and `x-` content.
-- Hash vectors for document, node, projection, and raw-file revisions.
-- External-edit tests that move a workspace between valid and inspect-only
-  states.
+## Atomicity and recovery
+
+Writes take an external per-package lock, reopen the package, verify snapshot
+and file hashes, validate an in-memory candidate, then journal staged files and
+backups outside the package. Targets are installed with the manifest last for
+canonical acceptance. The package is reopened and validated before the new
+snapshot is published.
+
+Recovery completes a fully installed journal, recognizes a fully old state, or
+restores every old file from verified backups. An unverifiable mixed state is
+read-only and reports recovery-required diagnostics.
+
+An accepted update transaction contains exactly the new document, the accepted
+change, and the matching manifest. Projection regeneration is a separate
+transaction and stale projections remain explicitly stale.
+
+## Runtime store and watching
+
+The external runtime directory stores locks, journals, backups, idempotency
+records, disposable caches, and redacted diagnostics. Portable objects remain
+authoritative files and reopening can rebuild all indexes.
+
+File-watch events trigger a fresh safe inventory; event paths are never trusted.
+A valid external edit creates a new snapshot. Invalid or provenance-breaking
+edits put the workspace into inspect-only mode. The runtime never watches or
+serves paths reached through links.
+
+## Tests
+
+- valid/invalid package inventories and root containment;
+- bounded parsing and profile capability behavior;
+- stale/concurrent writers and idempotency mismatch;
+- crash injection at every transaction step;
+- external edits and inspect-only transitions;
+- accepted-change atomicity and projection staleness; and
+- round-trip preservation of supported extension content.

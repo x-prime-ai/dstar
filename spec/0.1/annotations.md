@@ -16,6 +16,7 @@ thread contains:
 - a primary target representing what the author actually reviewed;
 - zero or more canonical targets representing relevant source-of-truth content;
 - an initial body and author;
+- an optional human assignee;
 - zero or more ordered replies;
 - a status and lifecycle metadata; and
 - an optional intended audience.
@@ -30,8 +31,8 @@ semantics are not mixed in `annotations/`.
 
 ## Scope
 
-`scope` states what the annotation is about, not what an agent is authorized or
-required to change:
+`scope` states what the annotation is about, not what any client is authorized
+or required to change:
 
 - `canonical` — canonical source-of-truth content;
 - `projection` — the selected view or its generator; or
@@ -43,8 +44,7 @@ required to change:
 - `question` — a request for information or clarification; or
 - `change-request` — feedback that may lead to a content proposal.
 
-Neither `scope` nor `purpose` invokes an agent. Only an explicit delegation
-requests agent execution.
+Neither `scope` nor `purpose` starts external work or grants authority.
 
 A link to canonical content is provenance, not an instruction to edit it. For
 example, “this summary is too verbose” has projection scope even though the
@@ -53,16 +53,13 @@ summary segment records which canonical nodes it summarizes.
 An annotation directly targeting `document` MUST use canonical scope. An
 annotation targeting a projection MAY use any scope.
 
-## Comment creation and delegation
+## Comment creation and assignment
 
-A human MAY create an annotation directly from a selection without assigning it
-to an agent. The annotation can support discussion, record an unresolved issue,
-or remain open for later work.
-
-Assigning the comment to an agent is a separate operation represented by a
-[delegation](delegations.md). Creating, completing, or cancelling a delegation
-MUST NOT implicitly resolve the annotation. Likewise, resolving an annotation
-does not rewrite the history of its delegations or resulting changes.
+A human MAY create an annotation without assigning it. The optional `assignee`
+MUST identify a human. Assignment records responsibility only: it does not
+start a runtime, create a task, grant proposal-decision authority, or specify
+which tools the assignee may use. Reassignment updates current portable state;
+assignment history is deferred to a future event-log profile.
 
 ## Target model
 
@@ -77,9 +74,9 @@ into `canonicalTargets`. Visual similarity between the two views does not
 change which object the person actually reviewed.
 
 The selection MUST originate from the view the human actually inspected. A
-natural-language description interpreted by an agent MAY supplement the
-comment, but it MUST NOT replace portable semantic and quotation anchors when a
-precise selection is available.
+natural-language description MAY supplement the comment, but it MUST NOT
+replace portable semantic and quotation anchors when a precise selection is
+available.
 
 A canonical selection uses `NodeSelector` with optional position and quotation
 evidence:
@@ -100,7 +97,7 @@ evidence:
       },
       {
         "type": "TextQuoteSelector",
-        "exact": "Humans direct and decide"
+        "exact": "Humans review and decide"
       }
     ]
   }
@@ -163,7 +160,7 @@ visible text stream, not to raw HTML bytes:
     },
     {
       "type": "TextQuoteSelector",
-      "exact": "Humans direct and decide"
+      "exact": "Humans review and decide"
     }
   ]
 }
@@ -276,9 +273,9 @@ for two tools editing the same annotation file.
 
 ## Audience
 
-An annotation MAY declare one or more intended actor types in `audience`.
-Conforming agent-context projections MUST omit annotations that do not include
-`agent` in their audience.
+An annotation MAY declare one or more intended DSTAR actor types in `audience`.
+A context projection for a particular actor type MUST omit annotations that do
+not include that actor type.
 
 Because a `.dstar` package is an inspectable file, `audience` is disclosure
 metadata rather than access control. Sensitive material requires storage-level
@@ -290,6 +287,7 @@ A semantically valid annotation MUST satisfy:
 
 - its filename matches its `id` plus `.json`;
 - all authors and lifecycle actors are valid actors;
+- `assignee`, when present, identifies a human;
 - the primary source and selected node, segment, or segment range exist at
   creation time;
 - a projection target belongs to a projection marked `reviewable`;

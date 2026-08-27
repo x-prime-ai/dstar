@@ -7,7 +7,7 @@ core-reader/          Package and canonical document behavior
 version-reader/       Historical canonical materialization and verification
 core-writer/          Accepted genesis/update materialization and preservation
 review-client/        Target resolution and thread lifecycle
-delegation-client/    Explicit assignment and independent lifecycle behavior
+review-client/        Human assignment and independent lifecycle behavior
 change-producer/      Proposal construction and provenance
 change-applier/       Conflict checks, atomicity, and decisions
 projection-renderer/  Projection revisions and source mappings
@@ -43,7 +43,7 @@ codes, and operation triples where behavior changes state.
 - a proposed, rejected, superseded, off-chain, or missing target is not a
   canonical version
 - deleting implementation checkpoints does not affect materialized output
-- current annotations, delegations, sources, assets, and projections are not
+- current annotations, sources, assets, and projections are not
   presented as reconstructed historical package state
 
 ## Planned Review Client fixtures
@@ -60,8 +60,8 @@ codes, and operation triples where behavior changes state.
 - transformed or summarized mapping does not invent an exact source range
 - projection-scoped feedback does not request a canonical change
 - a direct document target with projection scope is invalid
-- annotation scope and discussion purpose do not imply delegation
-- agent-context projection omits human-only annotations
+- annotation scope and discussion purpose do not imply assignment or execution
+- actor-scoped context projection respects audience metadata
 - a selection in a canonical HTML view targets `document`
 - canonical HTML exposes `data-dstar-node` lookup aids
 - a cross-node selection produces a valid `NodeRangeSelector`
@@ -79,22 +79,19 @@ codes, and operation triples where behavior changes state.
 - unsupported declared-profile content survives an accepted transformation
 - image and marked-link content survive an accepted transformation
 
-## Planned Delegation Client fixtures
+## Planned Assignment fixtures
 
-- a comment remains valid and open without a delegation
-- a queued delegation references an existing annotation and agent
-- completing a delegation does not resolve its source annotation
-- a completed delegation links to an agent-authored result change
-- a completed delegation links to an agent-authored reply result
-- terminal delegation records `completedAt` and `completedBy`
-- reassigning work creates a new delegation
-- a human or service assignee is invalid
+- a comment remains valid and open without assignment
+- an assigned comment references a human assignee
+- assignment does not resolve the annotation or accept a proposal
+- reassignment updates current assignment without starting external work
+- a service assignee is invalid
 
 ## Planned Change fixtures
 
-- valid agent-authored genesis proposal
+- valid caller-independent genesis proposal
 - genesis records its human request and evidence sources
-- valid agent-authored update using `replace_text`
+- valid update proposal using `replace_text`
 - valid `replace_inline` changes links and marks
 - insert and move operations verify the destination parent
 - delete and move operations verify the origin parent and reject relocation
@@ -108,8 +105,8 @@ codes, and operation triples where behavior changes state.
 - duplicate idempotency key does not apply twice
 - multi-operation change is atomic on failure
 - later operation preconditions are evaluated after earlier operations
-- a human or service change author is invalid in 0.1
-- an agent, service, or policy decision actor is invalid in 0.1
+- a malformed change actor is invalid
+- a service or policy decision actor is invalid in 0.1
 - accepted genesis records the correct resulting revision
 - accepted change records the correct resulting revision
 - top-level status and decision status mismatch is invalid

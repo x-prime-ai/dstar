@@ -33,11 +33,9 @@
       "type": "object",
       "required": ["type", "id"],
       "properties": {
-        "type": { "enum": ["human", "agent", "service"] },
+        "type": { "enum": ["human", "service"] },
         "id": { "$ref": "#/$defs/id" },
-        "name": { "type": "string" },
-        "model": { "type": "string" },
-        "provider": { "type": "string" }
+        "name": { "type": "string" }
       },
       "patternProperties": {
         "^x-": true

@@ -89,7 +89,7 @@ export function Inspector({
             <span>
               {version.kind} · {version.resultRevision}
             </span>
-            <span>Agent {version.agentAuthorId}</span>
+            <span>Author {version.authorId}</span>
             <span>
               Decided by {version.humanDecisionActorId} · {version.decidedAt}
             </span>

@@ -27,7 +27,6 @@
     },
     "document": { "const": "document.json" },
     "annotations": { "const": "annotations" },
-    "delegations": { "const": "delegations" },
     "sources": { "const": "sources.json" },
     "changes": { "const": "changes" },
     "assets": { "const": "assets" },

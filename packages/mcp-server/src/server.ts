@@ -9,60 +9,53 @@ import {
 } from "@modelcontextprotocol/server";
 
 import {
-  safeBrokerError,
   DSTAR_RESOURCE_URI_TEMPLATES,
+  safeBrokerError,
   type DstarMcpBroker,
   type MCP_TOOL_NAMES,
 } from "./broker.js";
 
-interface TokenInput {
-  readonly taskToken: string;
+interface ListCommentsInput {
+  readonly assignedToMe?: boolean;
+  readonly openOnly?: boolean;
 }
-
-interface StartTaskInput {
-  readonly delegationId?: string;
-}
-
-interface NodeInput extends TokenInput {
+interface NodeInput {
   readonly nodeId: string;
   readonly neighborCount?: number;
 }
-
-interface SearchInput extends TokenInput {
+interface SearchInput {
   readonly query: string;
   readonly limit?: number;
 }
-
-interface AnnotationInput extends TokenInput {
+interface AnnotationInput {
   readonly annotationId: string;
 }
-
-interface SourceInput extends TokenInput {
+interface SourceInput {
   readonly sourceId: string;
   readonly maxBytes?: number;
 }
-
-interface SimulateInput extends TokenInput {
-  readonly operations: readonly unknown[];
-  readonly sourceIds?: readonly string[];
-}
-
-interface SubmitResultInput extends TokenInput {
+interface ProposalInput {
   readonly idempotencyKey: string;
-  readonly operations?: readonly unknown[];
+  readonly baseChange: string;
+  readonly baseRevision: string;
+  readonly operations: readonly unknown[];
+  readonly motivatedBy?: readonly string[];
   readonly sourceIds?: readonly string[];
-  readonly replyBody?: string;
-  readonly reason?: string;
 }
-
-interface SubmitGenesisInput extends TokenInput {
+interface ReplyInput {
+  readonly annotationId: string;
+  readonly body: string;
+  readonly idempotencyKey: string;
+}
+interface GenesisInput {
   readonly idempotencyKey: string;
   readonly document: Readonly<Record<string, unknown>>;
   readonly sourceIds?: readonly string[];
 }
 
 const stringSchema = { type: "string" } as const;
-const numberSchema = { type: "integer" } as const;
+const integerSchema = { type: "integer" } as const;
+const booleanSchema = { type: "boolean" } as const;
 const stringArraySchema = { type: "array", items: stringSchema } as const;
 const operationArraySchema = {
   type: "array",
@@ -76,63 +69,66 @@ function objectSchema(
   return {
     type: "object",
     properties,
-    ...(required.length > 0 ? { required: [...required] } : {}),
+    ...(required.length ? { required: [...required] } : {}),
     additionalProperties: false,
   } as JsonSchemaType;
 }
 
+const proposalProperties = {
+  idempotencyKey: stringSchema,
+  baseChange: stringSchema,
+  baseRevision: stringSchema,
+  operations: operationArraySchema,
+  motivatedBy: stringArraySchema,
+  sourceIds: stringArraySchema,
+} as const;
+
 export const MCP_TOOL_SCHEMAS = Object.freeze({
-  list_tasks: objectSchema({}),
-  start_task: objectSchema({ delegationId: stringSchema }),
-  get_task: objectSchema({ taskToken: stringSchema }, ["taskToken"]),
-  get_manifest: objectSchema({ taskToken: stringSchema }, ["taskToken"]),
+  get_manifest: objectSchema({}),
+  list_comments: objectSchema({
+    assignedToMe: booleanSchema,
+    openOnly: booleanSchema,
+  }),
   get_node: objectSchema(
-    {
-      taskToken: stringSchema,
-      nodeId: stringSchema,
-      neighborCount: numberSchema,
-    },
-    ["taskToken", "nodeId"],
+    { nodeId: stringSchema, neighborCount: integerSchema },
+    ["nodeId"],
   ),
-  search_document: objectSchema(
-    { taskToken: stringSchema, query: stringSchema, limit: numberSchema },
-    ["taskToken", "query"],
-  ),
-  get_annotation: objectSchema(
-    { taskToken: stringSchema, annotationId: stringSchema },
-    ["taskToken", "annotationId"],
-  ),
+  search_document: objectSchema({ query: stringSchema, limit: integerSchema }, [
+    "query",
+  ]),
+  get_annotation: objectSchema({ annotationId: stringSchema }, [
+    "annotationId",
+  ]),
   get_source: objectSchema(
-    { taskToken: stringSchema, sourceId: stringSchema, maxBytes: numberSchema },
-    ["taskToken", "sourceId"],
+    { sourceId: stringSchema, maxBytes: integerSchema },
+    ["sourceId"],
   ),
-  simulate_update: objectSchema(
+  simulate_update: objectSchema(proposalProperties, [
+    "baseChange",
+    "baseRevision",
+    "operations",
+  ]),
+  submit_proposal: objectSchema(proposalProperties, [
+    "idempotencyKey",
+    "baseChange",
+    "baseRevision",
+    "operations",
+  ]),
+  reply_comment: objectSchema(
     {
-      taskToken: stringSchema,
-      operations: operationArraySchema,
-      sourceIds: stringArraySchema,
-    },
-    ["taskToken", "operations"],
-  ),
-  submit_result: objectSchema(
-    {
-      taskToken: stringSchema,
+      annotationId: stringSchema,
+      body: stringSchema,
       idempotencyKey: stringSchema,
-      operations: operationArraySchema,
-      sourceIds: stringArraySchema,
-      replyBody: stringSchema,
-      reason: stringSchema,
     },
-    ["taskToken", "idempotencyKey"],
+    ["annotationId", "body", "idempotencyKey"],
   ),
   submit_genesis: objectSchema(
     {
-      taskToken: stringSchema,
       idempotencyKey: stringSchema,
       document: { type: "object", properties: {}, additionalProperties: true },
       sourceIds: stringArraySchema,
     },
-    ["taskToken", "idempotencyKey", "document"],
+    ["idempotencyKey", "document"],
   ),
 } satisfies Record<(typeof MCP_TOOL_NAMES)[number], JsonSchemaType>);
 
@@ -161,128 +157,100 @@ async function call(handler: () => Promise<unknown>): Promise<CallToolResult> {
 }
 
 export function createDstarMcpServer(broker: DstarMcpBroker): McpServer {
-  const resourceNotificationsAvailable = broker.resourceSubscriptionsAvailable;
   const server = new McpServer(
     { name: "dstar", version: "0.1.0" },
     {
       capabilities: {
         tools: {},
-        resources: {
-          listChanged: resourceNotificationsAvailable,
-          subscribe: resourceNotificationsAvailable,
-        },
+        resources: { listChanged: true, subscribe: true },
       },
       instructions:
-        "DSTAR exposes one fixed agent scope. Read-only resources are optional; every workflow has a tool-only fallback. Tools can submit pending agent-authored work, but no MCP path can accept canonical content.",
+        "DSTAR exposes one fixed document or draft scope for a human principal. Tools read portable document state and create pending proposals or replies. No MCP tool accepts, rejects, resolves, or directly changes canonical content.",
     },
   );
 
-  const resourceDefinitions = [
-    {
-      name: "document-manifest",
-      template: DSTAR_RESOURCE_URI_TEMPLATES[0],
-      description: "Portable manifest for the fixed delegated document.",
-      matches: (uri: string) => uri === "dstar://document/manifest",
-    },
-    {
-      name: "document-node",
-      template: DSTAR_RESOURCE_URI_TEMPLATES[1],
-      description: "Canonical node and ancestor identifiers.",
-      matches: (uri: string) => uri.startsWith("dstar://document/node/"),
-    },
-    {
-      name: "annotation",
-      template: DSTAR_RESOURCE_URI_TEMPLATES[2],
-      description: "Agent-visible portable annotation thread.",
-      matches: (uri: string) => uri.startsWith("dstar://annotation/"),
-    },
-    {
-      name: "source",
-      template: DSTAR_RESOURCE_URI_TEMPLATES[3],
-      description: "Portable source metadata and bounded captured text.",
-      matches: (uri: string) => uri.startsWith("dstar://source/"),
-    },
-    {
-      name: "projection-mapping",
-      template: DSTAR_RESOURCE_URI_TEMPLATES[4],
-      description: "Portable projection-to-canonical mapping metadata.",
-      matches: (uri: string) =>
+  const definitions = [
+    [
+      "document-manifest",
+      DSTAR_RESOURCE_URI_TEMPLATES[0],
+      (uri: string) => uri === "dstar://document/manifest",
+    ],
+    [
+      "document-node",
+      DSTAR_RESOURCE_URI_TEMPLATES[1],
+      (uri: string) => uri.startsWith("dstar://document/node/"),
+    ],
+    [
+      "annotation",
+      DSTAR_RESOURCE_URI_TEMPLATES[2],
+      (uri: string) => uri.startsWith("dstar://annotation/"),
+    ],
+    [
+      "source",
+      DSTAR_RESOURCE_URI_TEMPLATES[3],
+      (uri: string) => uri.startsWith("dstar://source/"),
+    ],
+    [
+      "projection-mapping",
+      DSTAR_RESOURCE_URI_TEMPLATES[4],
+      (uri: string) =>
         uri.startsWith("dstar://projection/") && uri.endsWith("/mapping"),
-    },
-    {
-      name: "genesis-request",
-      template: DSTAR_RESOURCE_URI_TEMPLATES[5],
-      description: "Fixed human-authored request for a genesis process.",
-      matches: (uri: string) => uri === "dstar://genesis/request",
-    },
+    ],
+    [
+      "genesis-request",
+      DSTAR_RESOURCE_URI_TEMPLATES[5],
+      (uri: string) => uri === "dstar://genesis/request",
+    ],
   ] as const;
-
-  const resourceCatalogs = new WeakMap<
+  const catalogs = new WeakMap<
     object,
     Promise<Awaited<ReturnType<DstarMcpBroker["listResources"]>>>
   >();
-  const resourceCatalogFor = (context: object) => {
-    const current = resourceCatalogs.get(context);
-    if (current) return current;
+  const catalogFor = (context: object) => {
+    const existing = catalogs.get(context);
+    if (existing) return existing;
     const catalog = broker.listResources();
-    resourceCatalogs.set(context, catalog);
+    catalogs.set(context, catalog);
     return catalog;
   };
-
-  for (const definition of resourceDefinitions) {
+  for (const [name, template, matches] of definitions) {
     server.registerResource(
-      definition.name,
-      new ResourceTemplate(definition.template, {
+      name,
+      new ResourceTemplate(template, {
         list: async (context) => ({
-          resources: (await resourceCatalogFor(context))
-            .filter((resource) => definition.matches(resource.uri))
-            .map((resource) => ({
-              ...resource,
-              annotations: { audience: ["assistant" as const] },
-            })),
+          resources: (await catalogFor(context)).filter((item) =>
+            matches(item.uri),
+          ),
         }),
       }),
-      {
-        description: definition.description,
-        mimeType: "application/json",
-        annotations: { audience: ["assistant"] },
-      },
+      { description: "DSTAR document resource", mimeType: "application/json" },
       async (uri) => ({ contents: [await broker.readResource(uri.href)] }),
     );
   }
 
-  const legacySubscriptions = new Set<string>();
+  const subscriptions = new Set<string>();
   server.server.setRequestHandler("resources/subscribe", async (request) => {
-    if (!resourceNotificationsAvailable) {
-      throw new ProtocolError(
-        ProtocolErrorCode.InvalidRequest,
-        "Resource subscriptions are unavailable for this package",
-      );
-    }
-    const resources = await broker.listResources();
-    if (!resources.some((resource) => resource.uri === request.params.uri)) {
+    if (
+      !(await broker.listResources()).some(
+        (item) => item.uri === request.params.uri,
+      )
+    )
       throw new ProtocolError(
         ProtocolErrorCode.InvalidParams,
-        "The resource is unavailable to this process scope",
+        "Resource is outside this document scope",
       );
-    }
-    legacySubscriptions.add(request.params.uri);
+    subscriptions.add(request.params.uri);
     return {};
   });
   server.server.setRequestHandler("resources/unsubscribe", async (request) => {
-    legacySubscriptions.delete(request.params.uri);
+    subscriptions.delete(request.params.uri);
     return {};
   });
-
   const stopWatching = broker.watchResources((change) => {
     if (change.listChanged) server.sendResourceListChanged();
-    const protocolVersion = server.server.getNegotiatedProtocolVersion();
-    const modern =
-      protocolVersion !== undefined && protocolVersion >= "2026-07-28";
-    for (const uri of change.uris) {
-      if (!modern && !legacySubscriptions.has(uri)) continue;
-      void server.server.sendResourceUpdated({ uri }).catch(() => undefined);
-    }
+    for (const uri of change.uris)
+      if (subscriptions.has(uri))
+        void server.server.sendResourceUpdated({ uri }).catch(() => undefined);
   });
   const previousClose = server.server.onclose;
   server.server.onclose = () => {
@@ -291,72 +259,51 @@ export function createDstarMcpServer(broker: DstarMcpBroker): McpServer {
   };
 
   server.registerTool(
-    "list_tasks",
+    "get_manifest",
     {
-      description:
-        "List eligible DSTAR delegations assigned to this server's fixed agent actor.",
+      description: "Read the fixed document manifest or genesis request.",
       inputSchema: fromJsonSchema<Record<string, never>>(
-        MCP_TOOL_SCHEMAS.list_tasks,
+        MCP_TOOL_SCHEMAS.get_manifest,
       ),
       annotations: { readOnlyHint: true },
     },
-    (_args, context) => call(() => broker.listTasks(context.mcpReq.signal)),
+    (_args, context) => call(() => broker.getManifest(context.mcpReq.signal)),
   );
   server.registerTool(
-    "start_task",
+    "list_comments",
     {
       description:
-        "Exchange an eligible delegation, or the fixed genesis draft, for an opaque task token.",
-      inputSchema: fromJsonSchema<StartTaskInput>(MCP_TOOL_SCHEMAS.start_task),
-    },
-    (args, context) =>
-      call(() => broker.startTask(args.delegationId, context.mcpReq.signal)),
-  );
-  server.registerTool(
-    "get_task",
-    {
-      description:
-        "Read the fixed task request, target summary, freshness, and remaining budgets.",
-      inputSchema: fromJsonSchema<TokenInput>(MCP_TOOL_SCHEMAS.get_task),
-      annotations: { readOnlyHint: true },
-    },
-    (args, context) =>
-      call(() => broker.getTask(args.taskToken, context.mcpReq.signal)),
-  );
-  server.registerTool(
-    "get_manifest",
-    {
-      description:
-        "Read bounded manifest or genesis-draft metadata for the current task.",
-      inputSchema: fromJsonSchema<TokenInput>(MCP_TOOL_SCHEMAS.get_manifest),
-      annotations: { readOnlyHint: true },
-    },
-    (args, context) =>
-      call(() => broker.getManifest(args.taskToken, context.mcpReq.signal)),
-  );
-  server.registerTool(
-    "get_node",
-    {
-      description:
-        "Read one canonical node with ancestor IDs and bounded semantic neighbors.",
-      inputSchema: fromJsonSchema<NodeInput>(MCP_TOOL_SCHEMAS.get_node),
+        "List comments in the fixed document, optionally limited to comments assigned to the current human principal.",
+      inputSchema: fromJsonSchema<ListCommentsInput>(
+        MCP_TOOL_SCHEMAS.list_comments,
+      ),
       annotations: { readOnlyHint: true },
     },
     (args, context) =>
       call(() =>
-        broker.getNode(
-          args.taskToken,
-          args.nodeId,
-          args.neighborCount,
+        broker.listComments(
+          args.assignedToMe,
+          args.openOnly,
           context.mcpReq.signal,
         ),
       ),
   );
   server.registerTool(
+    "get_node",
+    {
+      description: "Read one canonical node with bounded context.",
+      inputSchema: fromJsonSchema<NodeInput>(MCP_TOOL_SCHEMAS.get_node),
+      annotations: { readOnlyHint: true },
+    },
+    (args, context) =>
+      call(() =>
+        broker.getNode(args.nodeId, args.neighborCount, context.mcpReq.signal),
+      ),
+  );
+  server.registerTool(
     "search_document",
     {
-      description:
-        "Deterministically search canonical node text in the fixed task snapshot.",
+      description: "Search canonical node text deterministically.",
       inputSchema: fromJsonSchema<SearchInput>(
         MCP_TOOL_SCHEMAS.search_document,
       ),
@@ -364,19 +311,13 @@ export function createDstarMcpServer(broker: DstarMcpBroker): McpServer {
     },
     (args, context) =>
       call(() =>
-        broker.searchDocument(
-          args.taskToken,
-          args.query,
-          args.limit,
-          context.mcpReq.signal,
-        ),
+        broker.searchDocument(args.query, args.limit, context.mcpReq.signal),
       ),
   );
   server.registerTool(
     "get_annotation",
     {
-      description:
-        "Read one annotation thread admitted to the fixed task's agent audience.",
+      description: "Read one portable annotation thread.",
       inputSchema: fromJsonSchema<AnnotationInput>(
         MCP_TOOL_SCHEMAS.get_annotation,
       ),
@@ -384,81 +325,68 @@ export function createDstarMcpServer(broker: DstarMcpBroker): McpServer {
     },
     (args, context) =>
       call(() =>
-        broker.getAnnotation(
-          args.taskToken,
-          args.annotationId,
-          context.mcpReq.signal,
-        ),
+        broker.getAnnotation(args.annotationId, context.mcpReq.signal),
       ),
   );
   server.registerTool(
     "get_source",
     {
-      description:
-        "Read permitted source metadata and a bounded captured text extract without fetching a URL.",
+      description: "Read source metadata without fetching external content.",
       inputSchema: fromJsonSchema<SourceInput>(MCP_TOOL_SCHEMAS.get_source),
       annotations: { readOnlyHint: true },
     },
     (args, context) =>
       call(() =>
-        broker.getSource(
-          args.taskToken,
-          args.sourceId,
-          args.maxBytes,
-          context.mcpReq.signal,
-        ),
+        broker.getSource(args.sourceId, args.maxBytes, context.mcpReq.signal),
       ),
   );
   server.registerTool(
     "simulate_update",
     {
-      description:
-        "Validate and simulate ordered DSTAR update operations without writing or accepting content.",
-      inputSchema: fromJsonSchema<SimulateInput>(
-        MCP_TOOL_SCHEMAS.simulate_update,
-      ),
+      description: "Validate and simulate proposed operations without writing.",
+      inputSchema: fromJsonSchema<
+        Omit<ProposalInput, "idempotencyKey"> & { idempotencyKey?: string }
+      >(MCP_TOOL_SCHEMAS.simulate_update),
       annotations: { readOnlyHint: true },
     },
     (args, context) =>
-      call(() =>
-        broker.simulateUpdate(
-          args.taskToken,
-          args.operations,
-          args.sourceIds,
-          context.mcpReq.signal,
-        ),
-      ),
+      call(() => broker.simulateUpdate(args, context.mcpReq.signal)),
   );
   server.registerTool(
-    "submit_result",
+    "submit_proposal",
     {
       description:
-        "Atomically finish a delegated task with at most one pending proposal and one reply, or a no-result reason. This never accepts canonical content.",
-      inputSchema: fromJsonSchema<SubmitResultInput>(
-        MCP_TOOL_SCHEMAS.submit_result,
+        "Store a pending proposal against explicit bases. This never accepts canonical content.",
+      inputSchema: fromJsonSchema<ProposalInput>(
+        MCP_TOOL_SCHEMAS.submit_proposal,
       ),
       annotations: { destructiveHint: false, idempotentHint: true },
     },
     (args, context) =>
-      call(() =>
-        broker.submitResult(args.taskToken, args, context.mcpReq.signal),
-      ),
+      call(() => broker.submitProposal(args, context.mcpReq.signal)),
+  );
+  server.registerTool(
+    "reply_comment",
+    {
+      description: "Append a reply under the current human principal.",
+      inputSchema: fromJsonSchema<ReplyInput>(MCP_TOOL_SCHEMAS.reply_comment),
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    (args, context) =>
+      call(() => broker.replyComment(args, context.mcpReq.signal)),
   );
   server.registerTool(
     "submit_genesis",
     {
       description:
-        "Stage one agent-authored genesis proposal in the fixed draft. A separate interactive human command must accept it.",
-      inputSchema: fromJsonSchema<SubmitGenesisInput>(
+        "Stage a genesis proposal for the fixed draft. A separate human decision must accept it.",
+      inputSchema: fromJsonSchema<GenesisInput>(
         MCP_TOOL_SCHEMAS.submit_genesis,
       ),
       annotations: { destructiveHint: false, idempotentHint: true },
     },
     (args, context) =>
-      call(() =>
-        broker.submitGenesis(args.taskToken, args, context.mcpReq.signal),
-      ),
+      call(() => broker.submitGenesis(args, context.mcpReq.signal)),
   );
-
   return server;
 }

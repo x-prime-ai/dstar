@@ -2,7 +2,6 @@ import {
   acceptGenesisProposal,
   acceptUpdateChange,
   buildAnnotation,
-  buildDelegation,
   documentRevision,
   listCanonicalVersions,
   materializeVersion,
@@ -12,12 +11,10 @@ import {
   validateStructure,
   type AnnotationInput,
   type CanonicalVersionSummary,
-  type DelegationInput,
   type Diagnostic,
   type DstarActor,
   type DstarAnnotation,
   type DstarChange,
-  type DstarDelegation,
   type DstarSources,
   type GenesisPackageInput,
   type JsonValue,
@@ -39,13 +36,10 @@ export interface CommandIdentity {
   readonly idempotencyKey: string;
 }
 
-export interface ProposalResultInput {
+export interface ProposalSubmissionInput {
   readonly change?: DstarChange;
-  readonly delegationId: string;
-  readonly completedBy: DstarActor;
-  readonly completedAt: string;
+  readonly annotationId?: string;
   readonly reply?: NonNullable<DstarAnnotation["replies"]>[number];
-  readonly reason?: string;
 }
 
 export interface AnnotationReplyInput {
@@ -99,49 +93,6 @@ function annotationPath(snapshot: PackageSnapshot, id: string): string {
   return `${snapshot.manifest.annotations ?? "annotations"}/${id}.json`;
 }
 
-function delegationPath(snapshot: PackageSnapshot, id: string): string {
-  return `${snapshot.manifest.delegations ?? "delegations"}/${id}.json`;
-}
-
-function updatedDelegation(
-  input: ProposalResultInput,
-  delegation: DstarDelegation,
-): DstarDelegation {
-  if (
-    input.completedBy.type !== "agent" ||
-    input.completedBy.id !== delegation.assignee.id
-  ) {
-    throw new PackageCommandError(
-      "Only the assigned agent may complete a delegation",
-    );
-  }
-  if (delegation.status !== "queued" && delegation.status !== "in_progress") {
-    throw new PackageCommandError("Only an active delegation may be completed");
-  }
-  const results: NonNullable<DstarDelegation["results"]> = [
-    ...(input.change
-      ? [{ type: "change" as const, change: input.change.id }]
-      : []),
-    ...(input.reply
-      ? [
-          {
-            type: "reply" as const,
-            annotation: delegation.annotation,
-            reply: input.reply.id,
-          },
-        ]
-      : []),
-  ];
-  return {
-    ...delegation,
-    status: "completed",
-    completedAt: input.completedAt,
-    completedBy: input.completedBy,
-    results,
-    ...(input.reason ? { reason: input.reason } : {}),
-  };
-}
-
 export class PackageCommands {
   readonly repository: PackageRepository;
 
@@ -174,36 +125,6 @@ export class PackageCommands {
       idempotency: command(
         identity.idempotencyKey,
         "create-annotation",
-        asJson(input),
-      ),
-    });
-  }
-
-  async createDelegation(
-    snapshot: PackageSnapshot,
-    input: DelegationInput,
-    identity: CommandIdentity,
-  ): Promise<PackageSnapshot> {
-    const delegation = buildDelegation(input);
-    if (
-      snapshot.delegations.some((candidate) => candidate.id === delegation.id)
-    ) {
-      throw new PackageCommandError(
-        `Delegation ${delegation.id} already exists`,
-      );
-    }
-    return this.repository.commit(snapshot, {
-      expectedSnapshotId: identity.expectedSnapshotId,
-      transactionType: "delegation",
-      writes: new Map([
-        [
-          delegationPath(snapshot, delegation.id),
-          encodeJson(asJson(delegation)),
-        ],
-      ]),
-      idempotency: command(
-        identity.idempotencyKey,
-        "create-delegation",
         asJson(input),
       ),
     });
@@ -287,95 +208,61 @@ export class PackageCommands {
     });
   }
 
-  async cancelDelegation(
+  async assignAnnotation(
     snapshot: PackageSnapshot,
-    delegationId: string,
-    actor: DstarActor,
-    cancelledAt: string,
-    reason: string | undefined,
+    annotationId: string,
+    assignee: DstarActor,
     identity: CommandIdentity,
   ): Promise<PackageSnapshot> {
-    const delegation = snapshot.delegations.find(
-      (candidate) => candidate.id === delegationId,
+    if (assignee.type !== "human")
+      throw new PackageCommandError("Annotation assignee must be human");
+    const annotation = snapshot.annotations.find(
+      (candidate) => candidate.id === annotationId,
     );
-    if (!delegation)
+    if (!annotation)
       throw new PackageCommandError(
-        `Delegation ${delegationId} does not exist`,
+        `Annotation ${annotationId} does not exist`,
       );
-    if (actor.type !== "human")
-      throw new PackageCommandError("Only a human may cancel a delegation");
-    if (delegation.status !== "queued" && delegation.status !== "in_progress")
-      throw new PackageCommandError(
-        "Only an active delegation may be cancelled",
-      );
-    const cancelled: DstarDelegation = {
-      ...delegation,
-      status: "cancelled",
-      completedAt: cancelledAt,
-      completedBy: actor,
-      ...(reason ? { reason } : {}),
+    const updated: DstarAnnotation = {
+      ...annotation,
+      assignee: assignee as NonNullable<DstarAnnotation["assignee"]>,
     };
     return this.repository.commit(snapshot, {
       expectedSnapshotId: identity.expectedSnapshotId,
-      transactionType: "delegation",
+      transactionType: "annotation",
       writes: new Map([
-        [
-          delegationPath(snapshot, delegation.id),
-          encodeJson(asJson(cancelled)),
-        ],
+        [annotationPath(snapshot, annotation.id), encodeJson(asJson(updated))],
       ]),
-      idempotency: command(identity.idempotencyKey, "cancel-delegation", {
-        delegationId,
-        actor: asJson(actor),
-        cancelledAt,
-        ...(reason ? { reason } : {}),
+      idempotency: command(identity.idempotencyKey, "assign-annotation", {
+        annotationId,
+        assignee: asJson(assignee),
       }),
     });
   }
 
-  async recordProposalResult(
+  async recordProposal(
     snapshot: PackageSnapshot,
-    input: ProposalResultInput,
+    input: ProposalSubmissionInput,
     identity: CommandIdentity,
   ): Promise<PackageSnapshot> {
-    const delegation = snapshot.delegations.find(
-      (candidate) => candidate.id === input.delegationId,
-    );
-    if (!delegation)
-      throw new PackageCommandError(
-        `Delegation ${input.delegationId} does not exist`,
-      );
     if (
       input.change &&
       snapshot.changes.some((candidate) => candidate.id === input.change?.id)
     ) {
       throw new PackageCommandError(`Change ${input.change.id} already exists`);
     }
-    if (!input.change && !input.reply && !input.reason) {
+    if (!input.change && !input.reply) {
       throw new PackageCommandError(
-        "A terminal delegation result requires a proposal, reply, or reason",
+        "A proposal submission requires a change or reply",
       );
     }
     if (
       input.change &&
-      (input.change.kind !== "update" ||
-        input.change.status !== "proposed" ||
-        input.change.author.type !== "agent" ||
-        input.change.author.id !== delegation.assignee.id ||
-        !input.change.fulfills?.includes(delegation.id) ||
-        !input.change.motivatedBy?.includes(delegation.annotation))
+      (input.change.kind !== "update" || input.change.status !== "proposed")
     ) {
-      throw new PackageCommandError(
-        "Proposal result does not preserve delegation provenance",
-      );
+      throw new PackageCommandError("Only a proposed update may be recorded");
     }
-    const nextDelegation = updatedDelegation(input, delegation);
-    const writes = new Map<string, Uint8Array>([
-      [
-        delegationPath(snapshot, nextDelegation.id),
-        encodeJson(asJson(nextDelegation)),
-      ],
-    ]);
+    const writes = new Map<string, Uint8Array>();
     if (input.change) {
       writes.set(
         changePath(snapshot, input.change.id),
@@ -383,21 +270,21 @@ export class PackageCommands {
       );
     }
     if (input.reply) {
-      if (
-        input.reply.author.type !== "agent" ||
-        input.reply.author.id !== delegation.assignee.id
-      ) {
-        throw new PackageCommandError(
-          "A delegation reply must be authored by the assigned agent",
-        );
-      }
+      if (!input.annotationId)
+        throw new PackageCommandError("A reply requires annotationId");
       const annotation = snapshot.annotations.find(
-        (candidate) => candidate.id === delegation.annotation,
+        (candidate) => candidate.id === input.annotationId,
       );
       if (!annotation)
         throw new PackageCommandError(
-          `Annotation ${delegation.annotation} does not exist`,
+          `Annotation ${input.annotationId} does not exist`,
         );
+      if (
+        (annotation.replies ?? []).some(
+          (candidate) => candidate.id === input.reply?.id,
+        )
+      )
+        throw new PackageCommandError(`Reply ${input.reply.id} already exists`);
       writes.set(
         annotationPath(snapshot, annotation.id),
         encodeJson(
@@ -414,7 +301,7 @@ export class PackageCommands {
       writes,
       idempotency: command(
         identity.idempotencyKey,
-        "record-proposal-result",
+        "record-proposal",
         asJson(input),
       ),
     });
@@ -606,10 +493,10 @@ export async function stageGenesisProposal(
   if (
     proposal.kind !== "genesis" ||
     proposal.status !== "proposed" ||
-    proposal.author.type !== "agent"
+    validateStructure("change", proposal).valid === false
   ) {
     throw new PackageCommandError(
-      "Genesis proposal must be proposed and agent-authored",
+      "Genesis proposal must be a valid proposed change",
     );
   }
   const validation = validateStructure("change", proposal);

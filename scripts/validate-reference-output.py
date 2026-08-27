@@ -442,7 +442,7 @@ def normalized_case(entry: dict[str, Any], fixture_directory: Path) -> dict[str,
     head = changes[manifest["headChange"]]
     check(head["status"] == "accepted", f"{entry['id']}: head is not accepted")
     check(head["decision"]["resultRevision"] == computed, f"{entry['id']}: history revision mismatch")
-    check(head["author"]["type"] == "agent", f"{entry['id']}: head author is not an agent")
+    check(head["author"]["type"] in ("human", "service"), f"{entry['id']}: head author is invalid")
     check(head["decision"]["actor"]["type"] == "human", f"{entry['id']}: head decision is not human")
     version_count = 0
     cursor: dict[str, Any] | None = head
@@ -461,7 +461,7 @@ def normalized_case(entry: dict[str, Any], fixture_directory: Path) -> dict[str,
     target_state = review_target_state(document, computed, target)
     proposal = exercise["update"]["proposal"]
     decision = exercise["update"]["decision"]
-    check(proposal["author"]["type"] == "agent", f"{entry['id']}: proposal author fixture is not an agent")
+    check(proposal["author"]["type"] in ("human", "service"), f"{entry['id']}: proposal author fixture is invalid")
     check(decision["actor"]["type"] == "human", f"{entry['id']}: decision actor fixture is not human")
 
     available = {
@@ -488,7 +488,7 @@ def normalized_case(entry: dict[str, Any], fixture_directory: Path) -> dict[str,
         },
         "Change Producer": {
             "valid": True,
-            "authorType": "agent",
+            "authorType": proposal["author"]["type"],
             "status": "proposed",
             "operationCount": 1,
         },

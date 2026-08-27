@@ -2,7 +2,6 @@ import { cloneJson, deepFreezeJson } from "./json.js";
 import type {
   DstarAnnotation,
   DstarChange,
-  DstarDelegation,
   DstarDocument,
   DstarNode,
   DstarProjection,
@@ -180,7 +179,6 @@ export class DocumentIndex {
 export class PackageIndex {
   readonly document: DocumentIndex;
   readonly annotations: ReadonlyMap<string, DstarAnnotation>;
-  readonly delegations: ReadonlyMap<string, DstarDelegation>;
   readonly changes: ReadonlyMap<string, DstarChange>;
   readonly projections: ReadonlyMap<string, DstarProjection>;
   readonly sources: ReadonlyMap<string, unknown>;
@@ -192,7 +190,6 @@ export class PackageIndex {
   constructor(pkg: InMemoryPackage) {
     this.document = new DocumentIndex(pkg.document);
     const annotations = new Map<string, DstarAnnotation>();
-    const delegations = new Map<string, DstarDelegation>();
     const changes = new Map<string, DstarChange>();
     const projections = new Map<string, DstarProjection>();
     const sources = new Map<string, unknown>();
@@ -215,14 +212,6 @@ export class PackageIndex {
         );
       }
     }
-    for (const delegation of pkg.delegations) {
-      insertUnique(
-        delegations,
-        delegation.id,
-        immutableProtocol(delegation),
-        "delegations",
-      );
-    }
     for (const change of pkg.changes)
       insertUnique(changes, change.id, immutableProtocol(change), "changes");
     for (const projection of pkg.projections?.projections ?? []) {
@@ -238,7 +227,6 @@ export class PackageIndex {
     }
 
     this.annotations = immutableMap(annotations);
-    this.delegations = immutableMap(delegations);
     this.changes = immutableMap(changes);
     this.projections = immutableMap(projections);
     this.sources = immutableMap(sources);

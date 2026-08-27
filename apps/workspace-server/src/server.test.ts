@@ -100,7 +100,7 @@ describe("loopback workspace server", () => {
     expect(document.html).not.toContain("contenteditable");
   });
 
-  it("persists comments, replies, resolution, and delegation as separate commands", async () => {
+  it("persists comments, replies, human assignment, and resolution as separate commands", async () => {
     const { packageRoot, server } = await workspace();
     const snapshot = await (await api(server, "/snapshot")).json();
     const command = {
@@ -118,15 +118,15 @@ describe("loopback workspace server", () => {
             {
               type: "TextPositionSelector",
               start: 0,
-              end: 6,
+              end: 5,
               unit: "unicode-code-point",
             },
-            { type: "TextQuoteSelector", exact: "Agents" },
+            { type: "TextQuoteSelector", exact: "Tools" },
           ],
         },
       },
-      body: "Make the agent boundary even clearer.",
-      audience: ["human", "agent"],
+      body: "Make the proposal boundary even clearer.",
+      audience: ["human"],
     };
     expect(
       (
@@ -162,27 +162,28 @@ describe("loopback workspace server", () => {
     const replied = await repliedResponse.json();
     expect(repliedResponse.status).toBe(200);
 
-    const delegatedResponse = await mutate(server, "/delegations", {
-      expectedSnapshotId: replied.snapshotId,
-      idempotencyKey: "server-delegate-comment",
-      annotationId,
-      assigneeId: "agent_demo",
-      instruction: "Propose a focused change.",
-    });
-    const delegated = await delegatedResponse.json();
-    expect(delegatedResponse.status).toBe(200);
+    const assignedResponse = await mutate(
+      server,
+      `/annotations/${annotationId}/assign`,
+      {
+        expectedSnapshotId: replied.snapshotId,
+        idempotencyKey: "server-assign-comment",
+        assigneeId: "human_reviewer",
+      },
+    );
+    const assigned = await assignedResponse.json();
+    expect(assignedResponse.status).toBe(200);
 
     const resolvedResponse = await mutate(
       server,
       `/annotations/${annotationId}/resolve`,
       {
-        expectedSnapshotId: delegated.snapshotId,
+        expectedSnapshotId: assigned.snapshotId,
         idempotencyKey: "server-resolve-comment",
       },
     );
     expect(resolvedResponse.status).toBe(200);
     const finalAnnotations = await (await api(server, "/annotations")).json();
-    const finalDelegations = await (await api(server, "/delegations")).json();
     expect(
       finalAnnotations.find(
         (item: { annotation: { id: string } }) =>
@@ -190,18 +191,13 @@ describe("loopback workspace server", () => {
       ).annotation,
     ).toMatchObject({
       status: "resolved",
+      assignee: { type: "human", id: "human_reviewer" },
       replies: [
         expect.objectContaining({
           author: expect.objectContaining({ type: "human" }),
         }),
       ],
     });
-    expect(
-      finalDelegations.find(
-        (delegation: { annotation: string }) =>
-          delegation.annotation === annotationId,
-      ),
-    ).toMatchObject({ status: "queued", assignee: { type: "agent" } });
     const reopened = await new PackageRepository(
       join(packageRoot, "..", "reopen-runtime"),
     ).open(packageRoot);
@@ -209,10 +205,12 @@ describe("loopback workspace server", () => {
       reopened.annotations.find((annotation) => annotation.id === annotationId),
     ).toMatchObject({ status: "resolved" });
     expect(
-      reopened.delegations.some(
-        (delegation) => delegation.annotation === annotationId,
-      ),
-    ).toBe(true);
+      reopened.annotations.find((annotation) => annotation.id === annotationId)
+        ?.assignee,
+    ).toEqual({
+      type: "human",
+      id: "human_reviewer",
+    });
   });
 
   it("shows deterministic simulation and requires the current result revision for human acceptance", async () => {
@@ -223,8 +221,8 @@ describe("loopback workspace server", () => {
     ).json();
     expect(simulation).toMatchObject({
       applicability: "applicable",
-      beforeHtml: expect.stringContaining("Agents author"),
-      afterHtml: expect.stringContaining("Humans direct, review, and decide"),
+      beforeHtml: expect.stringContaining("Tools propose"),
+      afterHtml: expect.stringContaining("Humans inspect, review, and decide"),
     });
     const rejected = await mutate(server, "/changes/change_0001/accept", {
       expectedSnapshotId: snapshot.snapshotId,
@@ -255,7 +253,7 @@ describe("loopback workspace server", () => {
       changeId: "change_0001",
       revision: simulation.resultRevision,
       historical: true,
-      html: expect.stringContaining("Humans direct, review, and decide"),
+      html: expect.stringContaining("Humans inspect, review, and decide"),
     });
     expect(historical.html).not.toContain("contenteditable");
   });

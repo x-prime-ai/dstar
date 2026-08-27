@@ -6,8 +6,8 @@ pass.
 
 | Host                                            | Version/evidence                                             | Tools                                                                   | Resources                                             | Subscriptions                                                           | MCP App                 | Fallback                          |
 | ----------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------- | --------------------------------- |
-| xPrime                                          | local `91c49d5`; `XPRIME_ROOT=… pnpm check:xprime`           | Passed: real UI → xPrime → pending proposal → separate human acceptance | Not exercised: current host does not expose Resources | Not implemented by host                                                 | Not implemented by host | Eleven tool-complete operations   |
-| Official MCP TypeScript client conformance host | `@modelcontextprotocol/client` 2.0.0, linked transport tests | Passed                                                                  | Passed: templates/list/read and audience scope        | Passed: modern `subscriptions/listen` plus legacy subscribe/unsubscribe | Not a UI host           | Tools remain independently usable |
+| xPrime                                          | local `91c49d5`; `XPRIME_ROOT=… pnpm check:xprime`           | Passed: fixed document → xPrime MCP client → pending proposal → separate human acceptance | Not exercised: current host does not expose Resources | Not implemented by host                                                 | Not implemented by host | Ten tool-complete operations   |
+| Official MCP TypeScript client conformance host | `@modelcontextprotocol/client` 2.0.0, linked transport tests | Passed                                                                  | Passed: templates/list/read and fixed document scope  | Advertised; end-to-end notification delivery not re-verified            | Not a UI host           | Tools remain independently usable |
 
 The DSTAR server exposes no `ui://` resource and no
 `io.modelcontextprotocol/ui` extension metadata yet. This is an explicit
@@ -27,7 +27,7 @@ current DSTAR constraint says no MCP path may accept canonical content. An MCP
 App runs through an MCP host. Packaging the complete review surface therefore
 requires an explicit decision between:
 
-1. a read/comment/delegate-only App with proposal decisions remaining in the
+1. a read/comment/propose-only App with proposal decisions remaining in the
    standalone loopback UI; or
 2. a narrowly human-gated App decision channel, which would amend the current
    blanket “no MCP path accepts canonical content” rule and require protocol,

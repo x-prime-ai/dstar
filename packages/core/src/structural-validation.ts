@@ -8,7 +8,6 @@ import { createDiagnostic, type Diagnostic } from "./diagnostics.js";
 import type {
   DstarAnnotation,
   DstarChange,
-  DstarDelegation,
   DstarDocument,
   DstarManifest,
   DstarProjectionIndex,
@@ -20,7 +19,6 @@ import { SCHEMA_IDS, type SchemaName } from "./schema/index.js";
 export interface SchemaValueMap {
   readonly annotation: DstarAnnotation;
   readonly change: DstarChange;
-  readonly delegation: DstarDelegation;
   readonly document: DstarDocument;
   readonly manifest: DstarManifest;
   readonly projection: DstarProjectionIndex;

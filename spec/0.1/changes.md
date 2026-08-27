@@ -2,9 +2,9 @@
 
 Status: **Pre-Draft**
 
-A change is an agent-authored proposal to create or transform canonical
-content. Humans direct work through comments and delegations and decide whether
-a proposal becomes canonical; they do not author change operations.
+A change is a proposal to create or transform canonical content. Proposal
+production is caller-independent; a separate authorized human decision
+determines whether the proposal becomes canonical.
 
 ## Change kinds
 
@@ -23,19 +23,19 @@ A change record contains:
 
 - a stable change ID and idempotency key;
 - its `genesis` or `update` kind;
-- an agent author;
+- a DSTAR actor author;
 - an optional human request containing direction that is not already represented
-  by an annotation or delegation;
+  by an annotation;
 - one or more ordered operations;
 - an initial `proposed` status;
-- optional links to annotations, delegations, and sources that motivated it;
+- optional links to annotations and sources that motivated it;
   and
 - an explicit human decision when no longer proposed.
 
 An update additionally contains the canonical revision and accepted head change
 against which it was authored. Once published, every proposal field other than
 lifecycle status and decision metadata MUST NOT be mutated. This includes its
-request, motivations, fulfillments, sources, and operations. A replacement or
+request, motivations, sources, and operations. A replacement or
 rebase has a new change ID. Lifecycle metadata may be added only by an
 authorized Change Applier.
 
@@ -62,9 +62,9 @@ DSTAR 0.1 standardizes the accepted genesis record in the resulting package;
 transport and persistence of an unaccepted genesis proposal are
 implementation-defined.
 
-The genesis record identifies the agent that produced the initial content and
-the human who accepted creation of the document. It is not an exception to the
-agent-author and human-decision boundary.
+The genesis record identifies its proposal author and the human who accepted
+creation of the document. How the author prepared the content is outside the
+protocol.
 
 ## Accepted change chain
 
@@ -111,8 +111,8 @@ To materialize an accepted target change, a Version Reader MUST:
    result revision.
 
 Materializing a historical version is read-only. It MUST NOT change the
-manifest, `document.json`, proposal status, decisions, annotations,
-delegations, sources, assets, or projections. The materialized head version
+manifest, `document.json`, proposal status, decisions, annotations, sources,
+assets, or projections. The materialized head version
 MUST be semantically identical to `document.json`; its change ID and revision
 MUST equal the manifest's `headChange` and `revision`.
 
@@ -125,7 +125,7 @@ Canonical version history covers the semantic document tree and its change
 provenance. DSTAR 0.1 does not define a historical snapshot of the entire
 package as it appeared at that time. In particular, materializing a canonical
 version does not reconstruct the then-current lifecycle state of annotations,
-delegations, sources, assets, or projections. Those objects retain their own
+sources, assets, or projections. Those objects retain their own
 separate package representation and rules; complete historical package state is
 not implied.
 
@@ -180,21 +180,18 @@ For `set_attrs`, an object `value` completely replaces the node's existing
 member. The resulting node MUST still satisfy its content profile, so removing
 required attributes is invalid.
 
-## Motivation and delegation
+## Motivation
 
 `motivatedBy` links a proposal to annotations that explain why the work exists.
-`fulfills` links it to delegations whose requested execution produced the
-proposal. A proposal may be motivated by a comment without a formal delegation,
-and a delegation may complete without producing a change when the agent instead
-reports that no valid change is available.
+It does not require assignment and does not resolve or otherwise transition the
+annotation.
 
 `request` records direct human direction when no anchored annotation exists. It
-is required for genesis because delegation requires a pre-existing target. An
-update SHOULD prefer `motivatedBy` and `fulfills` when the work began from a
-review selection.
+is required for genesis. An update SHOULD prefer `motivatedBy` when the work
+began from a review selection.
 
-Creating a proposal does not resolve its motivating annotation. Comment,
-delegation, and change lifecycle transitions are explicit and independent.
+Creating a proposal does not resolve its motivating annotation. Annotation and
+change lifecycle transitions are explicit and independent.
 
 ## Conflict handling
 
@@ -225,8 +222,8 @@ created.
 
 DSTAR 0.1 does not standardize an interactive merge UI. A client SHOULD offer
 the reviewer at least these paths: reject the proposal, supersede it with a new
-proposal, or ask an agent to create an explicit rebase. Silently choosing a
-conflict resolution is not conforming behavior.
+proposal, or create an explicit rebased proposal through any producer. Silently
+choosing a conflict resolution is not conforming behavior.
 
 ## Idempotency
 
@@ -243,8 +240,8 @@ proposed -> rejected
 proposed -> superseded
 ```
 
-Every change author MUST be an agent. Every non-proposed change has a `decision`
-whose actor MUST be an authorized human. An accepted decision additionally
+Every change author MUST be a valid DSTAR actor. Every non-proposed change has a
+`decision` whose actor MUST be an authorized human. An accepted decision additionally
 records the resulting canonical revision. A rejected or superseded change does
 not create or modify canonical content.
 
@@ -256,6 +253,5 @@ decision, writes the resulting canonical revision to the manifest, and sets
 the manifest's `headChange` to that update's ID.
 
 A policy or service may prevent application or request another proposal, but a
-validation outcome is not a portable human decision. DSTAR 0.1 authoring clients
-MUST NOT provide a path that serializes a human as the author of canonical
-content, including for typo fixes or exact replacement instructions.
+validation outcome is not a portable human decision. A proposal-only capability
+MUST NOT also expose acceptance, rejection, or supersession.

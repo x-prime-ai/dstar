@@ -2,70 +2,58 @@
 
 Status: **Pre-Draft**
 
-This document is the normative entry point for DSTAR 0.1. The specification is
-incomplete and must not yet be used to claim production compatibility.
-
-The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY**
-indicate requirement levels when written in uppercase.
+This document is the normative entry point for DSTAR 0.1. The key words
+**MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY** indicate
+requirement levels when written in uppercase.
 
 ## 1. Scope
 
-DSTAR defines a portable, agent-authored, and reviewable document object
-consisting of:
+DSTAR defines a portable, reviewable document object consisting of:
 
-- a small semantic document model;
-- a directory package encoding;
-- durable annotation threads and explicit delegations;
-- agent-authored creation and revision-aware update proposals;
-- portable accepted canonical version history;
+- a semantic document model and directory package encoding;
+- durable annotation threads with optional human assignment;
+- revision-aware genesis and update proposals;
+- explicit human decisions and accepted canonical version history;
 - sources, actors, assets, and provenance; and
 - addressable projections with mappings to canonical content.
 
 DSTAR does not define an editor UI, collaboration transport, database, CRDT,
-model provider, authentication system, or hosting service.
+model, provider, workflow runtime, task system, authentication system, or
+hosting service. The implementation that invokes an SDK or MCP adapter is not a
+portable DSTAR actor or package object merely because it performed the call.
 
-### 1.1. Terminology
+### 1.1 Terminology
 
-- **Canonical document** is the authoritative source of truth stored in
-  `document.json`. “Canonical” describes authority, not a presentation format.
-- **Canonical target** identifies content in that source of truth.
-- **Canonical version** is one accepted point in document history, identified by
-  its accepted change ID and associated with an exact content revision.
-- **Canonical view** is a faithful, read-only rendering of the current canonical
-  document. A selection in that view targets canonical content directly.
-- **Projection** is a derived view such as HTML, Markdown, a summary, or agent
-  context. A projection can be reviewed but does not replace the canonical
-  document.
-- **Primary target** records what an annotation author actually reviewed.
-- **Delegation** assigns an existing annotation to an agent for action without
-  changing the annotation's own lifecycle.
-
-Implementations MAY use friendlier UI labels such as “original” or “main
-document” while retaining these protocol terms in serialized data.
+- **Canonical document** is the authoritative source stored in
+  `document.json`.
+- **Canonical version** is one accepted point in history, identified by its
+  accepted change ID and exact content revision.
+- **Canonical view** is a faithful, read-only rendering of current canonical
+  content.
+- **Projection** is a derived, versioned view such as HTML, Markdown, a summary,
+  or plain text.
+- **Annotation** is a portable discussion thread attached to a precise target.
+- **Assignee** is the human currently responsible for an annotation.
+- **Proposal** is an immutable requested canonical transformation that remains
+  non-canonical until separately accepted.
 
 ## 2. Architecture
 
-A DSTAR package has one canonical document and four connected non-content
-layers:
-
 ```text
 canonical document
-    <- annotations, replies, and delegations
-    <- agent proposals, human decisions, and accepted version history
+    <- annotations, replies, and human assignment
+    <- proposals, human decisions, and accepted history
     <- sources and provenance
     <- projections and source mappings
 ```
 
-Annotations and changes refer to canonical nodes by durable ID. A canonical
-view may render those nodes as rich HTML, but it remains read-only. Human
-selections create protocol targets; they do not mutate canonical content. A
-projection is derived and has its own ID and revision so a person can review it.
-Projection segments act as a source map back to one or more canonical nodes or
-ranges, with an explicit `exact`, `transformed`, or `summarizes` relationship.
+Assignment, proposal, annotation, and decision lifecycles are independent.
+Assigning or replying to a comment does not mutate canonical content. Submitting
+a proposal does not resolve its motivating annotation.
 
 ## 3. Package
 
-An unpacked DSTAR document MUST be a directory whose name ends in `.dstar`.
+An unpacked DSTAR document MUST be a directory ending in `.dstar`:
 
 ```text
 example.dstar/
@@ -73,8 +61,6 @@ example.dstar/
 ├── document.json
 ├── annotations/
 │   └── ann_*.json
-├── delegations/
-│   └── delegation_*.json
 ├── changes/
 │   └── change_*.json
 ├── sources.json
@@ -84,207 +70,131 @@ example.dstar/
     └── ...
 ```
 
-Required entries:
+`manifest.json`, `document.json`, and `changes/` are required. Annotation,
+source, asset, and projection entries are optional. When an optional collection
+exists, its manifest entrypoint MUST be present.
 
-- `manifest.json` identifies the specification version, content profiles,
-  current canonical revision, accepted head change, and package entry points.
-- `document.json` contains the canonical document tree.
-- `changes/` contains the accepted genesis record, the accepted update chain to
-  the current canonical revision, and any retained pending or decided
-  proposals.
+Package paths MUST contain non-empty `/`-separated segments. They MUST NOT be
+absolute, contain `.` or `..` segments, contain `\` or `:`, or escape the
+package root. Implementations MUST NOT follow package-local links during
+validation or extraction.
 
-Optional entries:
+## 4. Validity
 
-- `annotations/` contains one annotation thread per JSON file.
-- `delegations/` contains one agent assignment per JSON file.
-- `sources.json` contains source records.
-- `assets/` contains package-local binary or textual resources.
-- `projections/` contains derived views; when present it MUST contain
-  `index.json`.
-
-The working representation is the directory package. A ZIP transfer encoding
-MAY use the filename suffix `.dstar.zip`; its deterministic packing rules are
-not yet normative in 0.1.
-
-Package paths MUST contain one or more non-empty `/`-separated segments. They
-MUST NOT begin with `/`, contain `.` or `..` segments, contain `\\`, contain
-`:`, or escape the package root. Implementations MUST NOT follow package-local
-links that escape the root while validating or extracting a package.
-
-## 4. Structural and semantic validity
-
-A structurally valid package conforms to the JSON Schemas in `schemas/`.
-
-A semantically valid package additionally satisfies all cross-object and
-behavioral requirements in this specification, including identifier uniqueness,
-reference integrity, projection mapping integrity, revision preconditions, and
-authority rules.
+Structural validity is defined by JSON Schemas in `schemas/`. Semantic validity
+additionally requires identifier uniqueness, reference integrity, profile
+validity, projection mapping integrity, revision preconditions, and authority
+rules in this specification.
 
 Every package MUST contain exactly one accepted genesis change. Accepted
-changes MUST form an unbroken change-ID chain ending at the manifest's
-`headChange`; the head's result revision MUST equal the manifest's current
-canonical revision. This is declared portable provenance, not proof that
-package files were never modified outside a conforming tool.
+changes MUST form an unbroken change-ID chain ending at `manifest.headChange`.
+The head result revision MUST equal `manifest.revision` and the computed
+revision of `document.json`.
 
-The JSON Schemas are authoritative for structural validity. The normative prose
-is authoritative for semantics and behavior.
+The schemas are authoritative for structure. Normative prose is authoritative
+for cross-object semantics and behavior.
 
-## 5. Identity
+## 5. Identity and actors
 
-Every document, node, annotation, reply, delegation, change, change operation,
-projection, and projection segment MUST have an identifier unique in its
-required scope. Identifiers are opaque strings. Implementations MUST NOT derive
-meaning, order, or location from an identifier.
+Document, node, annotation, reply, change, operation, projection, and segment
+identifiers are opaque. Implementations MUST NOT derive order or location from
+them. Moving a node MUST NOT change its identifier.
 
-Moving a node within a document MUST NOT change its identifier. Editor-internal
-positions, CRDT identifiers, and transient content hashes MUST NOT replace DSTAR
-identity.
+DSTAR 0.1 actor types are:
+
+- `human` — a person represented by the surrounding authenticated system; and
+- `service` — a named software service when service attribution is meaningful.
+
+The actor model intentionally has no model-, provider-, runtime-, or
+executor-specific actor type. A tool operating for a person records that person
+as the author. Local systems MAY retain additional execution audit data outside
+the package.
+
+An annotation assignee MUST be a human. A proposal author MAY be any valid
+DSTAR actor. A portable proposal decision and annotation resolution MUST name a
+human actor.
 
 ## 6. Content profiles
 
-Every package MUST declare at least one content profile in `manifest.json`.
-DSTAR 0.1 defines the profile identifier `dstar:base` for the node and inline
-model in [Document Model](document-model.md).
+Every package MUST declare at least one content profile. DSTAR 0.1 defines
+`dstar:base` in [Document Model](document-model.md). Unknown declared-profile
+content MUST be preserved losslessly by tools claiming preservation support;
+unsupported behavior MUST be reported rather than guessed.
 
-Additional profiles MAY define new node types, marks, attributes, containment
-rules, or projection roles. Profile identifiers are opaque strings in 0.1 and
-SHOULD be globally unique URIs when published by third parties.
+## 7. Canonical revisions
 
-An implementation that does not understand a declared profile MUST report that
-limitation. A lossless processor MUST preserve unknown profile content.
+Canonical revisions use `sha256:` followed by lowercase SHA-256 of RFC 8785
+canonical JSON bytes. Node preconditions use the same algorithm over the target
+node. Projection revisions hash raw artifact bytes.
 
-## 7. Revisions and canonical versions
+Canonical content changes only through acceptance of a proposal. Out-of-band
+file modification produces an invalid package when recorded revisions no longer
+match; the format does not claim cryptographic tamper proof.
 
-A canonical document revision identifies the exact `document.json` value.
-DSTAR 0.1 revision identifiers use this algorithm:
+## 8. Proposal and decision boundary
 
-1. Parse `document.json` as I-JSON.
-2. Serialize the parsed value using the JSON Canonicalization Scheme defined by
-   RFC 8785.
-3. Compute SHA-256 over the UTF-8 canonical bytes.
-4. Encode the identifier as `sha256:` followed by 64 lowercase hexadecimal
-   digits.
+A producer creates a proposed genesis or update change. A separate authorized
+human action accepts, rejects, or supersedes it. A conforming proposal surface
+MUST NOT also expose acceptance under the same capability.
 
-Formatting-only changes to `document.json` therefore do not change its
-revision. An asset has separate integrity and is not included in the 0.1
-document revision unless its digest is represented in canonical node data.
+Acceptance of an update MUST atomically:
 
-A **canonical version** is one accepted point in document history and is
-identified by its accepted change ID. Its `resultRevision` identifies the
-canonical content at that point. Change identity and content identity are
-distinct: two accepted changes MAY have the same result revision, including a
-no-op or a later return to earlier content, while remaining different canonical
-versions with different provenance.
+1. verify bases and ordered local preconditions;
+2. apply all operations to an isolated working copy;
+3. validate the result against declared profiles;
+4. record the human decision and result revision; and
+5. write canonical content plus manifest head/revision together.
 
-The current canonical version is the pair formed by the manifest's
-`headChange` and `revision`. Proposed, rejected, and superseded changes are
-review history but do not identify canonical versions. Historical canonical
-versions are materialized from the retained accepted change chain as defined in
-[Changes](changes.md).
+Detailed semantics are in [Changes](changes.md).
 
-An update change MUST declare both the accepted head change and canonical
-revision against which it was authored. An implementation MUST NOT silently
-apply it to a different head or revision. Update operations also carry local
-preconditions so a processor can report precise conflicts.
+## 9. Annotations and assignment
 
-A genesis change creates the first canonical revision and accepted history head,
-and therefore has neither base field. Its single `create_document` operation
-contains the proposed root document. Genesis and update changes share the
-proposal and human-decision flow in Section 8.
+Annotations preserve what a person reviewed through stable targets, quotations,
+and projection mappings. An optional `assignee` identifies a human responsible
+for the thread. Assignment does not start software, create a task, grant
+authority, or constrain how the human performs the work.
 
-Projection revisions use the same `sha256:` encoding over the projection's raw
-file bytes. They are distinct from canonical document revisions.
+Detailed semantics are in [Annotations](annotations.md).
 
-## 8. Actors and authority
+## 10. Projections
 
-An actor has a stable identifier and one of these types:
+Projections are derived and never canonical. Reviewable projections MUST map
+selectable meaningful regions back to canonical targets. Regeneration MUST
+preserve original review provenance and MUST NOT silently reattach ambiguous
+targets.
 
-- `human`
-- `agent`
-- `service`
+Detailed semantics are in [Projections](projections.md).
 
-Every genesis or update change MUST identify an agent author and begin in the
-`proposed` state before acceptance. In DSTAR 0.1, every portable decision
-accepting, rejecting, or superseding a proposal MUST identify an authorized
-human actor. A service or policy MAY validate, block, defer, or request
-replacement of a proposal, but it MUST NOT be recorded as an accepting
-authority.
-
-Humans MAY author annotations, replies, delegations, and decisions. They MUST
-NOT be serialized as the author of canonical content or a change operation.
-DSTAR 0.1 does not attempt to prove that no out-of-band modification of package
-files has occurred; the authoring rule is a behavioral conformance requirement.
-
-Authorization policy is implementation-defined, but authorship, motivation,
-and decision provenance are portable package data.
-
-An annotation MAY declare an intended audience. This is a context-disclosure
-instruction for conforming tools, not an encryption or filesystem security
-boundary.
-
-An annotation declares a subject scope and discussion purpose. Neither field
-invokes an agent or authorizes a change. Mapping a projection selection to
-canonical sources records provenance; only a separate delegation requests agent
-execution.
-
-## 9. Component specifications
-
-- [Document model](document-model.md)
-- [Annotations](annotations.md)
-- [Delegations](delegations.md)
-- [Changes](changes.md)
-- [Projections](projections.md)
-
-## 10. Implementation conformance
+## 11. Conformance roles
 
 An implementation MAY claim one or more roles:
 
-- **Core Reader** — reads and validates the manifest and canonical document.
-- **Version Reader** — materializes and validates historical canonical versions
-  from the accepted change chain.
-- **Core Writer** — materializes an accepted genesis or update change while
-  preserving stable identity and unknown declared-profile content.
-- **Review Client** — reads and writes annotations and delegations and resolves
-  human-created selection targets.
-- **Change Producer** — acts as an agent author of structurally and semantically
-  valid genesis or update proposals.
-- **Change Applier** — verifies and atomically accepts or rejects proposals.
-- **Projection Renderer** — generates indexed projections and source mappings.
+- **Reader** — opens, validates, and exposes package objects.
+- **Version Reader** — materializes accepted canonical versions.
+- **Review Client** — creates annotations, replies, human assignments, and
+  human lifecycle decisions.
+- **Change Producer** — creates structurally and semantically valid proposals.
+- **Change Applier** — simulates proposals and commits explicit human decisions.
+- **Projection Renderer** — creates derived artifacts and mappings.
+- **Preserver** — round-trips unknown declared-profile and `x-` data.
 
-A conformance claim MUST name the DSTAR version, role, supported content
-profiles, and any unsupported optional capabilities. Passing JSON Schema alone
-is not sufficient; role-specific behavioral fixtures under `tests/` are also
-required once published.
+Conformance claims MUST identify the role, DSTAR version, supported profiles,
+and test suite version.
 
-## 11. Extensions
+## 12. Security
 
-Unknown object properties beginning with `x-` are extension properties.
-Implementations SHOULD preserve extension properties during lossless reads and
-writes. New semantic types SHOULD be introduced by a declared profile rather
-than by an uncoordinated `x-` property.
+Package content, annotations, sources, and projections are untrusted input.
+Implementations MUST enforce path containment, bounded parsing, safe rendering,
+and explicit capability checks. Audience metadata is disclosure intent, not
+filesystem access control.
 
-Unknown node, mark, annotation, or operation types from a declared profile MUST
-be preserved by lossless processors. Renderers MUST emit a diagnostic or visible
-fallback instead of silently dropping meaningful content.
+Proposal-only SDK or MCP surfaces MUST NOT expose accept, reject, supersede,
+resolve, arbitrary path access, shell execution, or unrestricted network
+operations.
 
-## 12. Versioning
+## 13. Related normative documents
 
-The manifest field `dstar` identifies the specification version. A 0.x version
-is experimental and may introduce breaking changes.
-
-Within a future stable major version, minor versions may add fields and types
-that older readers are required to preserve, while major versions may make
-backward-incompatible changes.
-
-## 13. Open issues
-
-- Deterministic ZIP packing rules and a packed media type
-- Asset integrity, update-time asset mutations, and their relationship to
-  canonical revision
-- Profile discovery and registry policy
-- Portable archival representation and retention for prior projection revisions
-- Portable identity lineage for node splits, merges, and structural rewrites
-- Portable diagnostics for failed or conflicting change-application attempts
-- Portable envelope for an unaccepted genesis proposal
-- Event-log and archival representation for complete audit history
-- Conformance fixtures and required error codes for each role
+- [Document model](document-model.md)
+- [Annotations](annotations.md)
+- [Changes](changes.md)
+- [Projections](projections.md)

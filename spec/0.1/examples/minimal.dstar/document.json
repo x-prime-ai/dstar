@@ -21,7 +21,7 @@
       "content": [
         {
           "type": "text",
-          "text": "Agents author. Humans direct and decide."
+          "text": "Tools propose. Humans review and decide."
         }
       ]
     },
@@ -59,7 +59,7 @@
       "type": "image",
       "attrs": {
         "src": "assets/architecture.svg",
-        "alt": "DSTAR review loop connecting human direction, agent proposals, and canonical content."
+        "alt": "DSTAR review loop connecting a proposal to canonical content after a human decision."
       }
     }
   ]

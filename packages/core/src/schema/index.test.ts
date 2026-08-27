@@ -7,7 +7,6 @@ describe("schema registry", () => {
     expect(Object.keys(SCHEMA_IDS).sort()).toEqual([
       "annotation",
       "change",
-      "delegation",
       "document",
       "manifest",
       "projection",

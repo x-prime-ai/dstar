@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import annotation from "../../../spec/0.1/examples/minimal.dstar/annotations/ann_0001.json";
 import change from "../../../spec/0.1/examples/minimal.dstar/changes/change_0001.json";
 import genesis from "../../../spec/0.1/examples/minimal.dstar/changes/change_genesis_0001.json";
-import delegation from "../../../spec/0.1/examples/minimal.dstar/delegations/delegation_0001.json";
 import document from "../../../spec/0.1/examples/minimal.dstar/document.json";
 import manifest from "../../../spec/0.1/examples/minimal.dstar/manifest.json";
 import projections from "../../../spec/0.1/examples/minimal.dstar/projections/index.json";
@@ -16,7 +15,6 @@ const minimalPackage = {
   manifest,
   document,
   annotations: [annotation],
-  delegations: [delegation],
   changes: [genesis, change],
   sources,
   projections,
@@ -29,15 +27,14 @@ describe("cross-object semantic validation", () => {
     expect(result.valid).toBe(true);
   });
 
-  it("reports authority and reference violations without repairing data", () => {
+  it("reports missing motivation references without repairing data", () => {
     const invalid = {
       ...minimalPackage,
-      delegations: [
-        {
-          ...minimalPackage.delegations[0]!,
-          annotation: "ann_missing",
-        },
-      ],
+      changes: minimalPackage.changes.map((item) =>
+        item.id === "change_0001"
+          ? { ...item, motivatedBy: ["ann_missing"] }
+          : item,
+      ),
     } as InMemoryPackage;
     const result = validateInMemoryPackage(invalid);
     expect(result.valid).toBe(false);
@@ -46,6 +43,6 @@ describe("cross-object semantic validation", () => {
         (diagnostic) => diagnostic.code === "REF_MISSING",
       ),
     ).toBe(true);
-    expect(invalid.delegations[0]?.annotation).toBe("ann_missing");
+    expect(invalid.changes[1]?.motivatedBy).toEqual(["ann_missing"]);
   });
 });

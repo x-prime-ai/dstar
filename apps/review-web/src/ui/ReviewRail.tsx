@@ -10,10 +10,9 @@ interface ReviewRailProps {
   ) => Promise<boolean>;
   readonly onReply: (annotationId: string, body: string) => Promise<boolean>;
   readonly onResolve: (annotationId: string) => Promise<boolean>;
-  readonly onDelegate: (
+  readonly onAssign: (
     annotationId: string,
-    agentId: string,
-    instruction: string,
+    humanId: string,
   ) => Promise<boolean>;
 }
 
@@ -22,17 +21,16 @@ function ThreadActions({
   open,
   onReply,
   onResolve,
-  onDelegate,
+  onAssign,
 }: {
   readonly annotationId: string;
   readonly open: boolean;
   readonly onReply: ReviewRailProps["onReply"];
   readonly onResolve: ReviewRailProps["onResolve"];
-  readonly onDelegate: ReviewRailProps["onDelegate"];
+  readonly onAssign: ReviewRailProps["onAssign"];
 }) {
   const [reply, setReply] = useState("");
-  const [agent, setAgent] = useState("agent_demo");
-  const [instruction, setInstruction] = useState("");
+  const [assignee, setAssignee] = useState("");
   return (
     <div className="thread-actions">
       <form
@@ -58,32 +56,18 @@ function ThreadActions({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (agent.trim())
-            void onDelegate(
-              annotationId,
-              agent.trim(),
-              instruction.trim(),
-            ).then((saved) => {
-              if (saved) setInstruction("");
-            });
+          if (assignee.trim()) void onAssign(annotationId, assignee.trim());
         }}
       >
         <label>
-          Agent ID
+          Human assignee
           <input
-            value={agent}
-            onChange={(event) => setAgent(event.target.value)}
-          />
-        </label>
-        <label>
-          Supplemental instruction
-          <input
-            value={instruction}
-            onChange={(event) => setInstruction(event.target.value)}
+            value={assignee}
+            onChange={(event) => setAssignee(event.target.value)}
           />
         </label>
         <button className="button button-accent" type="submit">
-          Delegate separately
+          Assign comment
         </button>
       </form>
       {open ? (
@@ -106,7 +90,7 @@ export function ReviewRail({
   onComment,
   onReply,
   onResolve,
-  onDelegate,
+  onAssign,
 }: ReviewRailProps) {
   const [body, setBody] = useState("");
   const [purpose, setPurpose] = useState("discussion");
@@ -122,7 +106,7 @@ export function ReviewRail({
         ? { canonicalTargets: capture.canonicalTargets }
         : {}),
       body: body.trim(),
-      audience: ["human", "agent"],
+      audience: ["human"],
     });
     if (saved) setBody("");
   };
@@ -219,7 +203,7 @@ export function ReviewRail({
               open={annotation.status === "open"}
               onReply={onReply}
               onResolve={onResolve}
-              onDelegate={onDelegate}
+              onAssign={onAssign}
             />
           </article>
         ))}

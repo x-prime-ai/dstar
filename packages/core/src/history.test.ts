@@ -19,7 +19,7 @@ import type {
 } from "./protocol.js";
 import { documentRevision, nodeRevision } from "./revisions.js";
 
-const agent: DstarActor = { type: "agent", id: "agent_writer" };
+const service: DstarActor = { type: "service", id: "service_writer" };
 const human: DstarActor = { type: "human", id: "human_reviewer" };
 const createdAt = "2026-01-01T00:00:00.000Z";
 
@@ -83,7 +83,7 @@ function acceptedPackage(): InMemoryPackage {
       id: "change_genesis",
       kind: "genesis",
       idempotencyKey: "genesis-key",
-      author: agent as DstarChange["author"],
+      author: service,
       request: { actor: human as never, body: "Create it", createdAt },
       operations: [
         { id: "op_genesis", op: "create_document", value: genesisDocument },
@@ -103,7 +103,7 @@ function acceptedPackage(): InMemoryPackage {
       idempotencyKey: "change-1-key",
       baseChange: "change_genesis",
       baseRevision: genesisRevision,
-      author: agent as DstarChange["author"],
+      author: service,
       operations: [firstOperation],
       status: "accepted",
       createdAt,
@@ -120,7 +120,7 @@ function acceptedPackage(): InMemoryPackage {
       idempotencyKey: "change-2-key",
       baseChange: "change_1",
       baseRevision: firstRevision,
-      author: agent as DstarChange["author"],
+      author: service,
       operations: [secondOperation],
       status: "accepted",
       createdAt,
@@ -146,7 +146,6 @@ function acceptedPackage(): InMemoryPackage {
     },
     document: headDocument,
     annotations: [],
-    delegations: [],
     changes,
   };
 }
@@ -218,7 +217,7 @@ describe("pure change applier authority boundary", () => {
       id: "genesis_proposal",
       operationId: "create_document",
       idempotencyKey: "genesis-proposal-key",
-      author: agent,
+      author: human,
       requestActor: human,
       requestBody: "Create a document",
       createdAt,
@@ -233,7 +232,7 @@ describe("pure change applier authority boundary", () => {
           title: "Genesis",
           profiles: ["dstar:base"],
         },
-        agent,
+        service,
         createdAt,
         revision,
       ).valid,
@@ -259,7 +258,7 @@ describe("pure change applier authority boundary", () => {
       idempotencyKey: "change-3-key",
       baseChange: pkg.manifest.headChange,
       baseRevision: pkg.manifest.revision,
-      author: agent as DstarChange["author"],
+      author: human,
       operations: [
         {
           id: "op_3",
@@ -281,14 +280,14 @@ describe("pure change applier authority boundary", () => {
     expect(simulation.applicability).toBe("applicable");
     expect(proposal.status).toBe("proposed");
 
-    const agentAttempt = acceptUpdateChange(
+    const serviceAttempt = acceptUpdateChange(
       withProposal,
       proposal.id,
-      agent,
+      service,
       createdAt,
       simulation.resultRevision!,
     );
-    expect(agentAttempt.valid).toBe(false);
+    expect(serviceAttempt.valid).toBe(false);
 
     const humanDecision = acceptUpdateChange(
       withProposal,

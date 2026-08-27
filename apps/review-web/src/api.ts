@@ -7,11 +7,7 @@ import type {
   SnapshotView,
   WorkspaceState,
 } from "./types.js";
-import type {
-  CanonicalVersionSummary,
-  DstarChange,
-  DstarDelegation,
-} from "@dstar/core";
+import type { CanonicalVersionSummary, DstarChange } from "@dstar/core";
 
 export class WorkspaceApi {
   readonly token: string;
@@ -44,28 +40,19 @@ export class WorkspaceApi {
   }
 
   async state(): Promise<WorkspaceState> {
-    const [
-      snapshot,
-      document,
-      annotations,
-      delegations,
-      changes,
-      versions,
-      sources,
-    ] = await Promise.all([
-      this.request<SnapshotView>("/snapshot"),
-      this.request<DocumentView>("/document"),
-      this.request<readonly AnnotationView[]>("/annotations"),
-      this.request<readonly DstarDelegation[]>("/delegations"),
-      this.request<readonly DstarChange[]>("/changes"),
-      this.request<readonly CanonicalVersionSummary[]>("/versions"),
-      this.request<{ readonly sources: readonly unknown[] }>("/sources"),
-    ]);
+    const [snapshot, document, annotations, changes, versions, sources] =
+      await Promise.all([
+        this.request<SnapshotView>("/snapshot"),
+        this.request<DocumentView>("/document"),
+        this.request<readonly AnnotationView[]>("/annotations"),
+        this.request<readonly DstarChange[]>("/changes"),
+        this.request<readonly CanonicalVersionSummary[]>("/versions"),
+        this.request<{ readonly sources: readonly unknown[] }>("/sources"),
+      ]);
     return {
       snapshot,
       document,
       annotations,
-      delegations,
       changes,
       versions,
       sources,

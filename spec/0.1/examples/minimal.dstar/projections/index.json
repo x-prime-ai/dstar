@@ -6,8 +6,8 @@
       "mediaType": "text/markdown",
       "path": "projections/document.md",
       "reviewable": true,
-      "generatedFromRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
-      "revision": "sha256:7d9be07e04e2bba117571114f5c1406b9b69bd6f71a60a9b9971481852048d09",
+      "generatedFromRevision": "sha256:a59754cb50e1960f8ee58a98a90caebfc3d78e4e44429740f9c2f6cd03d100e8",
+      "revision": "sha256:c1a2f96a626e448cbf9a952d0f7c678e215e59c6d7d9670ac008716a946acbfe",
       "generator": {
         "actor": {
           "type": "service",
@@ -53,7 +53,7 @@
             },
             {
               "type": "TextQuoteSelector",
-              "exact": "Agents author. Humans direct and decide."
+              "exact": "Tools propose. Humans review and decide."
             }
           ],
           "derivedFrom": [
@@ -96,12 +96,12 @@
             {
               "type": "TextPositionSelector",
               "start": 135,
-              "end": 251,
+              "end": 250,
               "unit": "unicode-code-point"
             },
             {
               "type": "TextQuoteSelector",
-              "exact": "![DSTAR review loop connecting human direction, agent proposals, and canonical content.](../assets/architecture.svg)"
+              "exact": "![DSTAR review loop connecting a proposal to canonical content after a human decision.](../assets/architecture.svg)"
             }
           ],
           "derivedFrom": [
@@ -122,13 +122,13 @@
       "mediaType": "text/markdown",
       "path": "projections/summary.md",
       "reviewable": true,
-      "generatedFromRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
-      "revision": "sha256:c16a9a47ff1342393d4a110d9e8d09384d839911230e7d9bb7fde62aee70c0a8",
+      "generatedFromRevision": "sha256:a59754cb50e1960f8ee58a98a90caebfc3d78e4e44429740f9c2f6cd03d100e8",
+      "revision": "sha256:a6aa238d1325349f9a1c4426e62800c1303b0238255a4cc3012982206ff65839",
       "generator": {
         "actor": {
-          "type": "agent",
-          "id": "agent_demo",
-          "name": "Demo agent"
+          "type": "service",
+          "id": "service_summary",
+          "name": "Demo summary producer"
         },
         "createdAt": "2026-08-24T00:00:00Z"
       },
@@ -139,12 +139,12 @@
             {
               "type": "TextPositionSelector",
               "start": 11,
-              "end": 95,
+              "end": 72,
               "unit": "unicode-code-point"
             },
             {
               "type": "TextQuoteSelector",
-              "exact": "Agents author canonical content; humans direct the work and decide what is accepted."
+              "exact": "Proposals remain pending until humans review and accept them."
             }
           ],
           "derivedFrom": [
@@ -165,8 +165,8 @@
       "mediaType": "text/plain",
       "path": "projections/excerpt.txt",
       "reviewable": true,
-      "generatedFromRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
-      "revision": "sha256:354190720a82f0ec2a846699ec1e42540d8a79d39c3b181970dbe33e33b986c4",
+      "generatedFromRevision": "sha256:a59754cb50e1960f8ee58a98a90caebfc3d78e4e44429740f9c2f6cd03d100e8",
+      "revision": "sha256:80413794e35150caf25f8dec9361cdc0ae02e3cc3fc60d29b39043a43a03699c",
       "generator": {
         "actor": {
           "type": "service",
@@ -188,7 +188,7 @@
             },
             {
               "type": "TextQuoteSelector",
-              "exact": "Hello DSTAR\nAgents author. Humans direct and decide."
+              "exact": "Hello DSTAR\nTools propose. Humans review and decide."
             }
           ],
           "derivedFrom": [
@@ -199,7 +199,7 @@
                 "start": { "node": "node_title", "offset": 0 },
                 "end": { "node": "node_promise", "offset": 40 },
                 "unit": "unicode-code-point",
-                "exact": "Hello DSTAR\nAgents author. Humans direct and decide."
+                "exact": "Hello DSTAR\nTools propose. Humans review and decide."
               }
             }
           ]
@@ -212,8 +212,8 @@
       "mediaType": "text/html",
       "path": "projections/document.html",
       "reviewable": true,
-      "generatedFromRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
-      "revision": "sha256:eb1754989600896af2cbdc7f55ceaeee5d14d20c64d66140f04cd88ad1486a1a",
+      "generatedFromRevision": "sha256:a59754cb50e1960f8ee58a98a90caebfc3d78e4e44429740f9c2f6cd03d100e8",
+      "revision": "sha256:3b1be34f81250aebbf990695c525d65f38ccdb41b5103a44b28220ff7c4e3a36",
       "generator": {
         "actor": {
           "type": "service",
@@ -255,7 +255,7 @@
             },
             {
               "type": "TextQuoteSelector",
-              "exact": "Agents author. Humans direct and decide."
+              "exact": "Tools propose. Humans review and decide."
             }
           ],
           "derivedFrom": [

@@ -7,18 +7,18 @@
     "Core Reader": {
       "valid": true,
       "documentId": "doc_minimal",
-      "documentRevision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+      "documentRevision": "sha256:a59754cb50e1960f8ee58a98a90caebfc3d78e4e44429740f9c2f6cd03d100e8",
       "nodeCount": 5
     },
     "Version Reader": {
       "valid": true,
       "targetChangeId": "change_genesis_0001",
-      "revision": "sha256:9a744496f1ca60e1dc29d48e094694a3eb1ed9b9c81313a9cef54fec09a3218a",
+      "revision": "sha256:a59754cb50e1960f8ee58a98a90caebfc3d78e4e44429740f9c2f6cd03d100e8",
       "versionCount": 1
     },
     "Core Writer": {
       "applicable": true,
-      "resultRevision": "sha256:7aa21117bea46ceec9381d6239ebee5469a13adeb0e0548bdadb04a176f52ea9",
+      "resultRevision": "sha256:ca6249de02070ebb6ee7e00cab5de79e67018469cb2bb4f33f563f094dd0b862",
       "preservedRootId": "node_root"
     },
     "Review Client": {
@@ -27,17 +27,17 @@
     },
     "Change Producer": {
       "valid": true,
-      "authorType": "agent",
+      "authorType": "human",
       "status": "proposed",
       "operationCount": 1
     },
     "Change Applier": {
       "valid": true,
       "decisionActorType": "human",
-      "resultRevision": "sha256:7aa21117bea46ceec9381d6239ebee5469a13adeb0e0548bdadb04a176f52ea9"
+      "resultRevision": "sha256:ca6249de02070ebb6ee7e00cab5de79e67018469cb2bb4f33f563f094dd0b862"
     },
     "Projection Renderer": {
-      "canonicalByteLength": 1948,
+      "canonicalByteLength": 1947,
       "canonicalNodeOrder": [
         "node_root",
         "node_title",
@@ -48,19 +48,19 @@
       "projections": [
         {
           "kind": "html",
-          "revision": "sha256:f5537cee3c0232980f718980c34d06b155f7dbfb3871e95ac99edc83e5017264",
+          "revision": "sha256:bee596903dfce6b3530e0734c20744ca5f1c25c71d24640d23059154e50d0528",
           "reviewable": true,
           "segmentCount": 4
         },
         {
           "kind": "markdown",
-          "revision": "sha256:99f43f7220620ae1b37c86bbad25f805f43ef7fb8c2be34c7009f04c13ca198a",
+          "revision": "sha256:c6290cd7a55423937ccf9e372dadf9afd861d700312c52ee1cafd45b1b3a89ed",
           "reviewable": true,
           "segmentCount": 4
         },
         {
           "kind": "plain-text",
-          "revision": "sha256:bc757ea89ba6cd8ab61c6775bc62fb00f90e9a5a7a02387f94b11033966809c8",
+          "revision": "sha256:e1a0327ff58aa7c2632e5e6c5fd9a36bfed2398ab09755f04e46674f4914a512",
           "reviewable": true,
           "segmentCount": 4
         }

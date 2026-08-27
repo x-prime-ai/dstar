@@ -17,7 +17,7 @@ export interface CanonicalVersionSummary {
   readonly changeId: string;
   readonly kind: "genesis" | "update";
   readonly resultRevision: string;
-  readonly agentAuthorId: string;
+  readonly authorId: string;
   readonly humanDecisionActorId: string;
   readonly decidedAt: string;
 }
@@ -125,7 +125,7 @@ function versionSummary(
     changeId: change.id,
     kind: change.kind,
     resultRevision: revision,
-    agentAuthorId: change.author.id,
+    authorId: change.author.id,
     humanDecisionActorId: decision.actor.id,
     decidedAt: decision.at,
   });
@@ -307,12 +307,7 @@ export function simulateUpdateChange(
   changeId: string,
 ): ChangeSimulation {
   const change = pkg.changes.find((candidate) => candidate.id === changeId);
-  if (
-    !change ||
-    change.kind !== "update" ||
-    change.status !== "proposed" ||
-    change.author.type !== "agent"
-  ) {
+  if (!change || change.kind !== "update" || change.status !== "proposed") {
     return Object.freeze({
       changeId,
       applicability: "invalid",
@@ -320,7 +315,7 @@ export function simulateUpdateChange(
       baseRevisionMatches: false,
       diagnostics: Object.freeze([
         createDiagnostic("OP_INVALID", {
-          summary: "Change is not an agent-authored proposed update.",
+          summary: "Change is not a proposed update.",
         }),
       ]),
     });
@@ -417,7 +412,6 @@ export function acceptGenesisProposal(
   if (
     proposal.kind !== "genesis" ||
     proposal.status !== "proposed" ||
-    proposal.author.type !== "agent" ||
     proposal.request?.actor.type !== "human" ||
     proposal.operations.length !== 1 ||
     operation?.op !== "create_document"
@@ -426,8 +420,7 @@ export function acceptGenesisProposal(
       valid: false,
       diagnostics: Object.freeze([
         createDiagnostic("OP_INVALID", {
-          summary:
-            "Genesis must be one proposed agent-authored create_document.",
+          summary: "Genesis must be one proposed create_document operation.",
         }),
       ]),
     });
@@ -480,7 +473,6 @@ export function acceptGenesisProposal(
     },
     document: cloneJson(operation.value as JsonValue),
     annotations: [],
-    delegations: [],
     changes: [acceptedProposal],
   } as JsonValue) as unknown as InMemoryPackage;
   return Object.freeze({
@@ -538,7 +530,6 @@ export function rejectOrSupersedeChange(
     manifest: cloneJson(pkg.manifest as JsonValue),
     document: cloneJson(pkg.document as JsonValue),
     annotations: cloneJson(pkg.annotations as unknown as JsonValue),
-    delegations: cloneJson(pkg.delegations as unknown as JsonValue),
     changes,
     ...(pkg.sources
       ? { sources: cloneJson(pkg.sources as unknown as JsonValue) }
@@ -615,7 +606,6 @@ export function acceptUpdateChange(
     manifest,
     document: simulation.result,
     annotations: cloneJson(pkg.annotations as unknown as JsonValue),
-    delegations: cloneJson(pkg.delegations as unknown as JsonValue),
     changes,
     ...(pkg.sources
       ? { sources: cloneJson(pkg.sources as unknown as JsonValue) }

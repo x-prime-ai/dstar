@@ -17,7 +17,6 @@ try {
     manifest: snapshot.manifest,
     document: snapshot.document,
     annotations: snapshot.annotations,
-    delegations: snapshot.delegations,
     changes: snapshot.changes,
     sources: snapshot.sources ?? null,
     projections: snapshot.projections ?? null,
@@ -36,7 +35,8 @@ try {
   }
   process.stdout.write(
     `Portable reopen: ${second.annotations.length} annotations, ` +
-      `${second.delegations.length} delegations, ${second.changes.length} changes passed.\n`,
+      `${second.projections?.projections.length ?? 0} projections, ` +
+      `${second.changes.length} changes passed.\n`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

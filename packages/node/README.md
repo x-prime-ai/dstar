@@ -12,7 +12,8 @@ import { PackageCommands, PackageRepository, openPackage } from "@dstar/node";
 The production entrypoint exposes safe package opening, immutable snapshots,
 recoverable filesystem transactions, runtime idempotency, package commands,
 genesis drafts, and portable version reads. Canonical decisions require a human
-actor; proposal-result commands can only add agent-authored proposed changes.
+actor; proposal commands can only add pending changes or replies and cannot
+advance canonical content.
 
 The `@dstar/node/testing` entrypoint is labeled **testing** and exposes the
 `minimal.dstar` fixture loader.

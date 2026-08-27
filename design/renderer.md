@@ -4,7 +4,7 @@ Status: **Draft**
 
 ## 1. Purpose
 
-The render system converts canonical semantic content into human and agent
+The render system converts canonical semantic content into human and machine
 views without changing authority. It produces:
 
 - an in-memory canonical HTML view whose selection targets `document`;
@@ -22,7 +22,7 @@ PackageSnapshot
     -> profile capability check
     -> semantic RenderTree
     -> target-specific renderer
-       canonical HTML | HTML projection | Markdown | text | summary | agent context
+       canonical HTML | HTML projection | Markdown | text | summary | machine context
     -> mapping collector
     -> output validation and sanitization
     -> artifact bytes + projection record + diagnostics
@@ -142,10 +142,10 @@ Initial plugins:
 - Markdown export;
 - plain-text projection;
 - rule-based summary placeholder for deterministic tests;
-- agent-context projection assembled by task policy.
+- machine-context projection assembled by caller policy.
 
-Model-generated summaries use an agent generator actor and are invoked through
-the agent runtime, not disguised as deterministic renderer output.
+Non-deterministic summaries use a service generator actor and are invoked by an
+external application, not disguised as deterministic renderer output.
 
 ## 7. Segment and source-map construction
 
@@ -249,7 +249,7 @@ It controls newline convention, attribute order, JSON formatting, and locale.
 Timestamps live in generator metadata and are supplied to the render operation;
 they do not vary during retries.
 
-Agent-generated projections are not required to be byte-deterministic, but
+Non-deterministic projections are not required to be byte-deterministic, but
 their stored bytes, generator actor, creation time, revision, and mappings are
 fixed once published.
 
@@ -292,9 +292,9 @@ original projection ID and revision.
 A document acceptance does not wait for this process. Until it succeeds, stale
 projections remain labeled and the canonical view remains current.
 
-## 14. Agent-context rendering
+## 14. Machine-context rendering
 
-Agent context is a projection policy, not a dump of the package. It:
+Machine context is a projection policy, not a dump of the package. It:
 
 - includes only requested semantic nodes and necessary ancestors;
 - applies annotation audience filtering;

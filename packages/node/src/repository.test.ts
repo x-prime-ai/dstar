@@ -70,9 +70,9 @@ describe("recoverable package repository", () => {
       ...snapshot.annotations[0]!,
       body: "Partially installed",
     };
-    const delegation = {
-      ...snapshot.delegations[0]!,
-      instruction: "Partially installed",
+    const change = {
+      ...snapshot.changes.find((item) => item.id === "change_0001")!,
+      "x-test": "Partially installed",
     };
     await expect(
       repository.commit(
@@ -82,7 +82,7 @@ describe("recoverable package repository", () => {
           transactionType: "proposal",
           writes: new Map([
             [`annotations/${annotation.id}.json`, encodeJson(annotation)],
-            [`delegations/${delegation.id}.json`, encodeJson(delegation)],
+            [`changes/${change.id}.json`, encodeJson(change)],
           ]),
         },
         { failAfterInstallStep: 1 },
@@ -92,8 +92,8 @@ describe("recoverable package repository", () => {
     const recovered = await repository.open(packageRoot);
     expect(recovered.snapshotId).toBe(snapshot.snapshotId);
     expect(recovered.annotations[0]?.body).toBe(snapshot.annotations[0]?.body);
-    expect(recovered.delegations[0]?.instruction).toBe(
-      snapshot.delegations[0]?.instruction,
+    expect(recovered.changes.find((item) => item.id === change.id)).toEqual(
+      snapshot.changes.find((item) => item.id === change.id),
     );
   });
 

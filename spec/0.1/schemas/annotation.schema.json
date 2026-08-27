@@ -27,6 +27,7 @@
     },
     "body": { "type": "string", "minLength": 1 },
     "author": { "$ref": "#/$defs/actor" },
+    "assignee": { "$ref": "#/$defs/humanActor" },
     "replies": {
       "type": "array",
       "items": { "$ref": "#/$defs/reply" }
@@ -35,7 +36,7 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "enum": ["human", "agent", "service"] }
+      "items": { "enum": ["human", "service"] }
     },
     "status": { "enum": ["open", "resolved"] },
     "createdAt": { "type": "string", "format": "date-time" },
@@ -93,11 +94,9 @@
       "type": "object",
       "required": ["type", "id"],
       "properties": {
-        "type": { "enum": ["human", "agent", "service"] },
+        "type": { "enum": ["human", "service"] },
         "id": { "$ref": "#/$defs/id" },
-        "name": { "type": "string" },
-        "model": { "type": "string" },
-        "provider": { "type": "string" }
+        "name": { "type": "string" }
       },
       "patternProperties": {
         "^x-": true

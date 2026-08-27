@@ -48,12 +48,6 @@ const fixtureSets = [
     ),
   ],
   [
-    "delegation.schema.json",
-    (await readdir(join(fixtureRoot, "delegations"))).map((name) =>
-      join(fixtureRoot, "delegations", name),
-    ),
-  ],
-  [
     "change.schema.json",
     (await readdir(join(fixtureRoot, "changes"))).map((name) =>
       join(fixtureRoot, "changes", name),

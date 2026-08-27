@@ -26,11 +26,6 @@ const human: DstarActor = {
   id: "human_test",
   name: "Test human",
 };
-const agent: DstarActor = {
-  type: "agent",
-  id: "agent_demo",
-  name: "Demo agent",
-};
 
 async function workspace() {
   const temporary = await mkdtemp(join(tmpdir(), "dstar-commands-test-"));
@@ -48,7 +43,7 @@ async function workspace() {
 }
 
 describe("atomic package commands", () => {
-  it("keeps human replies, resolution, cancellation, and decisions separate", async () => {
+  it("keeps human replies, assignment, resolution, and decisions separate", async () => {
     const { packageRoot, repository, commands } = await workspace();
     const opened = await repository.open(packageRoot);
     const replied = await commands.addHumanReply(
@@ -81,51 +76,42 @@ describe("atomic package commands", () => {
       status: "resolved",
       resolvedBy: human,
     });
-    expect(resolved.delegations[0]?.status).toBe("completed");
+    expect(resolved.annotations[0]?.assignee?.type).toBe("human");
     expect(
       resolved.changes.find((change) => change.id === "change_0001")?.status,
     ).toBe("proposed");
 
-    const queued = await commands.createDelegation(
+    const assigned = await commands.assignAnnotation(
       resolved,
-      {
-        id: "delegation_cancel_test",
-        annotationId: "ann_0001",
-        assignee: agent,
-        createdBy: human,
-        createdAt: "2026-08-26T09:02:00Z",
-      },
+      "ann_0001",
+      { type: "human", id: "human_assignee" },
       {
         expectedSnapshotId: resolved.snapshotId,
-        idempotencyKey: "queue-cancel-test",
+        idempotencyKey: "assign-human-test",
       },
     );
-    const cancelled = await commands.cancelDelegation(
-      queued,
-      "delegation_cancel_test",
-      human,
-      "2026-08-26T09:03:00Z",
-      "No longer needed.",
-      {
-        expectedSnapshotId: queued.snapshotId,
-        idempotencyKey: "cancel-human-test",
-      },
-    );
-    expect(
-      cancelled.delegations.find(
-        (delegation) => delegation.id === "delegation_cancel_test",
-      )?.status,
-    ).toBe("cancelled");
-    expect(cancelled.annotations[0]?.status).toBe("resolved");
+    expect(assigned.annotations[0]?.assignee?.id).toBe("human_assignee");
+    expect(assigned.annotations[0]?.status).toBe("resolved");
+    await expect(
+      commands.assignAnnotation(
+        assigned,
+        "ann_0001",
+        { type: "service", id: "service_executor" },
+        {
+          expectedSnapshotId: assigned.snapshotId,
+          idempotencyKey: "assign-service-test",
+        },
+      ),
+    ).rejects.toThrow("Annotation assignee must be human");
 
     const superseded = await commands.supersedeChange(
-      cancelled,
+      assigned,
       "change_0001",
       human,
       "2026-08-26T09:04:00Z",
       "A new request will replace it.",
       {
-        expectedSnapshotId: cancelled.snapshotId,
+        expectedSnapshotId: assigned.snapshotId,
         idempotencyKey: "supersede-human-test",
       },
     );
@@ -135,25 +121,10 @@ describe("atomic package commands", () => {
     expect(superseded.manifest.revision).toBe(opened.manifest.revision);
   });
 
-  it("creates a delegation and records an agent proposal without accepting content", async () => {
+  it("records a proposal directly without accepting content", async () => {
     const { packageRoot, repository, commands } = await workspace();
     const opened = await repository.open(packageRoot);
-    const delegated = await commands.createDelegation(
-      opened,
-      {
-        id: "delegation_test",
-        annotationId: "ann_0001",
-        assignee: agent,
-        createdBy: human,
-        createdAt: "2026-08-26T10:00:00Z",
-        instruction: "Propose a wording update.",
-      },
-      {
-        expectedSnapshotId: opened.snapshotId,
-        idempotencyKey: "create-delegation-test",
-      },
-    );
-    const fixtureProposal = delegated.changes.find(
+    const fixtureProposal = opened.changes.find(
       (change) => change.id === "change_0001",
     )!;
     const proposal = {
@@ -161,26 +132,18 @@ describe("atomic package commands", () => {
       id: "change_test",
       idempotencyKey: "proposal-test",
       motivatedBy: ["ann_0001"],
-      fulfills: ["delegation_test"],
+      author: human,
     };
-    const completed = await commands.recordProposalResult(
-      delegated,
+    const completed = await commands.recordProposal(
+      opened,
       {
         change: proposal,
-        delegationId: "delegation_test",
-        completedBy: agent,
-        completedAt: "2026-08-26T10:01:00Z",
       },
       {
-        expectedSnapshotId: delegated.snapshotId,
-        idempotencyKey: "proposal-result-test",
+        expectedSnapshotId: opened.snapshotId,
+        idempotencyKey: "proposal-test",
       },
     );
-
-    expect(
-      completed.delegations.find((item) => item.id === "delegation_test")
-        ?.status,
-    ).toBe("completed");
     expect(
       completed.changes.find((item) => item.id === "change_test")?.status,
     ).toBe("proposed");
@@ -219,7 +182,7 @@ describe("atomic package commands", () => {
     expect(materialized.revision).toBe(reopened.manifest.revision);
   });
 
-  it("materializes an agent-authored genesis proposal only after human acceptance", async () => {
+  it("materializes a genesis proposal only after human acceptance", async () => {
     const { temporary } = await workspace();
     const requestPath = join(temporary, "request.json");
     const draftRoot = join(temporary, "draft");
@@ -244,7 +207,7 @@ describe("atomic package commands", () => {
           content: [
             {
               type: "text" as const,
-              text: "Agents author. Humans direct and decide.",
+              text: "Tools propose. Humans review and decide.",
             },
           ],
         },
@@ -254,7 +217,7 @@ describe("atomic package commands", () => {
       id: "change_genesis_created",
       operationId: "operation_genesis_created",
       idempotencyKey: "genesis-created",
-      author: agent,
+      author: human,
       requestActor: human,
       requestBody: request.body,
       requestCreatedAt: request.createdAt,

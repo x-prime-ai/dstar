@@ -136,7 +136,6 @@ async function runCase(entry) {
       manifest: snapshot.manifest,
       document: snapshot.document,
       annotations: snapshot.annotations,
-      delegations: snapshot.delegations,
       changes: [...snapshot.changes, proposal],
       ...(snapshot.sources ? { sources: snapshot.sources } : {}),
       ...(snapshot.projections ? { projections: snapshot.projections } : {}),

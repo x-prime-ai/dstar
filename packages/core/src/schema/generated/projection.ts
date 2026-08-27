@@ -74,11 +74,9 @@ createdAt?: string
  * via the `definition` "actor".
  */
 export interface Actor {
-type: ("human" | "agent" | "service")
+type: ("human" | "service")
 id: Id
 name?: string
-model?: string
-provider?: string
 /**
  * This interface was referenced by `Actor`'s JSON-Schema definition
  * via the `patternProperty` "^x-".

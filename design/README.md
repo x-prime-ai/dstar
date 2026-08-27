@@ -7,8 +7,8 @@ non-normative: the protocol in [`spec/0.1`](../spec/0.1/DSTAR.md) remains the
 authority for portable files and interoperable behavior.
 
 The design makes one implementation concrete enough to build and test. Other
-implementations may use different languages, storage engines, renderers, agent
-frameworks, or interfaces while conforming to the protocol.
+implementations may use different languages, storage engines, renderers, host
+applications, or interfaces while conforming to the protocol.
 
 ## Documents
 
@@ -16,12 +16,12 @@ frameworks, or interfaces while conforming to the protocol.
   internal interfaces, and end-to-end flows.
 - [Package runtime](package-runtime.md) — safe package loading, snapshots,
   validation, locking, atomic writes, recovery, and local runtime state.
-- [Agent runtime](agent-runtime.md) — genesis, delegation execution, context
-  assembly, tool boundary, structured proposal output, and provider adapters.
-- [MCP server](mcp-server.md) — scoped resources and agent tools, transport,
+- [MCP server](mcp-server.md) — scoped resources and document tools, transport,
   capability enforcement, and the human-authority boundary.
+- [xPrime integration request](xprime-integration-request.md) — requested MCP
+  Resources and Apps client capabilities and their authority constraints.
 - [Review client](review-client.md) — canonical and projection views, browser
-  selection conversion, comments, delegation, proposal and version review, and
+  selection conversion, comments, human assignment, proposal and version review, and
   target recovery.
 - [Renderer](renderer.md) — profile registry, canonical HTML, projection
   generation, source maps, assets, sanitization, and regeneration.
@@ -31,9 +31,9 @@ frameworks, or interfaces while conforming to the protocol.
   preconditions, simulation, decisions, historical materialization,
   idempotency, and transactions.
 - [Security](security.md) — threat model, trust boundaries, package and HTML
-  safety, agent isolation, secrets, and approval controls.
-- [Implementation plan](implementation-plan.md) — repository layout, milestones,
-  tests, exit criteria, and sequencing.
+  safety, caller isolation, secrets, and approval controls.
+- [SDK-first roadmap](implementation-plan.md) — public packages, milestones,
+  tests, exit criteria, and delivery sequencing.
 
 ## Authority order
 
@@ -59,7 +59,8 @@ The 0.1 reference implementation is:
   dependency;
 - a local workspace service used by the CLI and browser review application;
 - a read-only React canonical renderer with explicit DOM-to-DSTAR mappings;
-- provider-neutral at the agent boundary; and
+- integrated first with xPrime through a tool-complete MCP client boundary,
+  without binding DSTAR to xPrime's execution model; and
 - conservative about writes: package mutation always goes through validated,
   locked transactions.
 

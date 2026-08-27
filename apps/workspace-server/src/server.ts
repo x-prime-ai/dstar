@@ -173,7 +173,6 @@ function snapshotWithDocument(
       manifest: { ...snapshot.manifest, revision, headChange },
       document,
       annotations: snapshot.annotations,
-      delegations: snapshot.delegations,
       changes: snapshot.changes,
       ...(snapshot.sources ? { sources: snapshot.sources } : {}),
       ...(snapshot.projections ? { projections: snapshot.projections } : {}),
@@ -359,7 +358,7 @@ async function handleRead(
         capabilities: {
           canonicalEditing: false,
           comment: true,
-          delegate: true,
+          assign: true,
           humanDecision: true,
           embeddedModelRuntime: false,
         },
@@ -403,10 +402,6 @@ async function handleRead(
   }
   if (pathname === `${API_PREFIX}/annotations`) {
     writeJson(response, 200, session.resolutions(), origin);
-    return true;
-  }
-  if (pathname === `${API_PREFIX}/delegations`) {
-    writeJson(response, 200, session.snapshot.delegations, origin);
     return true;
   }
   if (pathname === `${API_PREFIX}/changes`) {
@@ -577,6 +572,7 @@ async function handleMutation(
     const audience = Array.isArray(body.audience)
       ? (body.audience as unknown as AnnotationInput["audience"])
       : undefined;
+    const assigneeId = optionalString(body.assigneeId, "assigneeId");
     next = await session.commands.createAnnotation(
       session.snapshot,
       {
@@ -586,6 +582,9 @@ async function handleMutation(
         ...target,
         body: requiredString(body.body, "body"),
         author: session.human,
+        ...(assigneeId
+          ? { assignee: { type: "human" as const, id: assigneeId } }
+          : {}),
         createdAt: session.now(),
         ...(audience ? { audience } : {}),
       },
@@ -626,38 +625,21 @@ async function handleMutation(
       identity,
     );
   }
-  if (pathname === `${API_PREFIX}/delegations`) {
-    const assigneeName = optionalString(body.assigneeName, "assigneeName");
-    const instruction = optionalString(body.instruction, "instruction");
-    next = await session.commands.createDelegation(
-      session.snapshot,
-      {
-        id: session.id("delegation"),
-        annotationId: requiredString(body.annotationId, "annotationId"),
-        assignee: {
-          type: "agent",
-          id: requiredString(body.assigneeId, "assigneeId"),
-          ...(assigneeName ? { name: assigneeName } : {}),
-        },
-        createdBy: session.human,
-        createdAt: session.now(),
-        ...(instruction ? { instruction } : {}),
-      },
-      identity,
-    );
-  }
-  const cancelDelegationId = routeId(
+  const assignAnnotationId = routeId(
     pathname,
-    `${API_PREFIX}/delegations/`,
-    "/cancel",
+    `${API_PREFIX}/annotations/`,
+    "/assign",
   );
-  if (cancelDelegationId) {
-    next = await session.commands.cancelDelegation(
+  if (assignAnnotationId) {
+    const assigneeName = optionalString(body.assigneeName, "assigneeName");
+    next = await session.commands.assignAnnotation(
       session.snapshot,
-      cancelDelegationId,
-      session.human,
-      session.now(),
-      optionalString(body.reason, "reason"),
+      assignAnnotationId,
+      {
+        type: "human",
+        id: requiredString(body.assigneeId, "assigneeId"),
+        ...(assigneeName ? { name: assigneeName } : {}),
+      },
       identity,
     );
   }
@@ -696,39 +678,6 @@ async function handleMutation(
         identity,
       );
     }
-  }
-  const rebaseChangeId = routeId(
-    pathname,
-    `${API_PREFIX}/changes/`,
-    "/request-rebase",
-  );
-  if (rebaseChangeId) {
-    const change = session.snapshot.changes.find(
-      (candidate) => candidate.id === rebaseChangeId,
-    );
-    const annotationId = change?.motivatedBy?.[0];
-    if (!change || !annotationId)
-      throw new HttpError(
-        422,
-        "A rebase request requires a proposal linked to an annotation",
-      );
-    next = await session.commands.createDelegation(
-      session.snapshot,
-      {
-        id: session.id("delegation"),
-        annotationId,
-        assignee: {
-          type: "agent",
-          id: requiredString(body.assigneeId, "assigneeId"),
-        },
-        createdBy: session.human,
-        createdAt: session.now(),
-        instruction:
-          optionalString(body.instruction, "instruction") ??
-          `Rebase proposal ${rebaseChangeId} onto the current canonical head.`,
-      },
-      identity,
-    );
   }
   const regenerateId = routeId(
     pathname,

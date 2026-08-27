@@ -32,7 +32,6 @@ import {
 export type TransactionType =
   | "genesis"
   | "annotation"
-  | "delegation"
   | "evidence"
   | "proposal"
   | "decision"
@@ -145,7 +144,6 @@ function legalForTransaction(
 ): boolean {
   if (!validatePackagePath(path).valid) return false;
   const annotationDirectory = snapshot.manifest.annotations ?? "annotations";
-  const delegationDirectory = snapshot.manifest.delegations ?? "delegations";
   const changeDirectory = snapshot.manifest.changes;
   const sourcesPath = snapshot.manifest.sources ?? "sources.json";
   const assetsDirectory = snapshot.manifest.assets ?? "assets";
@@ -154,17 +152,13 @@ function legalForTransaction(
   switch (type) {
     case "annotation":
       return isWithin(path, annotationDirectory);
-    case "delegation":
-      return isWithin(path, delegationDirectory);
     case "evidence":
       return (
         path === sourcesPath || isWithin(path, `${assetsDirectory}/sources`)
       );
     case "proposal":
       return (
-        isWithin(path, changeDirectory) ||
-        isWithin(path, delegationDirectory) ||
-        isWithin(path, annotationDirectory)
+        isWithin(path, changeDirectory) || isWithin(path, annotationDirectory)
       );
     case "decision":
       return isWithin(path, changeDirectory);

@@ -73,12 +73,12 @@ defined; a third-party profile may define a namespaced alternative.
 
 ## Authoring boundary
 
-The initial root document is produced by an agent in a genesis proposal. Every
-later canonical transformation is also authored by an agent using the
+The initial root document is introduced by a genesis proposal. Every later
+canonical transformation is also represented by a proposal using the
 operations in [Changes](changes.md). A Core Writer materializes canonical
 content only after an authorized human accepts the proposal.
 
-Human selection, comment, delegation, and decision actions do not directly
+Human selection, comment, assignment, and decision actions do not directly
 mutate this tree. A DSTAR 0.1 authoring client MUST NOT serialize DOM mutations,
 editor-specific JSON, exact human replacement text, or transient selection
 positions as a human-authored canonical change.
@@ -93,7 +93,7 @@ Inline content is an ordered array. The required base inline type is `text`:
 ```json
 {
   "type": "text",
-  "text": "Agents author. Humans direct and decide.",
+  "text": "Tools propose. Humans review and decide.",
   "marks": [
     { "type": "strong" }
   ]

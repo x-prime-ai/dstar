@@ -10,11 +10,9 @@ import {
   simulateUpdateChange,
   validateBaseProfile,
   type DstarActor,
-  type DstarAnnotation,
   type DstarChange,
   type DstarDocument,
   type DstarUpdateOperation,
-  type InMemoryPackage,
   type JsonValue,
 } from "@dstar/core";
 import {
@@ -27,41 +25,34 @@ import {
   type GenesisDraft,
   type PackageSnapshot,
 } from "@dstar/node";
-import { randomBytes } from "node:crypto";
-import { unwatchFile, watch, watchFile, type FSWatcher } from "node:fs";
+import { watch, type FSWatcher } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 export const MCP_TOOL_NAMES = Object.freeze([
-  "list_tasks",
-  "start_task",
-  "get_task",
   "get_manifest",
+  "list_comments",
   "get_node",
   "search_document",
   "get_annotation",
   "get_source",
   "simulate_update",
-  "submit_result",
+  "submit_proposal",
+  "reply_comment",
   "submit_genesis",
 ] as const);
 
 export interface McpBudgets {
-  readonly maxTasks: number;
   readonly maxCalls: number;
   readonly maxReadBytes: number;
   readonly maxOutputBytes: number;
 }
 
 export const DEFAULT_MCP_BUDGETS: McpBudgets = Object.freeze({
-  maxTasks: 8,
   maxCalls: 128,
   maxReadBytes: 2 * 1024 * 1024,
   maxOutputBytes: 2 * 1024 * 1024,
 });
-
-const MAX_RESOURCE_CATALOG = 4_096;
-const MAX_RESOURCE_WATCH_PATHS = 8_192;
 
 export const DSTAR_RESOURCE_URI_TEMPLATES = Object.freeze([
   "dstar://document/manifest",
@@ -78,7 +69,6 @@ export interface DstarMcpResourceDescriptor {
   readonly title: string;
   readonly description: string;
   readonly mimeType: "application/json";
-  readonly annotations: { readonly audience: readonly ["assistant"] };
 }
 
 export interface DstarMcpResourceContent {
@@ -92,18 +82,11 @@ export interface DstarMcpResourceChange {
   readonly listChanged: boolean;
 }
 
-interface ResourceWatchState {
-  readonly descriptors: ReadonlyMap<string, string>;
-  readonly contents: ReadonlyMap<string, string>;
-}
-
 interface BrokerBaseOptions {
-  readonly actorId: string;
+  readonly principalId: string;
   readonly expiresAt?: string;
-  readonly taskTtlMs?: number;
   readonly budgets?: Partial<McpBudgets>;
   readonly now?: () => Date;
-  readonly token?: () => string;
 }
 
 export interface DocumentBrokerOptions extends BrokerBaseOptions {
@@ -118,22 +101,6 @@ export interface GenesisBrokerOptions extends BrokerBaseOptions {
 }
 
 export type BrokerOptions = DocumentBrokerOptions | GenesisBrokerOptions;
-
-interface TaskCapability {
-  readonly tokenDigest: string;
-  readonly mode: "delegation" | "genesis";
-  readonly actorId: string;
-  readonly expiresAt: string;
-  readonly allowedAnnotationIds: ReadonlySet<string>;
-  readonly allowedSourceIds: ReadonlySet<string>;
-  readonly startingSnapshot?: PackageSnapshot;
-  readonly delegationId?: string;
-  readonly draft?: GenesisDraft;
-  remainingCalls: number;
-  remainingReadBytes: number;
-  remainingOutputBytes: number;
-  terminal?: { digest: string; result: JsonValue };
-}
 
 export class McpBrokerError extends Error {
   readonly code: string;
@@ -157,41 +124,23 @@ function asJson(value: unknown): JsonValue {
   return value as JsonValue;
 }
 
-function bytesOf(value: unknown): number {
+function byteLength(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
-function visibleToAgent(annotation: DstarAnnotation): boolean {
-  return (
-    annotation.audience === undefined || annotation.audience.includes("agent")
-  );
-}
-
 function positiveInteger(value: number, name: string): number {
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new McpBrokerError(
-      "INVALID_ARGUMENT",
-      `${name} must be a positive integer`,
-    );
-  }
+  if (!Number.isSafeInteger(value) || value <= 0)
+    throw new McpBrokerError("INVALID_ARGUMENT", `${name} must be positive`);
   return value;
 }
 
 function stringArray(value: unknown, name: string): readonly string[] {
-  if (
-    !Array.isArray(value) ||
-    !value.every((item) => typeof item === "string")
-  ) {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string"))
     throw new McpBrokerError(
       "INVALID_ARGUMENT",
       `${name} must contain strings`,
     );
-  }
   return value;
-}
-
-function terminalDigest(value: JsonValue): string {
-  return revisionOf(value);
 }
 
 function portableId(prefix: string, seed: string): string {
@@ -202,7 +151,7 @@ function resourceUri(scope: string, id?: string, suffix = ""): string {
   return `dstar://${scope}${id === undefined ? "" : `/${encodeURIComponent(id)}`}${suffix}`;
 }
 
-function resourceDescriptor(
+function descriptor(
   uri: string,
   name: string,
   title: string,
@@ -214,8 +163,22 @@ function resourceDescriptor(
     title,
     description,
     mimeType: "application/json",
-    annotations: { audience: ["assistant"] },
   };
+}
+
+function samePortableValue(left: unknown, right: unknown): boolean {
+  return revisionOf(left as JsonValue) === revisionOf(right as JsonValue);
+}
+
+async function readOptionalChange(
+  path: string,
+): Promise<DstarChange | undefined> {
+  try {
+    return parseIJson(await readFile(path)).value as unknown as DstarChange;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
 }
 
 function packageError(error: unknown): McpBrokerError {
@@ -229,9 +192,9 @@ function packageError(error: unknown): McpBrokerError {
       "DSTAR validation rejected the operation",
       {
         retryable: error.diagnostics.some(
-          (diagnostic) => diagnostic.code === "TXN_SNAPSHOT_STALE",
+          (item) => item.code === "TXN_SNAPSHOT_STALE",
         ),
-        diagnosticCodes: error.diagnostics.map((diagnostic) => diagnostic.code),
+        diagnosticCodes: error.diagnostics.map((item) => item.code),
       },
     );
   }
@@ -246,49 +209,34 @@ function checkAbort(signal?: AbortSignal): void {
     });
 }
 
-async function readDraft(draftRoot: string): Promise<GenesisDraft> {
-  const value = parseIJson(await readFile(join(draftRoot, "draft.json")))
+async function readDraft(root: string): Promise<GenesisDraft> {
+  const value = parseIJson(await readFile(join(root, "draft.json")))
     .value as unknown as GenesisDraft;
   if (
     value.format !== "dstar-genesis-draft/0.1" ||
-    value.request.actor.type !== "human" ||
-    typeof value.request.body !== "string"
-  ) {
-    throw new McpBrokerError(
-      "DRAFT_INVALID",
-      "The fixed genesis draft is invalid",
-    );
-  }
+    value.request.actor.type !== "human"
+  )
+    throw new McpBrokerError("DRAFT_INVALID", "The fixed draft is invalid");
   return value;
 }
 
 export class DstarMcpBroker {
   readonly mode: "document" | "genesis";
-  readonly actorId: string;
+  readonly principalId: string;
   readonly expiresAt: string;
   readonly budgets: McpBudgets;
   readonly #now: () => Date;
-  readonly #tokenFactory: () => string;
-  readonly #taskTtlMs: number;
-  readonly #tasks = new Map<string, TaskCapability>();
   readonly #packageRoot?: string;
   readonly #draftRoot?: string;
   readonly #repository?: PackageRepository;
-  #resourceWatchPaths: readonly string[] = [];
-  #resourcePollPaths: readonly string[] = [];
-  #resourceSubscriptionsAvailable = true;
-  #resourceWatchBaseline?: ResourceWatchState;
-  #startedTasks = 0;
-  #remainingResourceReads: number;
-  #remainingResourceBytes: number;
+  #remainingCalls: number;
+  #remainingReadBytes: number;
+  #remainingOutputBytes: number;
 
   private constructor(options: BrokerOptions) {
     this.mode = options.mode;
-    this.actorId = options.actorId;
+    this.principalId = options.principalId;
     this.#now = options.now ?? (() => new Date());
-    this.#tokenFactory =
-      options.token ?? (() => randomBytes(32).toString("base64url"));
-    this.#taskTtlMs = options.taskTtlMs ?? 30 * 60 * 1_000;
     this.expiresAt =
       options.expiresAt ??
       new Date(this.#now().getTime() + 8 * 60 * 60 * 1_000).toISOString();
@@ -296,1300 +244,685 @@ export class DstarMcpBroker {
       ...DEFAULT_MCP_BUDGETS,
       ...options.budgets,
     });
-    positiveInteger(this.budgets.maxTasks, "maxTasks");
     positiveInteger(this.budgets.maxCalls, "maxCalls");
     positiveInteger(this.budgets.maxReadBytes, "maxReadBytes");
     positiveInteger(this.budgets.maxOutputBytes, "maxOutputBytes");
-    positiveInteger(this.#taskTtlMs, "taskTtlMs");
-    this.#remainingResourceReads = this.budgets.maxCalls;
-    this.#remainingResourceBytes = this.budgets.maxReadBytes;
-    if (!/^[A-Za-z][A-Za-z0-9._:-]{0,254}$/.test(this.actorId)) {
+    if (!/^[A-Za-z][A-Za-z0-9._:-]{0,254}$/.test(this.principalId))
       throw new McpBrokerError(
-        "INVALID_ACTOR",
-        "The fixed agent actor ID is invalid",
+        "INVALID_PRINCIPAL",
+        "The human principal ID is invalid",
       );
-    }
-    if (!Number.isFinite(Date.parse(this.expiresAt))) {
-      throw new McpBrokerError(
-        "INVALID_ARGUMENT",
-        "expiresAt must be a date-time",
-      );
-    }
     if (options.mode === "document") {
       this.#packageRoot = resolve(options.packageRoot);
       this.#repository = new PackageRepository(resolve(options.runtimeRoot));
-    } else {
-      this.#draftRoot = resolve(options.draftRoot);
-    }
+    } else this.#draftRoot = resolve(options.draftRoot);
+    this.#remainingCalls = this.budgets.maxCalls;
+    this.#remainingReadBytes = this.budgets.maxReadBytes;
+    this.#remainingOutputBytes = this.budgets.maxOutputBytes;
   }
 
   static async create(options: BrokerOptions): Promise<DstarMcpBroker> {
     const broker = new DstarMcpBroker(options);
-    if (options.mode === "document") {
-      const snapshot = await broker.#repository!.open(broker.#packageRoot!);
-      broker.#resourceWatchPaths = Object.freeze(
-        [
-          ...new Set([
-            broker.#packageRoot!,
-            ...snapshot.inventory.map((file) =>
-              resolve(broker.#packageRoot!, dirname(file.path)),
-            ),
-          ]),
-        ].sort(),
-      );
-      const pollPaths = [
-        ...new Set([
-          ...broker.#resourceWatchPaths,
-          ...snapshot.inventory.map((file) =>
-            resolve(broker.#packageRoot!, file.path),
-          ),
-        ]),
-      ].sort();
-      broker.#resourceSubscriptionsAvailable =
-        pollPaths.length <= MAX_RESOURCE_WATCH_PATHS;
-      broker.#resourcePollPaths = broker.#resourceSubscriptionsAvailable
-        ? Object.freeze(pollPaths)
-        : Object.freeze([]);
-      if (broker.#resourceSubscriptionsAvailable) {
-        broker.#resourceWatchBaseline = broker.#resourceWatchStateFrom(
-          undefined,
-          snapshot,
-        );
-      }
-    } else {
-      const draft = await readDraft(broker.#draftRoot!);
-      broker.#resourceWatchPaths = Object.freeze([broker.#draftRoot!]);
-      broker.#resourcePollPaths = Object.freeze([
-        broker.#draftRoot!,
-        join(broker.#draftRoot!, "draft.json"),
-      ]);
-      broker.#resourceWatchBaseline = broker.#resourceWatchStateFrom(
-        draft,
-        undefined,
-      );
-    }
+    if (options.mode === "document") await broker.#snapshot();
+    else await readDraft(broker.#draftRoot!);
     return broker;
   }
 
   get resourceSubscriptionsAvailable(): boolean {
-    return this.#resourceSubscriptionsAvailable;
+    return true;
   }
 
-  #checkProcess(): void {
-    if (this.#now().getTime() >= Date.parse(this.expiresAt)) {
+  #principal(): DstarActor {
+    return { type: "human", id: this.principalId };
+  }
+
+  #begin(signal?: AbortSignal): void {
+    checkAbort(signal);
+    if (this.#now().getTime() >= Date.parse(this.expiresAt))
       throw new McpBrokerError(
         "CAPABILITY_EXPIRED",
-        "The scoped DSTAR process capability expired",
+        "The DSTAR session expired",
       );
-    }
+    if (this.#remainingCalls <= 0)
+      throw new McpBrokerError(
+        "BUDGET_EXCEEDED",
+        "The session call budget is exhausted",
+      );
+    this.#remainingCalls -= 1;
+  }
+
+  #finish(value: JsonValue, readBytes = 0): JsonValue {
+    const outputBytes = byteLength(value);
+    if (
+      readBytes > this.#remainingReadBytes ||
+      outputBytes > this.#remainingOutputBytes
+    )
+      throw new McpBrokerError(
+        "BUDGET_EXCEEDED",
+        "The session byte budget is exhausted",
+      );
+    this.#remainingReadBytes -= readBytes;
+    this.#remainingOutputBytes -= outputBytes;
+    return value;
+  }
+
+  #remaining(): JsonValue {
+    return {
+      calls: this.#remainingCalls,
+      readBytes: this.#remainingReadBytes,
+      outputBytes: this.#remainingOutputBytes,
+    };
   }
 
   async #snapshot(): Promise<PackageSnapshot> {
-    this.#checkProcess();
     if (this.mode !== "document")
       throw new McpBrokerError(
         "MODE_DENIED",
-        "This tool requires document mode",
+        "This operation requires document mode",
       );
     return this.#repository!.open(this.#packageRoot!);
   }
 
-  #genesisResourceDescriptors(
-    draft: GenesisDraft,
-  ): readonly DstarMcpResourceDescriptor[] {
-    const descriptors = [
-      resourceDescriptor(
-        "dstar://genesis/request",
-        "genesis-request",
-        draft.request.title,
-        "Fixed human-authored request for this genesis process.",
-      ),
-      ...(draft.request.sources?.sources.map((source) =>
-        resourceDescriptor(
-          resourceUri("source", source.id),
-          `source-${source.id}`,
-          source.title,
-          "Source metadata admitted to this genesis request.",
+  async listResources(): Promise<readonly DstarMcpResourceDescriptor[]> {
+    if (this.mode === "genesis") {
+      const draft = await readDraft(this.#draftRoot!);
+      return Object.freeze([
+        descriptor(
+          "dstar://genesis/request",
+          "genesis-request",
+          draft.request.title,
+          "Fixed document creation request.",
         ),
-      ) ?? []),
-    ];
-    if (descriptors.length > MAX_RESOURCE_CATALOG) {
-      throw new McpBrokerError(
-        "RESOURCE_LIMIT_EXCEEDED",
-        "The resource catalog exceeds the process limit",
-      );
+        ...(draft.request.sources?.sources.map((source) =>
+          descriptor(
+            resourceUri("source", source.id),
+            `source-${source.id}`,
+            source.title,
+            "Source metadata admitted to this draft.",
+          ),
+        ) ?? []),
+      ]);
     }
-    return Object.freeze(descriptors);
-  }
-
-  #documentResourceDescriptors(
-    snapshot: PackageSnapshot,
-  ): readonly DstarMcpResourceDescriptor[] {
-    const annotations = new Map(
-      snapshot.annotations.map((annotation) => [annotation.id, annotation]),
-    );
-    const eligible = snapshot.delegations.filter((delegation) => {
-      const annotation = annotations.get(delegation.annotation);
-      return (
-        delegation.assignee.type === "agent" &&
-        delegation.assignee.id === this.actorId &&
-        (delegation.status === "queued" ||
-          delegation.status === "in_progress") &&
-        annotation !== undefined &&
-        visibleToAgent(annotation)
-      );
-    });
-    if (eligible.length === 0) return Object.freeze([]);
-
-    const visibleAnnotationIds = new Set(
-      eligible.map((delegation) => delegation.annotation),
-    );
+    const snapshot = await this.#snapshot();
     const index = new DocumentIndex(snapshot.document);
-    const descriptors: DstarMcpResourceDescriptor[] = [
-      resourceDescriptor(
+    return Object.freeze([
+      descriptor(
         "dstar://document/manifest",
         "document-manifest",
         snapshot.manifest.title,
-        "Portable manifest for the fixed delegated document.",
+        "Manifest for the fixed document.",
       ),
-      ...index.readingOrder.map((nodeId) =>
-        resourceDescriptor(
-          resourceUri("document/node", nodeId),
-          `node-${nodeId}`,
-          `Node ${nodeId}`,
-          "Canonical node and ancestor identifiers.",
+      ...index.readingOrder.map((id) =>
+        descriptor(
+          resourceUri("document/node", id),
+          `node-${id}`,
+          `Node ${id}`,
+          "Canonical node context.",
         ),
       ),
-      ...snapshot.annotations
-        .filter(
-          (annotation) =>
-            visibleAnnotationIds.has(annotation.id) &&
-            visibleToAgent(annotation),
-        )
-        .map((annotation) =>
-          resourceDescriptor(
-            resourceUri("annotation", annotation.id),
-            `annotation-${annotation.id}`,
-            `Annotation ${annotation.id}`,
-            "Agent-visible portable annotation thread.",
-          ),
+      ...snapshot.annotations.map((item) =>
+        descriptor(
+          resourceUri("annotation", item.id),
+          `annotation-${item.id}`,
+          `Annotation ${item.id}`,
+          "Portable annotation thread.",
         ),
-      ...(snapshot.sources?.sources.map((source) =>
-        resourceDescriptor(
-          resourceUri("source", source.id),
-          `source-${source.id}`,
-          source.title,
-          "Portable source metadata and bounded captured text when available.",
+      ),
+      ...(snapshot.sources?.sources.map((item) =>
+        descriptor(
+          resourceUri("source", item.id),
+          `source-${item.id}`,
+          item.title,
+          "Portable source metadata.",
         ),
       ) ?? []),
-      ...(snapshot.projections?.projections.map((projection) =>
-        resourceDescriptor(
-          resourceUri("projection", projection.id, "/mapping"),
-          `projection-${projection.id}-mapping`,
-          `Projection mapping ${projection.id}`,
-          "Portable projection metadata and canonical mapping segments.",
+      ...(snapshot.projections?.projections.map((item) =>
+        descriptor(
+          resourceUri("projection", item.id, "/mapping"),
+          `projection-${item.id}-mapping`,
+          `Projection ${item.id}`,
+          "Projection mapping metadata.",
         ),
       ) ?? []),
-    ];
-    if (descriptors.length > MAX_RESOURCE_CATALOG) {
-      throw new McpBrokerError(
-        "RESOURCE_LIMIT_EXCEEDED",
-        "The resource catalog exceeds the process limit",
-      );
-    }
-    return Object.freeze(descriptors);
-  }
-
-  async #resourceDescriptors(): Promise<readonly DstarMcpResourceDescriptor[]> {
-    this.#checkProcess();
-    if (this.mode === "genesis") {
-      return this.#genesisResourceDescriptors(
-        await readDraft(this.#draftRoot!),
-      );
-    }
-    return this.#documentResourceDescriptors(await this.#snapshot());
-  }
-
-  async listResources(
-    signal?: AbortSignal,
-  ): Promise<readonly DstarMcpResourceDescriptor[]> {
-    checkAbort(signal);
-    return this.#resourceDescriptors();
-  }
-
-  #resourceValue(
-    rawUri: string,
-    draft: GenesisDraft | undefined,
-    snapshot: PackageSnapshot | undefined,
-    documentIndex?: DocumentIndex,
-  ): JsonValue {
-    if (this.mode === "genesis") {
-      const currentDraft = draft!;
-      if (rawUri === "dstar://genesis/request") {
-        return asJson({
-          format: currentDraft.format,
-          request: {
-            documentId: currentDraft.request.documentId,
-            title: currentDraft.request.title,
-            profiles: currentDraft.request.profiles,
-            actor: currentDraft.request.actor,
-            body: currentDraft.request.body,
-            createdAt: currentDraft.request.createdAt,
-            allowedSourceIds:
-              currentDraft.request.sources?.sources
-                .map((source) => source.id)
-                .sort() ?? [],
-          },
-        });
-      }
-      const source = currentDraft.request.sources?.sources.find(
-        (candidate) => resourceUri("source", candidate.id) === rawUri,
-      );
-      if (!source) {
-        throw new McpBrokerError("NOT_FOUND", "The resource does not exist");
-      }
-      return asJson({ source });
-    }
-
-    const currentSnapshot = snapshot!;
-    if (rawUri === "dstar://document/manifest") {
-      return asJson({ manifest: currentSnapshot.manifest });
-    }
-    const index = documentIndex ?? new DocumentIndex(currentSnapshot.document);
-    const nodeId = index.readingOrder.find(
-      (candidate) => resourceUri("document/node", candidate) === rawUri,
-    );
-    if (nodeId) {
-      return asJson({
-        node: index.get(nodeId)!,
-        ancestorIds: index.ancestors(nodeId).map((ancestor) => ancestor.id),
-        documentRevision: currentSnapshot.manifest.revision,
-      });
-    }
-    const annotation = currentSnapshot.annotations.find(
-      (candidate) => resourceUri("annotation", candidate.id) === rawUri,
-    );
-    if (annotation) return asJson({ annotation });
-    const source = currentSnapshot.sources?.sources.find(
-      (candidate) => resourceUri("source", candidate.id) === rawUri,
-    );
-    if (source) {
-      let extract: string | undefined;
-      if (source.type === "file" && source.path) {
-        const bytes = currentSnapshot
-          .readFile(source.path)
-          ?.slice(0, 64 * 1024);
-        if (bytes) {
-          try {
-            extract = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-          } catch {
-            extract = undefined;
-          }
-        }
-      }
-      return asJson({
-        source,
-        ...(extract === undefined ? {} : { extract }),
-      });
-    }
-    const projection = currentSnapshot.projections?.projections.find(
-      (candidate) =>
-        resourceUri("projection", candidate.id, "/mapping") === rawUri,
-    );
-    if (!projection) {
-      throw new McpBrokerError("NOT_FOUND", "The resource does not exist");
-    }
-    return asJson({
-      projection: {
-        id: projection.id,
-        role: projection.role,
-        mediaType: projection.mediaType,
-        reviewable: projection.reviewable,
-        generatedFromRevision: projection.generatedFromRevision,
-        revision: projection.revision,
-        ...(projection.segments === undefined
-          ? {}
-          : { segments: projection.segments }),
-      },
-    });
-  }
-
-  #resourceWatchStateFrom(
-    draft: GenesisDraft | undefined,
-    snapshot: PackageSnapshot | undefined,
-  ): ResourceWatchState {
-    const descriptors = draft
-      ? this.#genesisResourceDescriptors(draft)
-      : this.#documentResourceDescriptors(snapshot!);
-    const documentIndex = snapshot
-      ? new DocumentIndex(snapshot.document)
-      : undefined;
-    return {
-      descriptors: new Map(
-        descriptors.map((descriptor) => [
-          descriptor.uri,
-          revisionOf(asJson(descriptor)),
-        ]),
-      ),
-      contents: new Map(
-        descriptors.map((descriptor) => [
-          descriptor.uri,
-          revisionOf(
-            this.#resourceValue(descriptor.uri, draft, snapshot, documentIndex),
-          ),
-        ]),
-      ),
-    };
-  }
-
-  async #resourceWatchState(): Promise<ResourceWatchState> {
-    this.#checkProcess();
-    const draft =
-      this.mode === "genesis" ? await readDraft(this.#draftRoot!) : undefined;
-    const snapshot =
-      this.mode === "document" ? await this.#snapshot() : undefined;
-    return this.#resourceWatchStateFrom(draft, snapshot);
+    ]);
   }
 
   async readResource(
     rawUri: string,
     signal?: AbortSignal,
   ): Promise<DstarMcpResourceContent> {
-    checkAbort(signal);
-    if (this.#remainingResourceReads <= 0) {
-      throw new McpBrokerError(
-        "BUDGET_EXCEEDED",
-        "The process resource read budget is exhausted",
-      );
-    }
-    this.#remainingResourceReads -= 1;
-    this.#checkProcess();
-    const draft =
-      this.mode === "genesis" ? await readDraft(this.#draftRoot!) : undefined;
-    const snapshot =
-      this.mode === "document" ? await this.#snapshot() : undefined;
-    const descriptors = draft
-      ? this.#genesisResourceDescriptors(draft)
-      : this.#documentResourceDescriptors(snapshot!);
-    if (!descriptors.some((resource) => resource.uri === rawUri)) {
+    this.#begin(signal);
+    if (!(await this.listResources()).some((item) => item.uri === rawUri))
       throw new McpBrokerError(
         "CAPABILITY_DENIED",
-        "The resource is unavailable to this process scope",
+        "The resource is outside this document scope",
       );
-    }
-
-    const value = this.#resourceValue(rawUri, draft, snapshot);
-
-    const text = JSON.stringify(value);
-    const size = new TextEncoder().encode(text).byteLength;
-    if (size > this.#remainingResourceBytes) {
-      throw new McpBrokerError(
-        "BUDGET_EXCEEDED",
-        "The process resource byte budget is exhausted",
+    let value: JsonValue;
+    if (this.mode === "genesis") {
+      const draft = await readDraft(this.#draftRoot!);
+      const source = draft.request.sources?.sources.find(
+        (item) => resourceUri("source", item.id) === rawUri,
       );
+      if (rawUri === "dstar://genesis/request")
+        value = asJson({ request: draft.request });
+      else if (source) value = asJson({ source });
+      else throw new McpBrokerError("NOT_FOUND", "Resource not found");
+    } else {
+      const snapshot = await this.#snapshot();
+      const index = new DocumentIndex(snapshot.document);
+      const nodeId = index.readingOrder.find(
+        (id) => resourceUri("document/node", id) === rawUri,
+      );
+      const annotation = snapshot.annotations.find(
+        (item) => resourceUri("annotation", item.id) === rawUri,
+      );
+      const source = snapshot.sources?.sources.find(
+        (item) => resourceUri("source", item.id) === rawUri,
+      );
+      const projection = snapshot.projections?.projections.find(
+        (item) => resourceUri("projection", item.id, "/mapping") === rawUri,
+      );
+      if (rawUri === "dstar://document/manifest")
+        value = asJson({ manifest: snapshot.manifest });
+      else if (nodeId)
+        value = asJson({
+          node: index.get(nodeId),
+          ancestorIds: index.ancestors(nodeId).map((item) => item.id),
+          documentRevision: snapshot.manifest.revision,
+        });
+      else if (annotation) value = asJson({ annotation });
+      else if (source) value = asJson({ source });
+      else if (projection) value = asJson({ projection });
+      else throw new McpBrokerError("NOT_FOUND", "Resource not found");
     }
-    this.#remainingResourceBytes -= size;
+    const text = JSON.stringify(this.#finish(value, byteLength(value)));
     return { uri: rawUri, mimeType: "application/json", text };
   }
 
   watchResources(
     listener: (change: DstarMcpResourceChange) => void,
   ): () => void {
-    if (!this.#resourceSubscriptionsAvailable) return () => undefined;
-    const watchers: FSWatcher[] = [];
-    const polledPaths: string[] = [];
+    const target =
+      this.mode === "document" ? this.#packageRoot! : this.#draftRoot!;
+    let watcher: FSWatcher;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let previous = this.#resourceWatchBaseline;
-    let closed = false;
-    let refreshChain = Promise.resolve();
-    const onChange = () => {
-      if (closed) return;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = undefined;
-        refreshChain = refreshChain
-          .catch(() => undefined)
-          .then(async () => {
-            const next = await this.#resourceWatchState();
-            if (closed) return;
-            const current = previous;
-            previous = next;
-            if (!current) return;
-            const listChanged =
-              current.descriptors.size !== next.descriptors.size ||
-              [...current.descriptors].some(
-                ([uri, fingerprint]) =>
-                  next.descriptors.get(uri) !== fingerprint,
-              );
-            const uris = [...next.contents]
-              .filter(
-                ([uri, fingerprint]) =>
-                  current.contents.has(uri) &&
-                  current.contents.get(uri) !== fingerprint,
-              )
-              .map(([uri]) => uri)
-              .sort();
-            if (listChanged || uris.length > 0) {
-              listener({ uris, listChanged });
-            }
-          })
-          .catch(() => undefined);
-      }, 50);
-      timer.unref?.();
-    };
-    const pollListener = (
-      current: { mtimeMs: number; size: number },
-      previousStat: { mtimeMs: number; size: number },
-    ) => {
-      if (
-        current.mtimeMs !== previousStat.mtimeMs ||
-        current.size !== previousStat.size
-      ) {
-        onChange();
-      }
-    };
-    const startPolling = () => {
-      if (polledPaths.length > 0 || closed) return;
-      for (const path of this.#resourcePollPaths) {
-        watchFile(path, { interval: 200, persistent: false }, pollListener);
-        polledPaths.push(path);
-      }
-    };
-    for (const path of this.#resourceWatchPaths) {
-      try {
-        const watcher = watch(path, onChange);
-        watcher.on("error", () => {
-          watcher.close();
-          startPolling();
-        });
-        watcher.unref();
-        watchers.push(watcher);
-      } catch {
-        startPolling();
-      }
+    try {
+      watcher = watch(target, { recursive: true, persistent: false }, () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => listener({ uris: [], listChanged: true }), 50);
+        timer.unref?.();
+      });
+      watcher.on("error", () => watcher.close());
+      watcher.unref();
+    } catch {
+      return () => undefined;
     }
     return () => {
-      closed = true;
       if (timer) clearTimeout(timer);
-      for (const watcher of watchers) watcher.close();
-      for (const path of polledPaths) unwatchFile(path, pollListener);
+      watcher.close();
     };
   }
 
-  #task(rawToken: string): TaskCapability {
-    this.#checkProcess();
-    const digest = sha256Hex(new TextEncoder().encode(rawToken));
-    const task = this.#tasks.get(digest);
-    if (!task || task.actorId !== this.actorId) {
-      throw new McpBrokerError(
-        "CAPABILITY_DENIED",
-        "The task capability is invalid",
-      );
-    }
-    if (this.#now().getTime() >= Date.parse(task.expiresAt)) {
-      throw new McpBrokerError(
-        "CAPABILITY_EXPIRED",
-        "The task capability expired",
-      );
-    }
-    return task;
-  }
-
-  #beginCall(
-    rawToken: string,
-    expectedMode?: TaskCapability["mode"],
-    allowTerminal = false,
-  ): TaskCapability {
-    const task = this.#task(rawToken);
-    if (expectedMode && task.mode !== expectedMode) {
-      throw new McpBrokerError(
-        "MODE_DENIED",
-        "The tool is unavailable for this task mode",
-      );
-    }
-    if (task.terminal) {
-      if (allowTerminal) return task;
-      throw new McpBrokerError("TASK_TERMINAL", "The task is already terminal");
-    }
-    if (task.remainingCalls <= 0)
-      throw new McpBrokerError(
-        "BUDGET_EXCEEDED",
-        "The task call budget is exhausted",
-      );
-    task.remainingCalls -= 1;
-    return task;
-  }
-
-  #finish(task: TaskCapability, value: JsonValue, readBytes = 0): JsonValue {
-    const outputBytes = bytesOf(value);
-    if (
-      readBytes > task.remainingReadBytes ||
-      outputBytes > task.remainingOutputBytes
-    ) {
-      throw new McpBrokerError(
-        "BUDGET_EXCEEDED",
-        "The task byte budget is exhausted",
-      );
-    }
-    task.remainingReadBytes -= readBytes;
-    task.remainingOutputBytes -= outputBytes;
-    return value;
-  }
-
-  #preflightEffect(
-    task: TaskCapability,
-    readBytes: number,
-    resultShape: JsonValue,
-  ): void {
-    if (
-      readBytes > task.remainingReadBytes ||
-      bytesOf(resultShape) > task.remainingOutputBytes
-    ) {
-      throw new McpBrokerError(
-        "BUDGET_EXCEEDED",
-        "The task byte budget is insufficient for this terminal result",
-      );
-    }
-  }
-
-  #remaining(task: TaskCapability): JsonValue {
-    return {
-      calls: task.remainingCalls,
-      readBytes: task.remainingReadBytes,
-      outputBytes: task.remainingOutputBytes,
-    };
-  }
-
-  async #freshness(task: TaskCapability): Promise<JsonValue> {
-    if (!task.startingSnapshot) return { current: true };
-    const current = await this.#currentTaskSnapshot(task);
-    return {
-      current: current.snapshotId === task.startingSnapshot.snapshotId,
-      startingSnapshotId: task.startingSnapshot.snapshotId,
-      currentSnapshotId: current.snapshotId,
-    };
-  }
-
-  async #currentTaskSnapshot(task: TaskCapability): Promise<PackageSnapshot> {
-    const current = await this.#snapshot();
-    if (current.manifest.id !== task.startingSnapshot!.manifest.id) {
-      throw new McpBrokerError(
-        "CAPABILITY_DENIED",
-        "The fixed package identity changed",
-      );
-    }
-    const delegation = current.delegations.find(
-      (candidate) => candidate.id === task.delegationId,
-    );
-    if (!delegation || delegation.assignee.id !== this.actorId) {
-      throw new McpBrokerError(
-        "CAPABILITY_DENIED",
-        "The task delegation is unavailable",
-      );
-    }
-    if (
-      !task.terminal &&
-      delegation.status !== "queued" &&
-      delegation.status !== "in_progress"
-    ) {
-      throw new McpBrokerError(
-        "TASK_TERMINAL",
-        "The portable delegation is terminal",
-      );
-    }
-    return current;
-  }
-
-  async listTasks(signal?: AbortSignal): Promise<JsonValue> {
-    checkAbort(signal);
-    const snapshot = await this.#snapshot();
-    const annotations = new Map(
-      snapshot.annotations.map((annotation) => [annotation.id, annotation]),
-    );
-    return snapshot.delegations
-      .filter((delegation) => {
-        const annotation = annotations.get(delegation.annotation);
-        return (
-          delegation.assignee.type === "agent" &&
-          delegation.assignee.id === this.actorId &&
-          (delegation.status === "queued" ||
-            delegation.status === "in_progress") &&
-          annotation !== undefined &&
-          visibleToAgent(annotation)
-        );
-      })
-      .map((delegation) => ({
-        delegationId: delegation.id,
-        annotationId: delegation.annotation,
-        status: delegation.status,
-        ...(delegation.instruction
-          ? { instruction: delegation.instruction }
-          : {}),
-        createdAt: delegation.createdAt,
-      }));
-  }
-
-  async startTask(
-    delegationId?: string,
-    signal?: AbortSignal,
-  ): Promise<JsonValue> {
-    checkAbort(signal);
-    this.#checkProcess();
-    if (this.#startedTasks >= this.budgets.maxTasks) {
-      throw new McpBrokerError(
-        "BUDGET_EXCEEDED",
-        "The process task budget is exhausted",
-      );
-    }
-    let task: TaskCapability;
-    if (this.mode === "document") {
-      if (!delegationId)
-        throw new McpBrokerError(
-          "INVALID_ARGUMENT",
-          "delegationId is required",
-        );
-      const snapshot = await this.#snapshot();
-      const delegation = snapshot.delegations.find(
-        (candidate) => candidate.id === delegationId,
-      );
-      const annotation = delegation
-        ? snapshot.annotations.find(
-            (candidate) => candidate.id === delegation.annotation,
-          )
-        : undefined;
-      if (
-        !delegation ||
-        delegation.assignee.id !== this.actorId ||
-        (delegation.status !== "queued" &&
-          delegation.status !== "in_progress") ||
-        !annotation ||
-        !visibleToAgent(annotation)
-      ) {
-        throw new McpBrokerError(
-          "CAPABILITY_DENIED",
-          "The delegation is not eligible for this actor",
-        );
-      }
-      task = {
-        tokenDigest: "",
-        mode: "delegation",
-        actorId: this.actorId,
-        delegationId: delegation.id,
-        startingSnapshot: snapshot,
-        allowedAnnotationIds: new Set([annotation.id]),
-        allowedSourceIds: new Set(
-          snapshot.sources?.sources.map((source) => source.id) ?? [],
-        ),
-        expiresAt: new Date(
-          this.#now().getTime() + this.#taskTtlMs,
-        ).toISOString(),
-        remainingCalls: this.budgets.maxCalls,
-        remainingReadBytes: this.budgets.maxReadBytes,
-        remainingOutputBytes: this.budgets.maxOutputBytes,
-      };
-    } else {
-      if (delegationId !== undefined) {
-        throw new McpBrokerError(
-          "INVALID_ARGUMENT",
-          "delegationId is unavailable in genesis mode",
-        );
-      }
+  async getManifest(signal?: AbortSignal): Promise<JsonValue> {
+    this.#begin(signal);
+    if (this.mode === "genesis") {
       const draft = await readDraft(this.#draftRoot!);
-      task = {
-        tokenDigest: "",
-        mode: "genesis",
-        actorId: this.actorId,
-        draft,
-        allowedAnnotationIds: new Set(),
-        allowedSourceIds: new Set(
-          draft.request.sources?.sources.map((source) => source.id) ?? [],
-        ),
-        expiresAt: new Date(
-          this.#now().getTime() + this.#taskTtlMs,
-        ).toISOString(),
-        remainingCalls: this.budgets.maxCalls,
-        remainingReadBytes: this.budgets.maxReadBytes,
-        remainingOutputBytes: this.budgets.maxOutputBytes,
-      };
-    }
-    const token = this.#tokenFactory();
-    const tokenDigest = sha256Hex(new TextEncoder().encode(token));
-    if (this.#tasks.has(tokenDigest))
-      throw new McpBrokerError(
-        "INTERNAL",
-        "Could not allocate a task capability",
-      );
-    task = { ...task, tokenDigest };
-    this.#tasks.set(tokenDigest, task);
-    this.#startedTasks += 1;
-    return {
-      taskToken: token,
-      mode: task.mode,
-      expiresAt: task.expiresAt,
-      ...(task.delegationId ? { delegationId: task.delegationId } : {}),
-      ...(task.startingSnapshot
-        ? {
-            startingSnapshotId: task.startingSnapshot.snapshotId,
-            startingBaseChange: task.startingSnapshot.manifest.headChange,
-            startingBaseRevision: task.startingSnapshot.manifest.revision,
-          }
-        : {}),
-      remaining: this.#remaining(task),
-    };
-  }
-
-  async getTask(rawToken: string, signal?: AbortSignal): Promise<JsonValue> {
-    checkAbort(signal);
-    const task = this.#beginCall(rawToken);
-    if (task.terminal)
-      throw new McpBrokerError("TASK_TERMINAL", "The task is already terminal");
-    if (task.mode === "genesis") {
       return this.#finish(
-        task,
         asJson({
           mode: "genesis",
-          request: {
-            documentId: task.draft!.request.documentId,
-            title: task.draft!.request.title,
-            profiles: task.draft!.request.profiles,
-            actor: task.draft!.request.actor,
-            body: task.draft!.request.body,
-            createdAt: task.draft!.request.createdAt,
-          },
-          allowedSourceIds: [...task.allowedSourceIds].sort(),
-          remaining: this.#remaining(task),
+          request: draft.request,
+          remaining: this.#remaining(),
         }),
       );
     }
-    const delegation = task.startingSnapshot!.delegations.find(
-      (candidate) => candidate.id === task.delegationId,
-    )!;
-    const annotation = task.startingSnapshot!.annotations.find(
-      (candidate) => candidate.id === delegation.annotation,
-    )!;
+    const snapshot = await this.#snapshot();
     return this.#finish(
-      task,
-      asJson({
-        mode: "delegation",
-        delegation: {
-          id: delegation.id,
-          instruction: delegation.instruction ?? null,
-          status: delegation.status,
-        },
-        annotation: {
-          id: annotation.id,
-          purpose: annotation.purpose,
-          target: annotation.target,
-        },
-        freshness: await this.#freshness(task),
-        remaining: this.#remaining(task),
-      }),
-    );
-  }
-
-  async getManifest(
-    rawToken: string,
-    signal?: AbortSignal,
-  ): Promise<JsonValue> {
-    checkAbort(signal);
-    const task = this.#beginCall(rawToken);
-    if (task.mode === "genesis") {
-      return this.#finish(
-        task,
-        asJson({
-          mode: "genesis",
-          documentId: task.draft!.request.documentId,
-          title: task.draft!.request.title,
-          profiles: task.draft!.request.profiles,
-          allowedSourceIds: [...task.allowedSourceIds].sort(),
-          remaining: this.#remaining(task),
-        }),
-      );
-    }
-    return this.#finish(
-      task,
       asJson({
         mode: "document",
-        manifest: task.startingSnapshot!.manifest,
-        freshness: await this.#freshness(task),
-        remaining: this.#remaining(task),
+        snapshotId: snapshot.snapshotId,
+        manifest: snapshot.manifest,
+        remaining: this.#remaining(),
       }),
+    );
+  }
+
+  async listComments(
+    assignedToMe = false,
+    openOnly = false,
+    signal?: AbortSignal,
+  ): Promise<JsonValue> {
+    this.#begin(signal);
+    const snapshot = await this.#snapshot();
+    const comments = snapshot.annotations
+      .filter((item) => !assignedToMe || item.assignee?.id === this.principalId)
+      .filter((item) => !openOnly || item.status === "open")
+      .map((item) => ({
+        id: item.id,
+        purpose: item.purpose,
+        status: item.status,
+        assignee: item.assignee ?? null,
+        target: item.target,
+        createdAt: item.createdAt,
+      }));
+    return this.#finish(
+      asJson({
+        comments,
+        snapshotId: snapshot.snapshotId,
+        remaining: this.#remaining(),
+      }),
+      byteLength(comments),
     );
   }
 
   async getNode(
-    rawToken: string,
     nodeId: string,
     neighborCount = 1,
     signal?: AbortSignal,
   ): Promise<JsonValue> {
-    checkAbort(signal);
-    const task = this.#beginCall(rawToken, "delegation");
+    this.#begin(signal);
     positiveInteger(neighborCount, "neighborCount");
     if (neighborCount > 5)
       throw new McpBrokerError(
         "INVALID_ARGUMENT",
         "neighborCount must not exceed 5",
       );
-    const index = new DocumentIndex(task.startingSnapshot!.document);
+    const snapshot = await this.#snapshot();
+    const index = new DocumentIndex(snapshot.document);
     const node = index.get(nodeId);
-    if (!node)
-      throw new McpBrokerError(
-        "NOT_FOUND",
-        "The requested node does not exist",
-      );
+    if (!node) throw new McpBrokerError("NOT_FOUND", "The node does not exist");
     const position = index.orderById.get(nodeId)!;
-    const neighborIds = index.readingOrder.slice(
-      Math.max(0, position - neighborCount),
-      Math.min(index.readingOrder.length, position + neighborCount + 1),
-    );
-    const value = {
+    const neighbors = index.readingOrder
+      .slice(
+        Math.max(0, position - neighborCount),
+        position + neighborCount + 1,
+      )
+      .filter((id) => id !== nodeId)
+      .map((id) => ({
+        id,
+        type: index.get(id)!.type,
+        text: nodeTextStream(index.get(id)!),
+      }));
+    const value = asJson({
       node,
-      ancestorIds: index.ancestors(nodeId).map((ancestor) => ancestor.id),
-      neighbors: neighborIds
-        .filter((id) => id !== nodeId)
-        .map((id) => ({
-          id,
-          type: index.get(id)!.type,
-          text: nodeTextStream(index.get(id)!),
-        })),
-      freshness: await this.#freshness(task),
-      remaining: this.#remaining(task),
-    };
-    return this.#finish(task, asJson(value), bytesOf(value));
+      ancestorIds: index.ancestors(nodeId).map((item) => item.id),
+      neighbors,
+      snapshotId: snapshot.snapshotId,
+      documentRevision: snapshot.manifest.revision,
+      remaining: this.#remaining(),
+    });
+    return this.#finish(value, byteLength(value));
   }
 
   async searchDocument(
-    rawToken: string,
     query: string,
     limit = 10,
     signal?: AbortSignal,
   ): Promise<JsonValue> {
-    checkAbort(signal);
-    const task = this.#beginCall(rawToken, "delegation");
-    if (query.trim().length === 0)
+    this.#begin(signal);
+    if (!query.trim())
       throw new McpBrokerError("INVALID_ARGUMENT", "query must not be empty");
     positiveInteger(limit, "limit");
     if (limit > 50)
       throw new McpBrokerError("INVALID_ARGUMENT", "limit must not exceed 50");
-    const index = new DocumentIndex(task.startingSnapshot!.document);
+    const snapshot = await this.#snapshot();
+    const index = new DocumentIndex(snapshot.document);
     const needle = query.toLocaleLowerCase("en-US");
     const results = index.readingOrder
       .flatMap((id, order) => {
         const node = index.get(id)!;
         const text = nodeTextStream(node);
-        const lower = text.toLocaleLowerCase("en-US");
-        const at = lower.indexOf(needle);
-        if (at === -1) return [];
-        const start = Math.max(0, at - 60);
-        return [
-          {
-            nodeId: id,
-            type: node.type,
-            order,
-            excerpt: text.slice(start, start + 180),
-          },
-        ];
+        const at = text.toLocaleLowerCase("en-US").indexOf(needle);
+        return at < 0
+          ? []
+          : [
+              {
+                nodeId: id,
+                type: node.type,
+                order,
+                excerpt: text.slice(Math.max(0, at - 60), at + 120),
+              },
+            ];
       })
       .slice(0, limit);
     return this.#finish(
-      task,
       asJson({
         query,
         results,
-        freshness: await this.#freshness(task),
-        remaining: this.#remaining(task),
+        snapshotId: snapshot.snapshotId,
+        remaining: this.#remaining(),
       }),
-      bytesOf(results),
+      byteLength(results),
     );
   }
 
   async getAnnotation(
-    rawToken: string,
     annotationId: string,
     signal?: AbortSignal,
   ): Promise<JsonValue> {
-    checkAbort(signal);
-    const task = this.#beginCall(rawToken, "delegation");
-    if (!task.allowedAnnotationIds.has(annotationId)) {
-      throw new McpBrokerError(
-        "CAPABILITY_DENIED",
-        "The annotation is unavailable to this task",
-      );
-    }
-    const annotation = task.startingSnapshot!.annotations.find(
-      (candidate) => candidate.id === annotationId,
+    this.#begin(signal);
+    const snapshot = await this.#snapshot();
+    const annotation = snapshot.annotations.find(
+      (item) => item.id === annotationId,
     );
-    if (!annotation || !visibleToAgent(annotation)) {
-      throw new McpBrokerError(
-        "CAPABILITY_DENIED",
-        "The annotation is unavailable to this task",
-      );
-    }
+    if (!annotation)
+      throw new McpBrokerError("NOT_FOUND", "The annotation does not exist");
     return this.#finish(
-      task,
       asJson({
         annotation,
-        freshness: await this.#freshness(task),
-        remaining: this.#remaining(task),
+        snapshotId: snapshot.snapshotId,
+        remaining: this.#remaining(),
       }),
-      bytesOf(annotation),
+      byteLength(annotation),
     );
   }
 
   async getSource(
-    rawToken: string,
     sourceId: string,
     maxBytes = 64 * 1024,
     signal?: AbortSignal,
   ): Promise<JsonValue> {
-    checkAbort(signal);
-    const task = this.#beginCall(rawToken);
+    this.#begin(signal);
     positiveInteger(maxBytes, "maxBytes");
     if (maxBytes > 256 * 1024)
       throw new McpBrokerError(
         "INVALID_ARGUMENT",
         "maxBytes must not exceed 262144",
       );
-    if (!task.allowedSourceIds.has(sourceId)) {
-      throw new McpBrokerError(
-        "CAPABILITY_DENIED",
-        "The source is unavailable to this task",
-      );
-    }
-    const source = (
-      task.mode === "delegation"
-        ? task.startingSnapshot!.sources?.sources
-        : task.draft!.request.sources?.sources
-    )?.find((candidate) => candidate.id === sourceId);
+    const sources =
+      this.mode === "document"
+        ? (await this.#snapshot()).sources
+        : (await readDraft(this.#draftRoot!)).request.sources;
+    const source = sources?.sources.find((item) => item.id === sourceId);
     if (!source)
-      throw new McpBrokerError(
-        "CAPABILITY_DENIED",
-        "The source is unavailable to this task",
-      );
-    let extract: string | undefined;
-    let readBytes = bytesOf(source);
-    if (task.mode === "delegation" && source.type === "file" && source.path) {
-      const bytes = task.startingSnapshot!.readFile(source.path);
-      if (bytes) {
-        const bounded = bytes.slice(0, maxBytes);
-        readBytes += bounded.byteLength;
-        try {
-          extract = new TextDecoder("utf-8", { fatal: true }).decode(bounded);
-        } catch {
-          extract = undefined;
-        }
-      }
-    }
+      throw new McpBrokerError("NOT_FOUND", "The source does not exist");
     return this.#finish(
-      task,
-      asJson({
-        source,
-        ...(extract === undefined ? {} : { extract }),
-        ...(task.mode === "delegation"
-          ? { freshness: await this.#freshness(task) }
-          : {}),
-        remaining: this.#remaining(task),
-      }),
-      readBytes,
+      asJson({ source, remaining: this.#remaining() }),
+      Math.min(byteLength(source), maxBytes),
     );
   }
 
-  #draftUpdate(
-    task: TaskCapability,
-    operations: readonly DstarUpdateOperation[],
-    sourceIds: readonly string[],
-  ) {
-    for (const sourceId of sourceIds) {
-      if (!task.allowedSourceIds.has(sourceId)) {
-        throw new McpBrokerError(
-          "CAPABILITY_DENIED",
-          "A proposal source is unavailable to this task",
-        );
-      }
-    }
-    const delegation = task.startingSnapshot!.delegations.find(
-      (candidate) => candidate.id === task.delegationId,
-    )!;
-    const seed = revisionOf(
-      asJson({ task: delegation.id, operations, sourceIds }),
-    );
-    return buildUpdateProposal({
-      id: portableId("change", seed),
-      idempotencyKey: `simulation:${seed}`,
-      author: { type: "agent", id: this.actorId },
-      baseChange: task.startingSnapshot!.manifest.headChange,
-      baseRevision: task.startingSnapshot!.manifest.revision,
-      operations,
-      createdAt: this.#now().toISOString(),
-      motivatedBy: [delegation.annotation],
-      fulfills: [delegation.id],
-      ...(sourceIds.length > 0 ? { sources: sourceIds } : {}),
-    });
-  }
-
-  async simulateUpdate(
-    rawToken: string,
-    operationsValue: unknown,
-    sourceIdsValue: unknown = [],
-    signal?: AbortSignal,
-  ): Promise<JsonValue> {
-    checkAbort(signal);
-    const task = this.#beginCall(rawToken, "delegation");
-    if (!Array.isArray(operationsValue) || operationsValue.length === 0) {
-      throw new McpBrokerError(
-        "INVALID_ARGUMENT",
-        "operations must be a non-empty array",
-      );
-    }
-    const operations = operationsValue as DstarUpdateOperation[];
-    const sourceIds = stringArray(sourceIdsValue, "sourceIds");
-    const proposal = this.#draftUpdate(task, operations, sourceIds);
-    const candidate: InMemoryPackage = {
-      ...task.startingSnapshot!,
-      changes: [...task.startingSnapshot!.changes, proposal],
-    };
-    const simulation = simulateUpdateChange(candidate, proposal.id);
-    return this.#finish(
-      task,
-      asJson({
-        simulation,
-        freshness: await this.#freshness(task),
-        remaining: this.#remaining(task),
-      }),
-      bytesOf(operationsValue),
-    );
-  }
-
-  async submitResult(
-    rawToken: string,
-    input: {
-      readonly idempotencyKey: string;
-      readonly operations?: unknown;
-      readonly sourceIds?: unknown;
-      readonly replyBody?: string;
-      readonly reason?: string;
-    },
-    signal?: AbortSignal,
-  ): Promise<JsonValue> {
-    checkAbort(signal);
-    const task = this.#beginCall(rawToken, "delegation", true);
-    const payload = asJson(input);
-    const payloadBytes = bytesOf(payload);
-    if (payloadBytes > task.remainingReadBytes) {
-      throw new McpBrokerError(
-        "BUDGET_EXCEEDED",
-        "The task read budget is exhausted",
-      );
-    }
-    const digest = terminalDigest(payload);
-    if (task.terminal) {
-      if (task.terminal.digest !== digest) {
-        throw new McpBrokerError(
-          "IDEMPOTENCY_MISMATCH",
-          "The terminal task payload differs from the original",
-        );
-      }
-      return task.terminal.result;
-    }
-    if (input.idempotencyKey.length === 0) {
+  #proposal(input: {
+    idempotencyKey: string;
+    baseChange: string;
+    baseRevision: string;
+    operations: readonly unknown[];
+    motivatedBy?: unknown;
+    sourceIds?: unknown;
+  }): DstarChange {
+    if (!input.idempotencyKey)
       throw new McpBrokerError(
         "INVALID_ARGUMENT",
         "idempotencyKey must not be empty",
       );
-    }
-    const operations = input.operations === undefined ? [] : input.operations;
-    if (!Array.isArray(operations))
-      throw new McpBrokerError(
-        "INVALID_ARGUMENT",
-        "operations must be an array",
-      );
-    const sourceIds = stringArray(input.sourceIds ?? [], "sourceIds");
-    if (operations.length === 0 && !input.replyBody && !input.reason) {
-      throw new McpBrokerError(
-        "INVALID_ARGUMENT",
-        "A result requires operations, a reply, or a reason",
-      );
-    }
-    let change: DstarChange | undefined;
-    let simulation: ReturnType<typeof simulateUpdateChange> | undefined;
-    if (operations.length > 0) {
-      const draft = this.#draftUpdate(
-        task,
-        operations as DstarUpdateOperation[],
-        sourceIds,
-      );
-      change = {
-        ...draft,
-        idempotencyKey: input.idempotencyKey,
-        id: portableId(
-          "change",
-          `${task.delegationId}\0${input.idempotencyKey}`,
-        ),
-      };
-      const candidate: InMemoryPackage = {
-        ...task.startingSnapshot!,
-        changes: [...task.startingSnapshot!.changes, change],
-      };
-      simulation = simulateUpdateChange(candidate, change.id);
-      if (simulation.applicability !== "applicable") {
-        throw new McpBrokerError(
-          "PROPOSAL_INVALID",
-          "The proposed operations are not applicable",
-          {
-            diagnosticCodes: simulation.diagnostics.map(
-              (diagnostic) => diagnostic.code,
-            ),
-          },
-        );
-      }
-    }
-    const reply = input.replyBody
-      ? {
-          id: portableId(
-            "reply",
-            `${task.delegationId}\0${input.idempotencyKey}`,
-          ),
-          body: input.replyBody,
-          author: { type: "agent" as const, id: this.actorId },
-          createdAt: this.#now().toISOString(),
-        }
-      : undefined;
-    this.#preflightEffect(
-      task,
-      payloadBytes,
-      asJson({
-        status: "pending-human-decision",
-        ...(change ? { changeId: change.id, simulation } : {}),
-        ...(reply ? { replyId: reply.id } : {}),
-        resultSnapshotId: `snapshot:${"0".repeat(64)}`,
-        canonicalHead: task.startingSnapshot!.manifest.headChange,
-        canonicalRevision: task.startingSnapshot!.manifest.revision,
-        staleFromStartingSnapshot: true,
-      }),
+    return buildUpdateProposal({
+      id: portableId("change", `${this.principalId}\0${input.idempotencyKey}`),
+      idempotencyKey: input.idempotencyKey,
+      author: this.#principal(),
+      baseChange: input.baseChange,
+      baseRevision: input.baseRevision,
+      operations: input.operations as readonly DstarUpdateOperation[],
+      createdAt: this.#now().toISOString(),
+      motivatedBy: stringArray(input.motivatedBy ?? [], "motivatedBy"),
+      sources: stringArray(input.sourceIds ?? [], "sourceIds"),
+    });
+  }
+
+  async simulateUpdate(
+    input: {
+      idempotencyKey?: string;
+      baseChange: string;
+      baseRevision: string;
+      operations: readonly unknown[];
+      motivatedBy?: unknown;
+      sourceIds?: unknown;
+    },
+    signal?: AbortSignal,
+  ): Promise<JsonValue> {
+    this.#begin(signal);
+    const snapshot = await this.#snapshot();
+    const proposal = this.#proposal({
+      ...input,
+      idempotencyKey: input.idempotencyKey ?? "simulation",
+    });
+    const simulation = simulateUpdateChange(
+      { ...snapshot, changes: [...snapshot.changes, proposal] },
+      proposal.id,
     );
+    return this.#finish(
+      asJson({
+        proposal,
+        simulation,
+        snapshotId: snapshot.snapshotId,
+        remaining: this.#remaining(),
+      }),
+      byteLength(input),
+    );
+  }
+
+  async submitProposal(
+    input: {
+      idempotencyKey: string;
+      baseChange: string;
+      baseRevision: string;
+      operations: readonly unknown[];
+      motivatedBy?: unknown;
+      sourceIds?: unknown;
+    },
+    signal?: AbortSignal,
+  ): Promise<JsonValue> {
+    this.#begin(signal);
+    const snapshot = await this.#snapshot();
+    const id = portableId(
+      "change",
+      `${this.principalId}\0${input.idempotencyKey}`,
+    );
+    const existing = snapshot.changes.find((item) => item.id === id);
+    const proposal = this.#proposal(input);
+    const stableProposal = existing
+      ? { ...proposal, createdAt: existing.createdAt }
+      : proposal;
+    if (existing && !samePortableValue(existing, stableProposal))
+      throw new McpBrokerError(
+        "IDEMPOTENCY_MISMATCH",
+        "The idempotency key was already used with different proposal input",
+      );
+    const simulation = simulateUpdateChange(
+      existing
+        ? snapshot
+        : { ...snapshot, changes: [...snapshot.changes, stableProposal] },
+      stableProposal.id,
+    );
+    if (
+      simulation.applicability === "invalid" ||
+      simulation.applicability === "local-conflict"
+    )
+      throw new McpBrokerError(
+        "PROPOSAL_INVALID",
+        "The proposal does not simulate cleanly",
+        { diagnosticCodes: simulation.diagnostics.map((item) => item.code) },
+      );
+    if (existing)
+      return this.#finish(
+        asJson({
+          status: "pending-human-decision",
+          changeId: existing.id,
+          simulation,
+          snapshotId: snapshot.snapshotId,
+          canonicalRevision: snapshot.manifest.revision,
+          remaining: this.#remaining(),
+        }),
+        byteLength(input),
+      );
     try {
-      const current = await this.#currentTaskSnapshot(task);
-      const resultSnapshot = await new PackageCommands(
+      const result = await new PackageCommands(
         this.#repository!,
-      ).recordProposalResult(
-        current,
+      ).recordProposal(
+        snapshot,
+        { change: stableProposal },
         {
-          ...(change ? { change } : {}),
-          delegationId: task.delegationId!,
-          completedBy: { type: "agent", id: this.actorId },
-          completedAt: this.#now().toISOString(),
-          ...(reply ? { reply } : {}),
-          ...(input.reason ? { reason: input.reason } : {}),
-        },
-        {
-          expectedSnapshotId: current.snapshotId,
-          idempotencyKey: `mcp-result:${task.delegationId}:${input.idempotencyKey}`,
+          expectedSnapshotId: snapshot.snapshotId,
+          idempotencyKey: `mcp-proposal:${this.principalId}:${input.idempotencyKey}`,
         },
       );
-      const result = asJson({
-        status: "pending-human-decision",
-        ...(change ? { changeId: change.id, simulation } : {}),
-        ...(reply ? { replyId: reply.id } : {}),
-        resultSnapshotId: resultSnapshot.snapshotId,
-        canonicalHead: resultSnapshot.manifest.headChange,
-        canonicalRevision: resultSnapshot.manifest.revision,
-        staleFromStartingSnapshot:
-          current.snapshotId !== task.startingSnapshot!.snapshotId,
-      });
-      const finished = this.#finish(task, result, payloadBytes);
-      task.terminal = { digest, result: finished };
-      return finished;
+      return this.#finish(
+        asJson({
+          status: "pending-human-decision",
+          changeId: stableProposal.id,
+          simulation,
+          snapshotId: result.snapshotId,
+          canonicalRevision: result.manifest.revision,
+          remaining: this.#remaining(),
+        }),
+        byteLength(input),
+      );
+    } catch (error) {
+      throw packageError(error);
+    }
+  }
+
+  async replyComment(
+    input: { annotationId: string; body: string; idempotencyKey: string },
+    signal?: AbortSignal,
+  ): Promise<JsonValue> {
+    this.#begin(signal);
+    if (!input.body.trim() || !input.idempotencyKey)
+      throw new McpBrokerError(
+        "INVALID_ARGUMENT",
+        "body and idempotencyKey are required",
+      );
+    const snapshot = await this.#snapshot();
+    const annotation = snapshot.annotations.find(
+      (item) => item.id === input.annotationId,
+    );
+    if (!annotation)
+      throw new McpBrokerError("NOT_FOUND", "The annotation does not exist");
+    const id = portableId(
+      "reply",
+      `${this.principalId}\0${input.idempotencyKey}`,
+    );
+    const existing = annotation.replies?.find((item) => item.id === id);
+    const reply = {
+      id,
+      body: input.body,
+      author: this.#principal(),
+      createdAt: existing?.createdAt ?? this.#now().toISOString(),
+    };
+    if (existing && !samePortableValue(existing, reply))
+      throw new McpBrokerError(
+        "IDEMPOTENCY_MISMATCH",
+        "The idempotency key was already used with different reply input",
+      );
+    if (existing)
+      return this.#finish(
+        asJson({
+          replyId: existing.id,
+          annotationId: input.annotationId,
+          snapshotId: snapshot.snapshotId,
+          remaining: this.#remaining(),
+        }),
+        byteLength(input),
+      );
+    try {
+      const result = await new PackageCommands(
+        this.#repository!,
+      ).recordProposal(
+        snapshot,
+        { annotationId: input.annotationId, reply },
+        {
+          expectedSnapshotId: snapshot.snapshotId,
+          idempotencyKey: `mcp-reply:${this.principalId}:${input.idempotencyKey}`,
+        },
+      );
+      return this.#finish(
+        asJson({
+          replyId: reply.id,
+          annotationId: input.annotationId,
+          snapshotId: result.snapshotId,
+          remaining: this.#remaining(),
+        }),
+        byteLength(input),
+      );
     } catch (error) {
       throw packageError(error);
     }
   }
 
   async submitGenesis(
-    rawToken: string,
-    input: {
-      readonly idempotencyKey: string;
-      readonly document: unknown;
-      readonly sourceIds?: unknown;
-    },
+    input: { idempotencyKey: string; document: unknown; sourceIds?: unknown },
     signal?: AbortSignal,
   ): Promise<JsonValue> {
-    checkAbort(signal);
-    const task = this.#beginCall(rawToken, "genesis", true);
-    const payload = asJson(input);
-    const payloadBytes = bytesOf(payload);
-    if (payloadBytes > task.remainingReadBytes) {
+    this.#begin(signal);
+    if (this.mode !== "genesis")
       throw new McpBrokerError(
-        "BUDGET_EXCEEDED",
-        "The task read budget is exhausted",
+        "MODE_DENIED",
+        "This operation requires genesis mode",
       );
-    }
-    const digest = terminalDigest(payload);
-    if (task.terminal) {
-      if (task.terminal.digest !== digest) {
-        throw new McpBrokerError(
-          "IDEMPOTENCY_MISMATCH",
-          "The terminal task payload differs from the original",
-        );
-      }
-      return task.terminal.result;
-    }
-    if (input.idempotencyKey.length === 0) {
+    const draft = await readDraft(this.#draftRoot!);
+    if (draft.request.actor.id !== this.principalId)
       throw new McpBrokerError(
-        "INVALID_ARGUMENT",
-        "idempotencyKey must not be empty",
+        "CAPABILITY_DENIED",
+        "The draft belongs to another human principal",
       );
-    }
     const sourceIds = stringArray(input.sourceIds ?? [], "sourceIds");
-    for (const sourceId of sourceIds) {
-      if (!task.allowedSourceIds.has(sourceId)) {
-        throw new McpBrokerError(
-          "CAPABILITY_DENIED",
-          "A genesis source is unavailable to this task",
-        );
-      }
-    }
-    const actor: DstarActor = { type: "agent", id: this.actorId };
-    const proposal = buildGenesisProposal({
-      id: portableId("change_genesis", input.idempotencyKey),
-      operationId: portableId("operation_genesis", input.idempotencyKey),
-      idempotencyKey: input.idempotencyKey,
-      author: actor,
-      requestActor: task.draft!.request.actor,
-      requestBody: task.draft!.request.body,
-      requestCreatedAt: task.draft!.request.createdAt,
-      createdAt: this.#now().toISOString(),
-      document: input.document as DstarDocument,
-      ...(sourceIds.length > 0 ? { sources: sourceIds } : {}),
-    });
-    const profileDiagnostics = validateBaseProfile(
-      input.document as DstarDocument,
-      task.draft!.request.profiles,
+    const allowed = new Set(
+      draft.request.sources?.sources.map((item) => item.id) ?? [],
     );
-    if (
-      profileDiagnostics.some((diagnostic) => diagnostic.severity === "error")
-    ) {
+    if (sourceIds.some((id) => !allowed.has(id)))
+      throw new McpBrokerError(
+        "CAPABILITY_DENIED",
+        "A source is outside this draft scope",
+      );
+    const proposalId = portableId(
+      "change_genesis",
+      `${this.principalId}\0${input.idempotencyKey}`,
+    );
+    const existing = await readOptionalChange(
+      join(this.#draftRoot!, "proposal.json"),
+    );
+    const proposal = buildGenesisProposal({
+      id: proposalId,
+      operationId: portableId(
+        "operation_genesis",
+        `${this.principalId}\0${input.idempotencyKey}`,
+      ),
+      idempotencyKey: input.idempotencyKey,
+      author: this.#principal(),
+      requestActor: draft.request.actor,
+      requestBody: draft.request.body,
+      requestCreatedAt: draft.request.createdAt,
+      createdAt:
+        existing?.id === proposalId
+          ? existing.createdAt
+          : this.#now().toISOString(),
+      document: input.document as DstarDocument,
+      sources: sourceIds,
+    });
+    const diagnostics = validateBaseProfile(
+      input.document as DstarDocument,
+      draft.request.profiles,
+    );
+    if (diagnostics.some((item) => item.severity === "error"))
       throw new McpBrokerError(
         "PROPOSAL_INVALID",
-        "The genesis document violates its declared profiles",
-        {
-          diagnosticCodes: profileDiagnostics.map(
-            (diagnostic) => diagnostic.code,
-          ),
-        },
+        "The document violates its profiles",
+        { diagnosticCodes: diagnostics.map((item) => item.code) },
       );
-    }
-    const result = asJson({
-      status: "pending-human-decision",
-      proposalId: proposal.id,
-      documentRevision: documentRevision(input.document as DstarDocument),
-    });
-    this.#preflightEffect(task, payloadBytes, result);
+    if (existing && !samePortableValue(existing, proposal))
+      throw new McpBrokerError(
+        "IDEMPOTENCY_MISMATCH",
+        "The draft already contains a different genesis proposal",
+      );
     try {
-      await stageGenesisProposal(this.#draftRoot!, proposal);
-      const finished = this.#finish(task, result, payloadBytes);
-      task.terminal = { digest, result: finished };
-      return finished;
+      if (!existing) await stageGenesisProposal(this.#draftRoot!, proposal);
+      return this.#finish(
+        asJson({
+          status: "pending-human-decision",
+          proposalId: proposal.id,
+          documentRevision: documentRevision(input.document as DstarDocument),
+          remaining: this.#remaining(),
+        }),
+        byteLength(input),
+      );
     } catch (error) {
       throw packageError(error);
     }

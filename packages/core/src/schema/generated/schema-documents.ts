@@ -60,6 +60,9 @@ export const SCHEMA_DOCUMENTS = {
       "author": {
         "$ref": "#/$defs/actor"
       },
+      "assignee": {
+        "$ref": "#/$defs/humanActor"
+      },
       "replies": {
         "type": "array",
         "items": {
@@ -73,7 +76,6 @@ export const SCHEMA_DOCUMENTS = {
         "items": {
           "enum": [
             "human",
-            "agent",
             "service"
           ]
         }
@@ -188,7 +190,6 @@ export const SCHEMA_DOCUMENTS = {
           "type": {
             "enum": [
               "human",
-              "agent",
               "service"
             ]
           },
@@ -196,12 +197,6 @@ export const SCHEMA_DOCUMENTS = {
             "$ref": "#/$defs/id"
           },
           "name": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          },
-          "provider": {
             "type": "string"
           }
         },
@@ -621,7 +616,7 @@ export const SCHEMA_DOCUMENTS = {
         "$ref": "#/$defs/revision"
       },
       "author": {
-        "$ref": "#/$defs/agentActor"
+        "$ref": "#/$defs/actor"
       },
       "request": {
         "$ref": "#/$defs/request"
@@ -653,13 +648,6 @@ export const SCHEMA_DOCUMENTS = {
         "format": "date-time"
       },
       "motivatedBy": {
-        "type": "array",
-        "items": {
-          "$ref": "#/$defs/id"
-        },
-        "uniqueItems": true
-      },
-      "fulfills": {
         "type": "array",
         "items": {
           "$ref": "#/$defs/id"
@@ -867,7 +855,6 @@ export const SCHEMA_DOCUMENTS = {
           "type": {
             "enum": [
               "human",
-              "agent",
               "service"
             ]
           },
@@ -876,35 +863,12 @@ export const SCHEMA_DOCUMENTS = {
           },
           "name": {
             "type": "string"
-          },
-          "model": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
           }
         },
         "patternProperties": {
           "^x-": true
         },
         "additionalProperties": false
-      },
-      "agentActor": {
-        "allOf": [
-          {
-            "$ref": "#/$defs/actor"
-          },
-          {
-            "properties": {
-              "type": {
-                "const": "agent"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          }
-        ]
       },
       "humanActor": {
         "allOf": [
@@ -1337,232 +1301,6 @@ export const SCHEMA_DOCUMENTS = {
       }
     }
   },
-  "delegation": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://dstar.dev/spec/0.1/schemas/delegation.schema.json",
-    "title": "DSTAR 0.1 Delegation",
-    "type": "object",
-    "required": [
-      "id",
-      "annotation",
-      "assignee",
-      "createdBy",
-      "status",
-      "createdAt"
-    ],
-    "properties": {
-      "id": {
-        "$ref": "#/$defs/id"
-      },
-      "annotation": {
-        "$ref": "#/$defs/id"
-      },
-      "assignee": {
-        "$ref": "#/$defs/agentActor"
-      },
-      "createdBy": {
-        "$ref": "#/$defs/humanActor"
-      },
-      "instruction": {
-        "type": "string",
-        "minLength": 1
-      },
-      "status": {
-        "enum": [
-          "queued",
-          "in_progress",
-          "completed",
-          "failed",
-          "cancelled"
-        ]
-      },
-      "createdAt": {
-        "type": "string",
-        "format": "date-time"
-      },
-      "completedAt": {
-        "type": "string",
-        "format": "date-time"
-      },
-      "completedBy": {
-        "$ref": "#/$defs/actor"
-      },
-      "reason": {
-        "type": "string"
-      },
-      "results": {
-        "type": "array",
-        "items": {
-          "$ref": "#/$defs/result"
-        },
-        "uniqueItems": true
-      }
-    },
-    "patternProperties": {
-      "^x-": true
-    },
-    "additionalProperties": false,
-    "allOf": [
-      {
-        "if": {
-          "properties": {
-            "status": {
-              "enum": [
-                "completed",
-                "failed",
-                "cancelled"
-              ]
-            }
-          },
-          "required": [
-            "status"
-          ]
-        },
-        "then": {
-          "required": [
-            "completedAt",
-            "completedBy"
-          ]
-        },
-        "else": {
-          "not": {
-            "anyOf": [
-              {
-                "required": [
-                  "completedAt"
-                ]
-              },
-              {
-                "required": [
-                  "completedBy"
-                ]
-              }
-            ]
-          }
-        }
-      }
-    ],
-    "$defs": {
-      "id": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 255,
-        "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$"
-      },
-      "actor": {
-        "type": "object",
-        "required": [
-          "type",
-          "id"
-        ],
-        "properties": {
-          "type": {
-            "enum": [
-              "human",
-              "agent",
-              "service"
-            ]
-          },
-          "id": {
-            "$ref": "#/$defs/id"
-          },
-          "name": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          }
-        },
-        "patternProperties": {
-          "^x-": true
-        },
-        "additionalProperties": false
-      },
-      "agentActor": {
-        "allOf": [
-          {
-            "$ref": "#/$defs/actor"
-          },
-          {
-            "properties": {
-              "type": {
-                "const": "agent"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          }
-        ]
-      },
-      "humanActor": {
-        "allOf": [
-          {
-            "$ref": "#/$defs/actor"
-          },
-          {
-            "properties": {
-              "type": {
-                "const": "human"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          }
-        ]
-      },
-      "changeResult": {
-        "type": "object",
-        "required": [
-          "type",
-          "change"
-        ],
-        "properties": {
-          "type": {
-            "const": "change"
-          },
-          "change": {
-            "$ref": "#/$defs/id"
-          }
-        },
-        "additionalProperties": false
-      },
-      "replyResult": {
-        "type": "object",
-        "required": [
-          "type",
-          "annotation",
-          "reply"
-        ],
-        "properties": {
-          "type": {
-            "const": "reply"
-          },
-          "annotation": {
-            "$ref": "#/$defs/id"
-          },
-          "reply": {
-            "$ref": "#/$defs/id"
-          }
-        },
-        "additionalProperties": false
-      },
-      "result": {
-        "oneOf": [
-          {
-            "$ref": "#/$defs/changeResult"
-          },
-          {
-            "$ref": "#/$defs/replyResult"
-          }
-        ]
-      }
-    }
-  },
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://dstar.dev/spec/0.1/schemas/document.schema.json",
@@ -1908,9 +1646,6 @@ export const SCHEMA_DOCUMENTS = {
       "annotations": {
         "const": "annotations"
       },
-      "delegations": {
-        "const": "delegations"
-      },
       "sources": {
         "const": "sources.json"
       },
@@ -1986,7 +1721,6 @@ export const SCHEMA_DOCUMENTS = {
           "type": {
             "enum": [
               "human",
-              "agent",
               "service"
             ]
           },
@@ -1994,12 +1728,6 @@ export const SCHEMA_DOCUMENTS = {
             "$ref": "#/$defs/id"
           },
           "name": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          },
-          "provider": {
             "type": "string"
           }
         },

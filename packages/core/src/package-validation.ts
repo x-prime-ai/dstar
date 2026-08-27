@@ -27,13 +27,6 @@ function missing(summary: string, objectId?: string): Diagnostic {
   });
 }
 
-function authority(summary: string, objectId?: string): Diagnostic {
-  return createDiagnostic("AUTH_CHANGE_AUTHOR_NOT_AGENT", {
-    summary,
-    ...(objectId ? { location: { objectId } } : {}),
-  });
-}
-
 function documentForRevision(
   pkg: InMemoryPackage,
   revision: string,
@@ -214,6 +207,14 @@ function validateAnnotation(
       }),
     );
   }
+  if (annotation.assignee && annotation.assignee.type !== "human") {
+    diagnostics.push(
+      createDiagnostic("AUTH_ANNOTATION_ASSIGNEE_NOT_HUMAN", {
+        summary: "Annotation assignee must identify a human.",
+        location: { objectId: annotation.id },
+      }),
+    );
+  }
   return diagnostics;
 }
 
@@ -226,11 +227,6 @@ export function validateInMemoryPackage(
   for (const annotation of pkg.annotations) {
     diagnostics.push(
       ...validateStructure("annotation", annotation).diagnostics,
-    );
-  }
-  for (const delegation of pkg.delegations) {
-    diagnostics.push(
-      ...validateStructure("delegation", delegation).diagnostics,
     );
   }
   for (const change of pkg.changes)
@@ -282,16 +278,6 @@ export function validateInMemoryPackage(
       ),
     );
   }
-  if (
-    pkg.delegations.length > 0 &&
-    pkg.manifest.delegations !== "delegations"
-  ) {
-    diagnostics.push(
-      missing(
-        "Manifest must declare the delegations entrypoint when delegations exist.",
-      ),
-    );
-  }
   if (pkg.sources && pkg.manifest.sources !== "sources.json") {
     diagnostics.push(
       missing(
@@ -336,10 +322,6 @@ export function validateInMemoryPackage(
   }
 
   for (const change of pkg.changes) {
-    if (change.author.type !== "agent")
-      diagnostics.push(
-        authority("Every change author must be an agent.", change.id),
-      );
     if (
       change.status !== "proposed" &&
       change.decision?.actor.type !== "human"
@@ -384,12 +366,6 @@ export function validateInMemoryPackage(
           missing("motivatedBy annotation is missing.", change.id),
         );
     }
-    for (const delegationId of change.fulfills ?? []) {
-      if (!index.delegations.has(delegationId))
-        diagnostics.push(
-          missing("fulfilled delegation is missing.", change.id),
-        );
-    }
     for (const sourceId of change.sources ?? []) {
       if (!index.sources.has(sourceId))
         diagnostics.push(missing("Change source is missing.", change.id));
@@ -398,60 +374,6 @@ export function validateInMemoryPackage(
 
   for (const annotation of pkg.annotations)
     diagnostics.push(...validateAnnotation(pkg, index, annotation));
-
-  for (const delegation of pkg.delegations) {
-    const annotation = index.annotations.get(delegation.annotation);
-    if (!annotation)
-      diagnostics.push(
-        missing("Delegation annotation is missing.", delegation.id),
-      );
-    if (delegation.assignee.type !== "agent")
-      diagnostics.push(
-        authority("Delegation assignee must be an agent.", delegation.id),
-      );
-    if (delegation.createdBy.type !== "human") {
-      diagnostics.push(
-        createDiagnostic("AUTH_DECISION_ACTOR_NOT_HUMAN", {
-          summary: "Delegation creator must be a human.",
-          location: { objectId: delegation.id },
-        }),
-      );
-    }
-    for (const result of delegation.results ?? []) {
-      if (result.type === "change") {
-        const change = index.changes.get(result.change);
-        if (
-          !change ||
-          change.author.id !== delegation.assignee.id ||
-          change.author.type !== "agent"
-        ) {
-          diagnostics.push(
-            missing(
-              "Delegation change result is missing or has the wrong agent author.",
-              delegation.id,
-            ),
-          );
-        }
-      } else {
-        const reply = index.getReply(result.annotation, result.reply);
-        if (
-          !reply ||
-          reply.annotationId !== delegation.annotation ||
-          (reply.reply as { author?: { id?: string; type?: string } }).author
-            ?.id !== delegation.assignee.id ||
-          (reply.reply as { author?: { id?: string; type?: string } }).author
-            ?.type !== "agent"
-        ) {
-          diagnostics.push(
-            missing(
-              "Delegation reply result is missing or has the wrong agent author.",
-              delegation.id,
-            ),
-          );
-        }
-      }
-    }
-  }
 
   for (const source of pkg.sources?.sources ?? []) {
     if (

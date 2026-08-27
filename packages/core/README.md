@@ -12,7 +12,7 @@ surface includes:
 - immutable document/package indexes and Unicode selectors;
 - all six deterministic update operations and semantic diff;
 - accepted-version materialization; and
-- in-memory proposal, annotation, delegation, and explicit human-decision
+- in-memory proposal, annotation, human assignment, and explicit human-decision
   helpers.
 
 Public entrypoints:
@@ -24,8 +24,8 @@ import { DocumentSchema } from "@dstar/core/schema";
 ```
 
 Proposal builders always produce `status: "proposed"`. Pure acceptance helpers
-require a human actor and an exact simulated result revision; they do not expose
-agent-side shortcuts around the authority boundary.
+require a human actor and an exact simulated result revision; proposal authors
+are ordinary portable actors and receive no decision authority.
 
 The schema namespaces are generated from `spec/0.1/schemas`. Run
 `pnpm generate:schema-types` after changing a schema; CI rejects drift.

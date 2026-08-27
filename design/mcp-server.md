@@ -2,249 +2,132 @@
 
 Status: **Draft**
 
-## 1. Purpose and boundary
+## 1. Boundary
 
-The MCP server lets an MCP-capable agent inspect one DSTAR document and return
-review work through a standard tool interface. It is an adapter over the same
-workspace, review, evidence, and agent services used by the CLI and review
-client. It does not implement a second document model, open package files
-directly, or define portable behavior.
+The MCP server is a thin, non-normative adapter over `@dstar/core` and
+`@dstar/node`. It exposes one fixed document or genesis draft to any compatible
+MCP client. DSTAR does not know whether the client is interactive software,
+automation, or another runtime.
 
-The server is intentionally capability-restricted:
+The launcher fixes:
 
-- resources expose bounded, read-only context;
-- tools may search, validate draft output, reply to an assigned annotation, or
-  submit a proposal;
-- every read is filtered by the session actor and audience policy;
-- every write is bound to the package snapshot and active task; and
-- no agent-facing MCP session can accept, reject, supersede, resolve, or commit
-  canonical content.
+- document package or genesis draft;
+- authenticated human principal;
+- expiry and byte/call budgets; and
+- filesystem/runtime handles unavailable to tool arguments.
 
-Human decisions continue through the review client or explicit human CLI/API
-commands. MCP is not an authority shortcut.
+The principal is the person on whose authority the client is operating. MCP
+does not serialize an executor identity, runtime session, model, provider,
+delegation, or task into the package.
 
-## 2. Protocol compatibility
+## 2. Authority
 
-The implementation follows the negotiated MCP protocol version rather than
-assuming that the newest specification is always available. On initialization
-it advertises only capabilities implemented for that session.
+MCP tools may:
 
-The 0.1 server advertises:
+- read the fixed document, annotations, sources, and mappings;
+- simulate update operations;
+- append a reply attributed to the fixed human principal;
+- store a pending update proposal attributed to that principal; and
+- stage a pending genesis proposal for that principal's fixed draft.
 
-- `resources`, without subscriptions or list-change notifications initially;
-- `tools`, with a stable list for the lifetime of the session; and
-- no server prompts, sampling, elicitation, or task-augmented execution.
+MCP exposes no tool for accepting, rejecting, superseding, resolving, changing
+identity, opening another package, arbitrary paths, shell execution, or
+unrestricted network access. Proposal submission never changes canonical
+content.
 
-Tool inputs and structured results have explicit JSON Schemas. Unknown fields
-are rejected unless a tool schema deliberately permits them. Protocol framing,
-lifecycle, cancellation, and error behavior are delegated to a maintained MCP
-SDK behind a small adapter and covered by compatibility tests.
-
-References for the transport adapter are the current official MCP
-[tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools),
-[resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources),
-[transports](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports),
-and
-[authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
-specifications. These links guide this implementation, not the DSTAR protocol.
-
-## 3. Process and transport model
-
-### 3.1 Standard input/output in 0.1
-
-The initial server is launched as a subprocess:
+## 3. Process modes
 
 ```text
-dstar mcp <document.dstar> --actor <agent-id> --task <delegation-id>
+dstar mcp document <document.dstar> --principal <human-id>
+dstar mcp genesis <draft> --principal <human-id>
 ```
 
-The host supplies opaque session configuration through inherited process state
-or environment variables. The subprocess receives exactly one of:
+The first transport is stdio. Standard output contains only MCP messages;
+redacted diagnostics use standard error.
 
-- an existing package plus one active delegation; or
-- a new genesis draft plus one creation request.
+The process capability is server-held and never crosses MCP. There is no
+`taskToken`, `start_task`, executor assignment, or task lifecycle. Calls consume
+the process-level budget directly.
 
-It cannot choose another package, traverse arbitrary roots, or change actor or
-task after initialization. Standard output contains only MCP protocol messages;
-diagnostics go to standard error with document bodies and secrets redacted.
+## 4. Tools
 
-The workspace service may host the adapter in-process, but the observable
-authorization and tool contracts are identical.
+| Tool | Mode | Effect |
+| --- | --- | --- |
+| `get_manifest` | both | Current manifest or fixed genesis request |
+| `list_comments` | document | Comment summaries, optionally assigned to the principal |
+| `get_node` | document | Canonical node, ancestors, and bounded neighbors |
+| `search_document` | document | Deterministic local text search |
+| `get_annotation` | document | One portable annotation thread |
+| `get_source` | both | Source metadata without implicit fetching |
+| `simulate_update` | document | Pure validation, applicability, and semantic diff |
+| `submit_proposal` | document | Persist one pending update proposal |
+| `reply_comment` | document | Append one reply under the principal |
+| `submit_genesis` | genesis | Stage one pending genesis proposal |
 
-### 3.2 Future Streamable HTTP transport
+Every update simulation/submission supplies explicit `baseChange` and
+`baseRevision`. Removing task state must not allow the server to silently move
+a proposal to a head that the client did not inspect. A stale proposal may be
+retained for review; it is never silently rebased or accepted.
 
-Streamable HTTP is deferred. If added, it must:
-
-- bind to loopback by default;
-- validate `Origin` on every applicable request;
-- authenticate every session and request under the MCP authorization rules;
-- bind package, actor, audience, and task scope server-side rather than trusting
-  request arguments; and
-- use the local-service CSRF, rate-limit, body-limit, and shutdown controls.
-
-A public or multi-user MCP endpoint requires a separate authorization design.
-
-## 4. Session capability
-
-The launcher creates an unforgeable `McpSessionCapability`:
-
-```ts
-interface McpSessionCapability {
-  sessionId: string;
-  mode: "delegation" | "genesis";
-  packageHandle?: PackageHandle;
-  draftHandle?: GenesisDraftHandle;
-  actorId: string;
-  delegationId?: string;
-  allowedAnnotationIds: readonly string[];
-  allowedSourceIds: readonly string[];
-  startingSnapshotId?: string;
-  expiresAt: string;
-  budgets: {
-    maxCalls: number;
-    maxReadBytes: number;
-    maxOutputBytes: number;
-  };
-}
-```
-
-The object never crosses the MCP boundary. Public tool arguments use semantic
-IDs only; the adapter combines them with the server-held capability. Each call
-checks expiry, cancellation, budget, task state, and current package identity.
+Terminal writes are idempotent by principal plus caller-supplied idempotency
+key. Repeating the same command returns the original portable result when it is
+still current; reusing a key with different arguments fails.
 
 ## 5. Resources
 
-Resources are application-driven context, not a dump of the package. The
-server lists only objects visible to the scoped actor.
+Resources are optional URI-addressed views of the same fixed scope:
 
 | URI | Contents |
 | --- | --- |
-| `dstar://document/manifest` | Safe manifest summary, head revision, profile IDs, snapshot ID |
-| `dstar://document/node/{nodeId}` | One canonical node and bounded semantic neighborhood |
-| `dstar://annotation/{annotationId}` | Assigned thread and visible replies |
-| `dstar://source/{sourceId}` | Registered source metadata and an authorized bounded extract |
-| `dstar://projection/{projectionId}/mapping` | Projection metadata and relevant mapping records |
-| `dstar://task/current` | Active delegation or genesis request, status, and budgets |
+| `dstar://document/manifest` | Current manifest |
+| `dstar://document/node/{nodeId}` | Canonical node context |
+| `dstar://annotation/{annotationId}` | Annotation thread |
+| `dstar://source/{sourceId}` | Source metadata |
+| `dstar://projection/{projectionId}/mapping` | Projection mapping |
+| `dstar://genesis/request` | Fixed genesis request |
 
-Resource templates validate DSTAR IDs before lookup. A missing, disallowed, or
-audience-excluded object is reported as unavailable without revealing whether a
-hidden object exists. Binary assets are not returned inline in 0.1; an explicit
-brokered extraction tool may be added after media limits and provider support
-are designed.
+Resources grant no additional mutation authority. Clients without Resource
+support use equivalent read tools. Change notifications are best-effort
+invalidation hints; every read reopens a validated snapshot.
 
-Resource contents include `snapshotId` where applicable. Reading a resource
-does not silently advance the task's starting snapshot.
+## 6. MCP App
 
-## 6. Agent tools
+The optional MCP App packages the same renderer and review controller used by
+the standalone UI. Its tool calls still pass through host policy and the DSTAR
+server. Embedding the UI does not expose hidden human-decision commands.
 
-### 6.1 Read and analysis tools
+## 7. Compatibility
 
-| Tool | Result |
-| --- | --- |
-| `dstar.get_manifest` | Bounded manifest and capability summary |
-| `dstar.get_node` | Node, ancestors, and bounded neighbors |
-| `dstar.search_document` | Ranked node IDs and short excerpts within the package |
-| `dstar.get_annotation` | One permitted thread with resolution state |
-| `dstar.get_source` | Permitted source metadata and bounded extract |
-| `dstar.simulate_update` | Validation, applicability, and semantic diff for draft operations |
+Raw tool names use ASCII letters, digits, and underscores. Adapter input schemas
+are small and flattened without `$ref`, `oneOf`, or `allOf`. Results include
+compact JSON text and may repeat the object as `structuredContent`.
 
-Search is local and deterministic for a snapshot. It accepts limits and profile
-filters, not filesystem paths or arbitrary query code. Source reads never fetch
-a URL implicitly; external retrieval is a separately brokered capability.
+The adapter is tool-complete; Resources and Apps degrade explicitly. The
+normative DSTAR schemas remain independent of MCP schema limitations.
 
-### 6.2 Output tools
+## 8. Security and errors
 
-| Mode | Tool | Effect |
-| --- | --- | --- |
-| Delegation | `dstar.submit_result` | Atomically stage at most one proposed update and at most one annotation reply, or a no-result outcome |
-| Genesis | `dstar.submit_genesis` | Stage one initial document proposal and allowed initial assets in the draft workspace |
+All tool arguments and document data are untrusted. The adapter validates IDs,
+limits, bases, operations, profile rules, and package state. Errors return
+stable safe codes and omit package paths, secrets, and document bodies.
 
-There is one terminal submission tool per mode so a proposal and its explanatory
-reply cannot be partially persisted. The broker, not the model, supplies:
+Tool descriptions and annotations are presentation hints, not authorization.
+Authorization comes only from the server-held process scope and the absence of
+decision methods from this adapter.
 
-- proposal, reply, and actor IDs;
-- author identity and timestamps;
-- delegation linkage;
-- starting snapshot and base revisions;
-- initial lifecycle status; and
-- output hashes and provenance envelope.
-
-The model supplies semantic content, operations, explicit preconditions,
-explanation, and cited source IDs. The broker validates the result, simulates
-all operations, and persists it as a proposal even when the starting snapshot
-has become stale. It never applies the proposal.
-
-Terminal submission is idempotent per task and client request key. A second
-non-identical terminal result is rejected; retrying the identical result returns
-the previously created IDs.
-
-## 7. Tools deliberately absent
-
-The agent-facing server does not expose tools for:
-
-- accepting, rejecting, or superseding a change;
-- resolving or deleting a human comment;
-- creating or assigning a delegation;
-- changing audience or actor identity;
-- modifying arbitrary package files, projections, assets, or sources;
-- installing a profile, renderer, plugin, or provider; or
-- executing shell commands or unrestricted network requests.
-
-Some actions may exist in human interfaces, but sharing their service code does
-not make them part of the MCP capability.
-
-## 8. Errors and cancellation
-
-Malformed MCP messages and unknown methods use protocol errors. Valid tool
-calls that fail DSTAR validation return tool execution errors with stable DSTAR
-diagnostic codes and safe structured details, for example:
-
-```json
-{
-  "code": "CHANGE_BASE_STALE",
-  "retryable": true,
-  "snapshotId": "snapshot:current",
-  "guidance": "Inspect the current nodes and submit a replacement proposal."
-}
-```
-
-Errors do not include hidden content, absolute paths, secrets, or raw provider
-exceptions. Cancellation stops pending reads or simulation when possible and
-prevents terminal submission once the owning job is cancelled. Package mutation
-still follows the package transaction rules if cancellation races with commit.
-
-## 9. Security and observability
-
-All MCP inputs and model-visible data are untrusted. The adapter:
-
-- validates tool arguments and structured outputs;
-- applies call, byte, time, token, and concurrency limits;
-- sanitizes resource text and tool diagnostics;
-- labels canonical content, comments, and sources as data rather than system
-  instructions when assembling provider context;
-- refuses IDs outside the capability before object lookup;
-- never returns provider credentials, local API tokens, or absolute paths; and
-- logs session ID, tool name, outcome, duration, and byte counts without bodies.
-
-Tool descriptions and annotations are convenience metadata, not authorization.
-Authorization is determined only by the server-held session capability.
-
-## 10. Verification
+## 9. Verification
 
 Tests cover:
 
-- MCP initialization and capability negotiation across supported protocol
-  versions;
-- resource listing/reading and template validation;
-- tool input/output-schema conformance;
-- audience and task-scope non-disclosure;
-- path, ID, oversized payload, prompt-injection, and forged-actor attempts;
-- inability to discover or invoke any human-decision operation;
-- stale snapshot, cancellation, retry, and duplicate terminal submission;
-- protocol-only stdout and redacted stderr; and
-- behavioral equivalence between MCP submissions and direct agent-runtime
-  submissions through the same broker.
+- MCP negotiation, stdio lifecycle, and stable public tool names;
+- fixed document/draft isolation and principal immutability;
+- no task/delegation/token surface;
+- direct comment read/reply and proposal submission;
+- explicit base handling, stale proposals, and idempotent retries;
+- inability to discover or invoke human-decision methods;
+- resource list/read/subscription and tool-only fallback; and
+- protocol-only stdout plus redacted diagnostics.
 
-A release test launches the server under a generic MCP client, completes a
-deterministic fake-agent delegation, and verifies that the result is a pending
-proposal until a separate authenticated human action accepts it.
+A release test submits an update through a generic MCP client and verifies that
+canonical revision and head remain unchanged until a separate interactive human
+decision accepts the proposal.

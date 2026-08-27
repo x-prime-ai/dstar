@@ -11,7 +11,7 @@ Expected roles include:
 - `summary` for progressive disclosure;
 - `source` for portable Markdown or another authoring syntax;
 - `plain-text` for search and accessibility; and
-- `agent-context` for targeted machine operations.
+- `machine-context` for targeted SDK or tool operations.
 
 ## Canonical views and projections
 
@@ -24,8 +24,8 @@ revision. A human selection in a projection targets the artifact the person
 actually saw and copies its source mappings back to canonical content.
 
 Both may look like polished HTML in a browser. Neither provides direct canonical
-editing in DSTAR 0.1. Human actions create comments, delegations, replies, or
-decisions; agents alone create canonical content proposals.
+editing in DSTAR 0.1. Human actions create comments, assignment, replies, or
+decisions; proposals may be produced through any conforming client.
 
 ## Projection index
 
@@ -103,8 +103,8 @@ projection's `generatedFromRevision`.
 
 The annotation `scope` records whether the discussion concerns the canonical
 document, the projection or its generator, or both. Its `purpose` records why
-the comment exists. Neither field invokes an agent, and source mappings do not
-imply edit intent.
+the comment exists. Neither field starts external work, and source mappings do
+not imply edit intent.
 
 After regeneration, a client MAY use canonical targets and the new source map
 to show the annotation in the new view only when the mapping is unique and
@@ -125,7 +125,7 @@ A reviewable HTML projection SHOULD use markup such as:
 
 ```html
 <p data-dstar-segment="segment_html_promise">
-  Agents author. Humans direct and decide.
+  Tools propose. Humans review and decide.
 </p>
 ```
 
@@ -153,8 +153,8 @@ entire old artifact.
 ## Rendering requirements
 
 A Projection Renderer SHOULD report unsupported nodes instead of silently
-dropping meaningful content. Agent-context renderers MUST respect annotation
-audience metadata.
+dropping meaningful content. Context renderers MUST respect annotation audience
+metadata.
 
 Canonical rendering algorithms and cross-renderer layout equivalence are not
 defined in DSTAR 0.1.
