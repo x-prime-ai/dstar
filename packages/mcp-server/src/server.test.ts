@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
-import { cp, mkdtemp, readFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -55,6 +55,21 @@ async function fixtureBroker() {
     runtimeRoot: join(temporary, "runtime"),
     principalId: "human_demo",
   });
+}
+
+async function fixtureBrokerWithRoot() {
+  const temporary = await mkdtemp(join(tmpdir(), "dstar-mcp-server-test-"));
+  const packageRoot = join(temporary, "fixture.dstar");
+  await cp(fixtureRoot, packageRoot, { recursive: true });
+  return {
+    packageRoot,
+    broker: await DstarMcpBroker.create({
+      mode: "document",
+      packageRoot,
+      runtimeRoot: join(temporary, "runtime"),
+      principalId: "human_demo",
+    }),
+  };
 }
 
 describe("official MCP adapter", () => {
@@ -123,6 +138,52 @@ describe("official MCP adapter", () => {
         comments.content.find((item) => item.type === "text")?.text,
       ).toContain("ann_0001");
     } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("delivers updates only for subscribed resources", async () => {
+    const { broker, packageRoot } = await fixtureBrokerWithRoot();
+    const server = createDstarMcpServer(broker);
+    const client = new Client({
+      name: "dstar-subscription-test",
+      version: "0.0.0",
+    });
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const updated = new Promise<string>((resolveUpdated, rejectUpdated) => {
+      timeout = setTimeout(
+        () => rejectUpdated(new Error("resource update was not delivered")),
+        5_000,
+      );
+      timeout.unref?.();
+      client.setNotificationHandler(
+        "notifications/resources/updated",
+        (notification) => {
+          if (timeout) clearTimeout(timeout);
+          resolveUpdated(notification.params.uri);
+        },
+      );
+    });
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport),
+      ]);
+      await expect(
+        client.subscribeResource({ uri: "file:///etc/passwd" }),
+      ).rejects.toThrow();
+      await client.subscribeResource({ uri: "dstar://document/manifest" });
+      const manifestPath = join(packageRoot, "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      manifest.title = `${manifest.title} updated`;
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+      expect(await updated).toBe("dstar://document/manifest");
+      await client.unsubscribeResource({ uri: "dstar://document/manifest" });
+    } finally {
+      if (timeout) clearTimeout(timeout);
       await client.close();
       await server.close();
     }

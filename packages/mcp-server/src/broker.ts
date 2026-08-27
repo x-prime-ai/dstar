@@ -25,7 +25,13 @@ import {
   type GenesisDraft,
   type PackageSnapshot,
 } from "@dstar/node";
-import { watch, type FSWatcher } from "node:fs";
+import {
+  unwatchFile,
+  watch,
+  watchFile,
+  type FSWatcher,
+  type Stats,
+} from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
@@ -229,6 +235,7 @@ export class DstarMcpBroker {
   readonly #packageRoot?: string;
   readonly #draftRoot?: string;
   readonly #repository?: PackageRepository;
+  #resourcePollPaths: readonly string[] = [];
   #remainingCalls: number;
   #remainingReadBytes: number;
   #remainingOutputBytes: number;
@@ -263,13 +270,26 @@ export class DstarMcpBroker {
 
   static async create(options: BrokerOptions): Promise<DstarMcpBroker> {
     const broker = new DstarMcpBroker(options);
-    if (options.mode === "document") await broker.#snapshot();
-    else await readDraft(broker.#draftRoot!);
+    if (options.mode === "document") {
+      const snapshot = await broker.#snapshot();
+      if (snapshot.inventory.length <= 256)
+        broker.#resourcePollPaths = Object.freeze(
+          snapshot.inventory.map((item) =>
+            join(broker.#packageRoot!, item.path),
+          ),
+        );
+    } else {
+      await readDraft(broker.#draftRoot!);
+      broker.#resourcePollPaths = Object.freeze([
+        join(broker.#draftRoot!, "draft.json"),
+        join(broker.#draftRoot!, "proposal.json"),
+      ]);
+    }
     return broker;
   }
 
   get resourceSubscriptionsAvailable(): boolean {
-    return true;
+    return this.#resourcePollPaths.length > 0;
   }
 
   #principal(): DstarActor {
@@ -442,24 +462,85 @@ export class DstarMcpBroker {
   watchResources(
     listener: (change: DstarMcpResourceChange) => void,
   ): () => void {
+    if (!this.resourceSubscriptionsAvailable) return () => undefined;
     const target =
       this.mode === "document" ? this.#packageRoot! : this.#draftRoot!;
-    let watcher: FSWatcher;
+    let watcher: FSWatcher | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const pollers: Array<{
+      path: string;
+      listener: (current: Stats, previous: Stats) => void;
+    }> = [];
+    const changedPaths = new Set<string>();
+    const changedUris = async (): Promise<readonly string[]> => {
+      const resources = await this.listResources();
+      const uris = new Set<string>();
+      for (const path of changedPaths) {
+        const normalized = path.replaceAll("\\", "/");
+        if (normalized === "manifest.json")
+          uris.add("dstar://document/manifest");
+        else if (normalized === "draft.json")
+          uris.add("dstar://genesis/request");
+        else if (normalized === "document.json") {
+          for (const item of resources)
+            if (item.uri.startsWith("dstar://document/node/"))
+              uris.add(item.uri);
+        } else if (
+          normalized.startsWith("annotations/") &&
+          normalized.endsWith(".json")
+        ) {
+          const id = normalized.slice("annotations/".length, -".json".length);
+          uris.add(resourceUri("annotation", id));
+        } else if (normalized === "sources.json") {
+          for (const item of resources)
+            if (item.uri.startsWith("dstar://source/")) uris.add(item.uri);
+        } else if (normalized === "projections/index.json") {
+          for (const item of resources)
+            if (item.uri.startsWith("dstar://projection/")) uris.add(item.uri);
+        }
+      }
+      changedPaths.clear();
+      return [...uris].sort();
+    };
+    const schedule = (filename?: string) => {
+      if (filename) changedPaths.add(filename);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = undefined;
+        void changedUris()
+          .then((uris) => listener({ uris, listChanged: true }))
+          .catch(() => listener({ uris: [], listChanged: true }));
+      }, 50);
+      timer.unref?.();
+    };
+    for (const path of this.#resourcePollPaths) {
+      const pollListener = (current: Stats, previous: Stats) => {
+        if (
+          current.mtimeMs !== previous.mtimeMs ||
+          current.size !== previous.size
+        )
+          schedule(path.slice(target.length + 1));
+      };
+      watchFile(path, { interval: 200, persistent: false }, pollListener);
+      pollers.push({ path, listener: pollListener });
+    }
     try {
-      watcher = watch(target, { recursive: true, persistent: false }, () => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => listener({ uris: [], listChanged: true }), 50);
-        timer.unref?.();
-      });
-      watcher.on("error", () => watcher.close());
+      watcher = watch(
+        target,
+        { recursive: true, persistent: false },
+        (_event, filename) => {
+          schedule(filename?.toString());
+        },
+      );
+      watcher.on("error", () => watcher?.close());
       watcher.unref();
     } catch {
-      return () => undefined;
+      // Polling remains active when native recursive watching is unavailable.
     }
     return () => {
       if (timer) clearTimeout(timer);
-      watcher.close();
+      watcher?.close();
+      for (const poller of pollers) unwatchFile(poller.path, poller.listener);
     };
   }
 

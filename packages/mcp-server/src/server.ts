@@ -162,7 +162,9 @@ export function createDstarMcpServer(broker: DstarMcpBroker): McpServer {
     {
       capabilities: {
         tools: {},
-        resources: { listChanged: true, subscribe: true },
+        resources: broker.resourceSubscriptionsAvailable
+          ? { listChanged: true, subscribe: true }
+          : { listChanged: false, subscribe: false },
       },
       instructions:
         "DSTAR exposes one fixed document or draft scope for a human principal. Tools read portable document state and create pending proposals or replies. No MCP tool accepts, rejects, resolves, or directly changes canonical content.",
