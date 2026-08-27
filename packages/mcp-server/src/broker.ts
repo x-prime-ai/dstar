@@ -92,6 +92,11 @@ export interface DstarMcpResourceChange {
   readonly listChanged: boolean;
 }
 
+interface ResourceWatchState {
+  readonly descriptors: ReadonlyMap<string, string>;
+  readonly contents: ReadonlyMap<string, string>;
+}
+
 interface BrokerBaseOptions {
   readonly actorId: string;
   readonly expiresAt?: string;
@@ -272,6 +277,7 @@ export class DstarMcpBroker {
   #resourceWatchPaths: readonly string[] = [];
   #resourcePollPaths: readonly string[] = [];
   #resourceSubscriptionsAvailable = true;
+  #resourceWatchBaseline?: ResourceWatchState;
   #startedTasks = 0;
   #remainingResourceReads: number;
   #remainingResourceBytes: number;
@@ -344,13 +350,23 @@ export class DstarMcpBroker {
       broker.#resourcePollPaths = broker.#resourceSubscriptionsAvailable
         ? Object.freeze(pollPaths)
         : Object.freeze([]);
+      if (broker.#resourceSubscriptionsAvailable) {
+        broker.#resourceWatchBaseline = broker.#resourceWatchStateFrom(
+          undefined,
+          snapshot,
+        );
+      }
     } else {
-      await readDraft(broker.#draftRoot!);
+      const draft = await readDraft(broker.#draftRoot!);
       broker.#resourceWatchPaths = Object.freeze([broker.#draftRoot!]);
       broker.#resourcePollPaths = Object.freeze([
         broker.#draftRoot!,
         join(broker.#draftRoot!, "draft.json"),
       ]);
+      broker.#resourceWatchBaseline = broker.#resourceWatchStateFrom(
+        draft,
+        undefined,
+      );
     }
     return broker;
   }
@@ -501,6 +517,140 @@ export class DstarMcpBroker {
     return this.#resourceDescriptors();
   }
 
+  #resourceValue(
+    rawUri: string,
+    draft: GenesisDraft | undefined,
+    snapshot: PackageSnapshot | undefined,
+    documentIndex?: DocumentIndex,
+  ): JsonValue {
+    if (this.mode === "genesis") {
+      const currentDraft = draft!;
+      if (rawUri === "dstar://genesis/request") {
+        return asJson({
+          format: currentDraft.format,
+          request: {
+            documentId: currentDraft.request.documentId,
+            title: currentDraft.request.title,
+            profiles: currentDraft.request.profiles,
+            actor: currentDraft.request.actor,
+            body: currentDraft.request.body,
+            createdAt: currentDraft.request.createdAt,
+            allowedSourceIds:
+              currentDraft.request.sources?.sources
+                .map((source) => source.id)
+                .sort() ?? [],
+          },
+        });
+      }
+      const source = currentDraft.request.sources?.sources.find(
+        (candidate) => resourceUri("source", candidate.id) === rawUri,
+      );
+      if (!source) {
+        throw new McpBrokerError("NOT_FOUND", "The resource does not exist");
+      }
+      return asJson({ source });
+    }
+
+    const currentSnapshot = snapshot!;
+    if (rawUri === "dstar://document/manifest") {
+      return asJson({ manifest: currentSnapshot.manifest });
+    }
+    const index = documentIndex ?? new DocumentIndex(currentSnapshot.document);
+    const nodeId = index.readingOrder.find(
+      (candidate) => resourceUri("document/node", candidate) === rawUri,
+    );
+    if (nodeId) {
+      return asJson({
+        node: index.get(nodeId)!,
+        ancestorIds: index.ancestors(nodeId).map((ancestor) => ancestor.id),
+        documentRevision: currentSnapshot.manifest.revision,
+      });
+    }
+    const annotation = currentSnapshot.annotations.find(
+      (candidate) => resourceUri("annotation", candidate.id) === rawUri,
+    );
+    if (annotation) return asJson({ annotation });
+    const source = currentSnapshot.sources?.sources.find(
+      (candidate) => resourceUri("source", candidate.id) === rawUri,
+    );
+    if (source) {
+      let extract: string | undefined;
+      if (source.type === "file" && source.path) {
+        const bytes = currentSnapshot
+          .readFile(source.path)
+          ?.slice(0, 64 * 1024);
+        if (bytes) {
+          try {
+            extract = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+          } catch {
+            extract = undefined;
+          }
+        }
+      }
+      return asJson({
+        source,
+        ...(extract === undefined ? {} : { extract }),
+      });
+    }
+    const projection = currentSnapshot.projections?.projections.find(
+      (candidate) =>
+        resourceUri("projection", candidate.id, "/mapping") === rawUri,
+    );
+    if (!projection) {
+      throw new McpBrokerError("NOT_FOUND", "The resource does not exist");
+    }
+    return asJson({
+      projection: {
+        id: projection.id,
+        role: projection.role,
+        mediaType: projection.mediaType,
+        reviewable: projection.reviewable,
+        generatedFromRevision: projection.generatedFromRevision,
+        revision: projection.revision,
+        ...(projection.segments === undefined
+          ? {}
+          : { segments: projection.segments }),
+      },
+    });
+  }
+
+  #resourceWatchStateFrom(
+    draft: GenesisDraft | undefined,
+    snapshot: PackageSnapshot | undefined,
+  ): ResourceWatchState {
+    const descriptors = draft
+      ? this.#genesisResourceDescriptors(draft)
+      : this.#documentResourceDescriptors(snapshot!);
+    const documentIndex = snapshot
+      ? new DocumentIndex(snapshot.document)
+      : undefined;
+    return {
+      descriptors: new Map(
+        descriptors.map((descriptor) => [
+          descriptor.uri,
+          revisionOf(asJson(descriptor)),
+        ]),
+      ),
+      contents: new Map(
+        descriptors.map((descriptor) => [
+          descriptor.uri,
+          revisionOf(
+            this.#resourceValue(descriptor.uri, draft, snapshot, documentIndex),
+          ),
+        ]),
+      ),
+    };
+  }
+
+  async #resourceWatchState(): Promise<ResourceWatchState> {
+    this.#checkProcess();
+    const draft =
+      this.mode === "genesis" ? await readDraft(this.#draftRoot!) : undefined;
+    const snapshot =
+      this.mode === "document" ? await this.#snapshot() : undefined;
+    return this.#resourceWatchStateFrom(draft, snapshot);
+  }
+
   async readResource(
     rawUri: string,
     signal?: AbortSignal,
@@ -528,109 +678,7 @@ export class DstarMcpBroker {
       );
     }
 
-    let value: JsonValue;
-    if (this.mode === "genesis") {
-      const currentDraft = draft!;
-      if (rawUri === "dstar://genesis/request") {
-        value = asJson({
-          format: currentDraft.format,
-          request: {
-            documentId: currentDraft.request.documentId,
-            title: currentDraft.request.title,
-            profiles: currentDraft.request.profiles,
-            actor: currentDraft.request.actor,
-            body: currentDraft.request.body,
-            createdAt: currentDraft.request.createdAt,
-            allowedSourceIds:
-              currentDraft.request.sources?.sources
-                .map((source) => source.id)
-                .sort() ?? [],
-          },
-        });
-      } else {
-        const source = currentDraft.request.sources?.sources.find(
-          (candidate) => resourceUri("source", candidate.id) === rawUri,
-        );
-        if (!source) {
-          throw new McpBrokerError("NOT_FOUND", "The resource does not exist");
-        }
-        value = asJson({ source });
-      }
-    } else {
-      const currentSnapshot = snapshot!;
-      if (rawUri === "dstar://document/manifest") {
-        value = asJson({ manifest: currentSnapshot.manifest });
-      } else {
-        const nodeId = new DocumentIndex(
-          currentSnapshot.document,
-        ).readingOrder.find(
-          (candidate) => resourceUri("document/node", candidate) === rawUri,
-        );
-        if (nodeId) {
-          const index = new DocumentIndex(currentSnapshot.document);
-          value = asJson({
-            node: index.get(nodeId)!,
-            ancestorIds: index.ancestors(nodeId).map((ancestor) => ancestor.id),
-            documentRevision: currentSnapshot.manifest.revision,
-          });
-        } else {
-          const annotation = currentSnapshot.annotations.find(
-            (candidate) => resourceUri("annotation", candidate.id) === rawUri,
-          );
-          if (annotation) {
-            value = asJson({ annotation });
-          } else {
-            const source = currentSnapshot.sources?.sources.find(
-              (candidate) => resourceUri("source", candidate.id) === rawUri,
-            );
-            if (source) {
-              let extract: string | undefined;
-              if (source.type === "file" && source.path) {
-                const bytes = currentSnapshot
-                  .readFile(source.path)
-                  ?.slice(0, 64 * 1024);
-                if (bytes) {
-                  try {
-                    extract = new TextDecoder("utf-8", { fatal: true }).decode(
-                      bytes,
-                    );
-                  } catch {
-                    extract = undefined;
-                  }
-                }
-              }
-              value = asJson({
-                source,
-                ...(extract === undefined ? {} : { extract }),
-              });
-            } else {
-              const projection = currentSnapshot.projections?.projections.find(
-                (candidate) =>
-                  resourceUri("projection", candidate.id, "/mapping") ===
-                  rawUri,
-              );
-              if (!projection) {
-                throw new McpBrokerError(
-                  "NOT_FOUND",
-                  "The resource does not exist",
-                );
-              }
-              value = asJson({
-                projection: {
-                  id: projection.id,
-                  role: projection.role,
-                  mediaType: projection.mediaType,
-                  reviewable: projection.reviewable,
-                  generatedFromRevision: projection.generatedFromRevision,
-                  revision: projection.revision,
-                  segments: projection.segments,
-                },
-              });
-            }
-          }
-        }
-      }
-    }
+    const value = this.#resourceValue(rawUri, draft, snapshot);
 
     const text = JSON.stringify(value);
     const size = new TextEncoder().encode(text).byteLength;
@@ -651,28 +699,39 @@ export class DstarMcpBroker {
     const watchers: FSWatcher[] = [];
     const polledPaths: string[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let previous = new Set<string>();
+    let previous = this.#resourceWatchBaseline;
     let closed = false;
-    void this.#resourceDescriptors()
-      .then((resources) => {
-        previous = new Set(resources.map((resource) => resource.uri));
-      })
-      .catch(() => undefined);
+    let refreshChain = Promise.resolve();
     const onChange = () => {
       if (closed) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         timer = undefined;
-        void this.#resourceDescriptors()
-          .then((resources) => {
+        refreshChain = refreshChain
+          .catch(() => undefined)
+          .then(async () => {
+            const next = await this.#resourceWatchState();
             if (closed) return;
-            const next = new Set(resources.map((resource) => resource.uri));
-            const uris = [...new Set([...previous, ...next])].sort();
-            const listChanged =
-              previous.size !== next.size ||
-              [...previous].some((uri) => !next.has(uri));
+            const current = previous;
             previous = next;
-            listener({ uris, listChanged });
+            if (!current) return;
+            const listChanged =
+              current.descriptors.size !== next.descriptors.size ||
+              [...current.descriptors].some(
+                ([uri, fingerprint]) =>
+                  next.descriptors.get(uri) !== fingerprint,
+              );
+            const uris = [...next.contents]
+              .filter(
+                ([uri, fingerprint]) =>
+                  current.contents.has(uri) &&
+                  current.contents.get(uri) !== fingerprint,
+              )
+              .map(([uri]) => uri)
+              .sort();
+            if (listChanged || uris.length > 0) {
+              listener({ uris, listChanged });
+            }
           })
           .catch(() => undefined);
       }, 50);

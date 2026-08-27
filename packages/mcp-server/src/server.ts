@@ -1,5 +1,7 @@
 import {
   McpServer,
+  ProtocolError,
+  ProtocolErrorCode,
   ResourceTemplate,
   fromJsonSchema,
   type CallToolResult,
@@ -159,14 +161,15 @@ async function call(handler: () => Promise<unknown>): Promise<CallToolResult> {
 }
 
 export function createDstarMcpServer(broker: DstarMcpBroker): McpServer {
+  const resourceNotificationsAvailable = broker.resourceSubscriptionsAvailable;
   const server = new McpServer(
     { name: "dstar", version: "0.1.0" },
     {
       capabilities: {
         tools: {},
         resources: {
-          listChanged: true,
-          subscribe: broker.resourceSubscriptionsAvailable,
+          listChanged: resourceNotificationsAvailable,
+          subscribe: resourceNotificationsAvailable,
         },
       },
       instructions:
@@ -214,12 +217,24 @@ export function createDstarMcpServer(broker: DstarMcpBroker): McpServer {
     },
   ] as const;
 
+  const resourceCatalogs = new WeakMap<
+    object,
+    Promise<Awaited<ReturnType<DstarMcpBroker["listResources"]>>>
+  >();
+  const resourceCatalogFor = (context: object) => {
+    const current = resourceCatalogs.get(context);
+    if (current) return current;
+    const catalog = broker.listResources();
+    resourceCatalogs.set(context, catalog);
+    return catalog;
+  };
+
   for (const definition of resourceDefinitions) {
     server.registerResource(
       definition.name,
       new ResourceTemplate(definition.template, {
-        list: async () => ({
-          resources: (await broker.listResources())
+        list: async (context) => ({
+          resources: (await resourceCatalogFor(context))
             .filter((resource) => definition.matches(resource.uri))
             .map((resource) => ({
               ...resource,
@@ -236,9 +251,36 @@ export function createDstarMcpServer(broker: DstarMcpBroker): McpServer {
     );
   }
 
+  const legacySubscriptions = new Set<string>();
+  server.server.setRequestHandler("resources/subscribe", async (request) => {
+    if (!resourceNotificationsAvailable) {
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidRequest,
+        "Resource subscriptions are unavailable for this package",
+      );
+    }
+    const resources = await broker.listResources();
+    if (!resources.some((resource) => resource.uri === request.params.uri)) {
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
+        "The resource is unavailable to this process scope",
+      );
+    }
+    legacySubscriptions.add(request.params.uri);
+    return {};
+  });
+  server.server.setRequestHandler("resources/unsubscribe", async (request) => {
+    legacySubscriptions.delete(request.params.uri);
+    return {};
+  });
+
   const stopWatching = broker.watchResources((change) => {
     if (change.listChanged) server.sendResourceListChanged();
+    const protocolVersion = server.server.getNegotiatedProtocolVersion();
+    const modern =
+      protocolVersion !== undefined && protocolVersion >= "2026-07-28";
     for (const uri of change.uris) {
+      if (!modern && !legacySubscriptions.has(uri)) continue;
       void server.server.sendResourceUpdated({ uri }).catch(() => undefined);
     }
   });

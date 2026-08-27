@@ -27,6 +27,17 @@ const resourceFixture = JSON.parse(
 ) as {
   readonly templates: readonly string[];
   readonly resources: readonly string[];
+  readonly legacySubscriptionMethods: readonly string[];
+  readonly notificationCapabilities: {
+    readonly available: {
+      readonly listChanged: true;
+      readonly subscribe: true;
+    };
+    readonly unavailable: {
+      readonly listChanged: false;
+      readonly subscribe: false;
+    };
+  };
 };
 
 function forbiddenSchemaKeyword(value: unknown): string | undefined {
@@ -81,6 +92,22 @@ async function brokerFixtureWithRoot() {
 
 async function brokerFixture() {
   return (await brokerFixtureWithRoot()).broker;
+}
+
+function brokerStub(
+  options: {
+    readonly notificationsAvailable?: boolean;
+    readonly listResources?: DstarMcpBroker["listResources"];
+  } = {},
+): DstarMcpBroker {
+  return {
+    resourceSubscriptionsAvailable: options.notificationsAvailable ?? true,
+    listResources: options.listResources ?? (async () => []),
+    readResource: async () => {
+      throw new Error("Resource reads are not used by this test broker");
+    },
+    watchResources: () => () => undefined,
+  } as unknown as DstarMcpBroker;
 }
 
 describe("official MCP v2 adapter", () => {
@@ -158,6 +185,56 @@ describe("official MCP v2 adapter", () => {
     }
   });
 
+  it("shares one resource catalog across all templates in a list request", async () => {
+    let listCalls = 0;
+    const server = createDstarMcpServer(
+      brokerStub({
+        listResources: async () => {
+          listCalls += 1;
+          return [];
+        },
+      }),
+    );
+    const client = new Client({ name: "dstar-list-test", version: "0.0.0" });
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport),
+      ]);
+      await client.listResources();
+      expect(listCalls).toBe(1);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("advertises no Resource notifications when the watcher is unavailable", async () => {
+    const server = createDstarMcpServer(
+      brokerStub({ notificationsAvailable: false }),
+    );
+    const client = new Client({
+      name: "dstar-capability-test",
+      version: "0.0.0",
+    });
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport),
+      ]);
+      expect(client.getServerCapabilities()?.resources).toEqual(
+        resourceFixture.notificationCapabilities.unavailable,
+      );
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("never exposes a genesis draft output path as a Resource", async () => {
     const draftRoot = await mkdtemp(join(tmpdir(), "dstar-genesis-resource-"));
     await writeFile(
@@ -184,6 +261,89 @@ describe("official MCP v2 adapter", () => {
     expect(content.text).toContain("doc_genesis_resource");
     expect(content.text).not.toContain("/private/secret");
     expect(content.text).not.toContain('"output"');
+  });
+
+  it("implements scoped legacy subscribe and unsubscribe requests", async () => {
+    const { broker, packageRoot } = await brokerFixtureWithRoot();
+    const server = createDstarMcpServer(broker);
+    const client = new Client({
+      name: "dstar-legacy-subscription-test",
+      version: "0.0.0",
+    });
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    const updated = new Promise<string>((resolveUpdated, rejectUpdated) => {
+      const timeout = setTimeout(
+        () =>
+          rejectUpdated(new Error("legacy resource update was not delivered")),
+        5_000,
+      );
+      timeout.unref?.();
+      client.setNotificationHandler(
+        "notifications/resources/updated",
+        (notification) => {
+          clearTimeout(timeout);
+          resolveUpdated(notification.params.uri);
+        },
+      );
+    });
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport),
+      ]);
+      expect(client.getServerCapabilities()?.resources).toEqual(
+        resourceFixture.notificationCapabilities.available,
+      );
+      expect(resourceFixture.legacySubscriptionMethods).toEqual([
+        "resources/subscribe",
+        "resources/unsubscribe",
+      ]);
+      await expect(
+        client.subscribeResource({ uri: "file:///etc/passwd" }),
+      ).rejects.toThrow();
+      await client.subscribeResource({ uri: "dstar://document/manifest" });
+      const manifestPath = join(packageRoot, "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      manifest.title = `${manifest.title} updated`;
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+      expect(await updated).toBe("dstar://document/manifest");
+      await client.unsubscribeResource({ uri: "dstar://document/manifest" });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("reports only Resource contents that actually changed", async () => {
+    const { broker, packageRoot } = await brokerFixtureWithRoot();
+    let stopWatching = () => undefined;
+    const changed = new Promise<{
+      readonly uris: readonly string[];
+      readonly listChanged: boolean;
+    }>((resolveChanged, rejectChanged) => {
+      const timeout = setTimeout(
+        () => rejectChanged(new Error("resource diff was not delivered")),
+        5_000,
+      );
+      timeout.unref?.();
+      stopWatching = broker.watchResources((change) => {
+        clearTimeout(timeout);
+        resolveChanged(change);
+      });
+    });
+    try {
+      const manifestPath = join(packageRoot, "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      manifest.title = `${manifest.title} updated`;
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+      expect(await changed).toEqual({
+        uris: ["dstar://document/manifest"],
+        listChanged: true,
+      });
+    } finally {
+      stopWatching();
+    }
   });
 
   it("delivers scoped resource updates through modern subscriptions/listen", async () => {
@@ -235,10 +395,9 @@ describe("official MCP v2 adapter", () => {
         resourceSubscriptions: ["dstar://document/manifest"],
       });
       const manifestPath = join(packageRoot, "manifest.json");
-      await writeFile(
-        manifestPath,
-        `${await readFile(manifestPath, "utf8")}\n`,
-      );
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      manifest.title = `${manifest.title} updated`;
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
       await directlyWatched;
       expect(await updated).toBe("dstar://document/manifest");
       await subscription.close();

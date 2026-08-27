@@ -6,9 +6,25 @@ expected output. Implementations may use any language and runtime; they pass a
 case when their normalized JSON output is I-JSON-equivalent to the named
 `expected` file.
 
+Each case is self-describing. `roles` selects the normalized role results that
+must be emitted, while `exercise` supplies portable inputs rather than relying
+on IDs built into a runner:
+
+- `review` selects an annotation and canonical target;
+- `update.operation` supplies an operation template whose `nodeRevision` is
+  computed from the input package;
+- `update.proposal` fixes the agent author, provenance, and deterministic time;
+- `update.decision` fixes a separate human decision actor and time; and
+- `projections` lists the deterministic renderer kinds to exercise.
+
+Runners MUST reject unknown roles, missing exercise inputs, profile mismatches,
+or unavailable targets. They MUST NOT replace the declared agent author or
+human decision actor with a single authority principal.
+
 The reference TypeScript runner is `scripts/run-role-fixtures.mjs`. The
-independent Python validator recomputes canonical document revisions without
-importing DSTAR packages:
+independent Python validator recomputes the normalized output, including the
+update result, exact review target, authority provenance, and deterministic
+base-profile render output, without importing DSTAR packages:
 
 ```text
 pnpm build
