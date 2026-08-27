@@ -62,6 +62,23 @@ describe("atomic package commands", () => {
         idempotencyKey: "reply-human-test",
       },
     );
+    const replyRetry = await commands.addHumanReply(
+      replied,
+      {
+        annotationId: "ann_0001",
+        reply: {
+          id: "reply_human_test",
+          body: "Keep this discussion separate from assignment.",
+          author: human,
+          createdAt: "2026-08-26T09:00:00Z",
+        },
+      },
+      {
+        expectedSnapshotId: replied.snapshotId,
+        idempotencyKey: "reply-human-test",
+      },
+    );
+    expect(replyRetry.snapshotId).toBe(replied.snapshotId);
     const resolved = await commands.resolveAnnotation(
       replied,
       "ann_0001",
@@ -149,6 +166,45 @@ describe("atomic package commands", () => {
     ).toBe("proposed");
     expect(completed.manifest.headChange).toBe(opened.manifest.headChange);
     expect(completed.manifest.revision).toBe(opened.manifest.revision);
+    const retry = await commands.recordProposal(
+      completed,
+      { change: proposal },
+      {
+        expectedSnapshotId: completed.snapshotId,
+        idempotencyKey: "proposal-test",
+      },
+    );
+    expect(retry.snapshotId).toBe(completed.snapshotId);
+  });
+
+  it("treats an identical annotation in the current snapshot as a retry", async () => {
+    const { packageRoot, repository, commands } = await workspace();
+    const opened = await repository.open(packageRoot);
+    const input = {
+      id: "ann_retry",
+      purpose: "discussion" as const,
+      scope: "canonical" as const,
+      target: {
+        source: "document",
+        revision: opened.manifest.revision,
+        selector: { type: "NodeSelector" as const, node: "node_promise" },
+      },
+      body: "Review this portable comment.",
+      author: human,
+      createdAt: "2026-08-26T09:30:00Z",
+    };
+    const created = await commands.createAnnotation(opened, input, {
+      expectedSnapshotId: opened.snapshotId,
+      idempotencyKey: "annotation-retry",
+    });
+    const retry = await commands.createAnnotation(created, input, {
+      expectedSnapshotId: created.snapshotId,
+      idempotencyKey: "annotation-retry",
+    });
+    expect(retry.snapshotId).toBe(created.snapshotId);
+    expect(
+      retry.annotations.filter((item) => item.id === input.id),
+    ).toHaveLength(1);
   });
 
   it("accepts only through a human decision and rebuilds history without runtime state", async () => {

@@ -84,11 +84,17 @@ Resources are optional URI-addressed views of the same fixed scope:
 | `dstar://annotation/{annotationId}` | Annotation thread |
 | `dstar://source/{sourceId}` | Source metadata |
 | `dstar://projection/{projectionId}/mapping` | Projection mapping |
-| `dstar://genesis/request` | Fixed genesis request |
+| `dstar://genesis/request` | Public fixed genesis request fields |
 
 Resources grant no additional mutation authority. Clients without Resource
 support use equivalent read tools. Change notifications are best-effort
 invalidation hints; every read reopens a validated snapshot.
+
+The public genesis request contains `documentId`, `title`, `profiles`, `actor`,
+`body`, `createdAt`, and `allowedSourceIds`. The server-held output path and the
+embedded source collection are not exposed through either this Resource or
+`get_manifest`; source metadata remains available only through the scoped
+`dstar://source/{sourceId}` Resource and `get_source` tool.
 
 ## 6. MCP App
 

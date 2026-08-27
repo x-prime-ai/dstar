@@ -9,6 +9,16 @@
     "dstar://genesis/request"
   ],
   "minimalDocumentPrincipal": "human_demo",
+  "publicGenesisRequestFields": [
+    "documentId",
+    "title",
+    "profiles",
+    "actor",
+    "body",
+    "createdAt",
+    "allowedSourceIds"
+  ],
+  "privateGenesisRequestFields": ["output", "sources"],
   "resources": [
     "dstar://document/manifest",
     "dstar://document/node/node_root",

@@ -127,6 +127,88 @@ describe("document-scoped DSTAR MCP broker", () => {
     ]);
   });
 
+  it("does not persist writes that exceed the session byte budget", async () => {
+    const { packageRoot, runtimeRoot, repository } = await documentWorkspace();
+    const before = await repository.open(packageRoot);
+    const broker = await DstarMcpBroker.create({
+      mode: "document",
+      packageRoot,
+      runtimeRoot,
+      principalId: principal.id,
+      budgets: { maxOutputBytes: 1 },
+    });
+    const operation = {
+      ...before.changes.find((change) => change.id === "change_0001")!
+        .operations[0],
+      id: "operation_budget_guard",
+    };
+    await expect(
+      broker.submitProposal({
+        idempotencyKey: "budget-guard-proposal",
+        baseChange: before.manifest.headChange,
+        baseRevision: before.manifest.revision,
+        operations: [operation],
+      }),
+    ).rejects.toMatchObject<McpBrokerError>({ code: "BUDGET_EXCEEDED" });
+    await expect(
+      broker.replyComment({
+        annotationId: "ann_0001",
+        body: "This must not be persisted.",
+        idempotencyKey: "budget-guard-reply",
+      }),
+    ).rejects.toMatchObject<McpBrokerError>({ code: "BUDGET_EXCEEDED" });
+
+    const after = await repository.open(packageRoot);
+    expect(after.changes).toEqual(before.changes);
+    expect(after.annotations).toEqual(before.annotations);
+  });
+
+  it("uses a collision-free ephemeral change for simulation", async () => {
+    const { packageRoot, runtimeRoot, repository } = await documentWorkspace();
+    const broker = await DstarMcpBroker.create({
+      mode: "document",
+      packageRoot,
+      runtimeRoot,
+      principalId: principal.id,
+      now: () => new Date("2026-08-26T12:00:00Z"),
+    });
+    const before = await repository.open(packageRoot);
+    const baseOperation = before.changes.find(
+      (change) => change.id === "change_0001",
+    )!.operations[0];
+    const submitted = (await broker.submitProposal({
+      idempotencyKey: "simulation",
+      baseChange: before.manifest.headChange,
+      baseRevision: before.manifest.revision,
+      operations: [
+        {
+          ...baseOperation,
+          id: "operation_saved_simulation",
+          value: "Saved proposal text",
+        },
+      ],
+    })) as Record<string, unknown>;
+    const simulated = (await broker.simulateUpdate({
+      baseChange: before.manifest.headChange,
+      baseRevision: before.manifest.revision,
+      operations: [
+        {
+          ...baseOperation,
+          id: "operation_ephemeral_simulation",
+          value: "New simulation text",
+        },
+      ],
+    })) as Record<string, unknown>;
+
+    expect((simulated.proposal as DstarChange).id).not.toBe(submitted.changeId);
+    expect(JSON.stringify(simulated.simulation)).toContain(
+      "New simulation text",
+    );
+    expect(JSON.stringify(simulated.simulation)).not.toContain(
+      "Saved proposal text",
+    );
+  });
+
   it("enforces cancellation, session budgets, expiry, and resource scope", async () => {
     const { packageRoot, runtimeRoot } = await documentWorkspace();
     let now = new Date("2026-08-26T12:00:00Z");
@@ -152,9 +234,37 @@ describe("document-scoped DSTAR MCP broker", () => {
       code: "BUDGET_EXCEEDED",
     });
     now = new Date("2026-08-26T12:02:00Z");
+    await expect(broker.listResources()).rejects.toMatchObject<McpBrokerError>({
+      code: "CAPABILITY_EXPIRED",
+    });
     await expect(broker.getManifest()).rejects.toMatchObject<McpBrokerError>({
       code: "CAPABILITY_EXPIRED",
     });
+  });
+
+  it("rejects a source larger than the requested maxBytes", async () => {
+    const { packageRoot, runtimeRoot } = await documentWorkspace();
+    const broker = await DstarMcpBroker.create({
+      mode: "document",
+      packageRoot,
+      runtimeRoot,
+      principalId: principal.id,
+    });
+    await expect(
+      broker.getSource("source_dstar_spec", 1),
+    ).rejects.toMatchObject<McpBrokerError>({ code: "BUDGET_EXCEEDED" });
+
+    const catalogBroker = await DstarMcpBroker.create({
+      mode: "document",
+      packageRoot,
+      runtimeRoot,
+      principalId: principal.id,
+      budgets: { maxCalls: 1 },
+    });
+    await expect(catalogBroker.listResources()).resolves.not.toHaveLength(0);
+    await expect(
+      catalogBroker.listResources(),
+    ).rejects.toMatchObject<McpBrokerError>({ code: "BUDGET_EXCEEDED" });
   });
 
   it("stages an idempotent genesis proposal without creating canonical content", async () => {
@@ -164,7 +274,7 @@ describe("document-scoped DSTAR MCP broker", () => {
     await writeFile(
       requestFile,
       encodeJson({
-        output: "created.dstar",
+        output: "/private/sensitive/output.dstar",
         documentId: "document_mcp",
         title: "MCP genesis",
         profiles: ["dstar:base"],
@@ -194,6 +304,19 @@ describe("document-scoped DSTAR MCP broker", () => {
       ],
     };
     const input = { idempotencyKey: "genesis-result", document };
+    const manifest = await broker.getManifest();
+    const requestResource = await broker.readResource(
+      "dstar://genesis/request",
+    );
+    expect(JSON.stringify(manifest)).not.toContain(
+      "/private/sensitive/output.dstar",
+    );
+    expect(requestResource.text).not.toContain(
+      "/private/sensitive/output.dstar",
+    );
+    expect(manifest).toMatchObject({
+      request: { allowedSourceIds: [] },
+    });
     await expect(broker.submitGenesis(input)).resolves.toMatchObject({
       status: "pending-human-decision",
       documentRevision: documentRevision(document),
@@ -213,6 +336,42 @@ describe("document-scoped DSTAR MCP broker", () => {
     expect(proposal).toMatchObject({ status: "proposed", author: principal });
     await expect(
       readFile(join(temporary, "created.dstar", "manifest.json")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("does not stage a genesis proposal that exceeds byte budget", async () => {
+    const temporary = await mkdtemp(
+      join(tmpdir(), "dstar-mcp-genesis-budget-"),
+    );
+    const requestFile = join(temporary, "request.json");
+    const draftRoot = join(temporary, "draft");
+    await writeFile(
+      requestFile,
+      encodeJson({
+        output: "/private/sensitive/output.dstar",
+        documentId: "document_budget",
+        title: "Budgeted genesis",
+        profiles: ["dstar:base"],
+        actor: principal,
+        body: "Create a document.",
+        createdAt: "2026-08-26T13:00:00Z",
+      }),
+    );
+    await createGenesisDraft(requestFile, draftRoot);
+    const broker = await DstarMcpBroker.create({
+      mode: "genesis",
+      draftRoot,
+      principalId: principal.id,
+      budgets: { maxOutputBytes: 1 },
+    });
+    await expect(
+      broker.submitGenesis({
+        idempotencyKey: "budget-genesis",
+        document: { id: "node_budget", type: "document", children: [] },
+      }),
+    ).rejects.toMatchObject<McpBrokerError>({ code: "BUDGET_EXCEEDED" });
+    await expect(
+      readFile(join(draftRoot, "proposal.json")),
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

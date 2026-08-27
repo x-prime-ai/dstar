@@ -7,6 +7,7 @@ import {
   materializeVersion,
   parseIJson,
   rejectOrSupersedeChange,
+  revisionOf,
   simulateUpdateChange,
   validateStructure,
   type AnnotationInput,
@@ -93,6 +94,10 @@ function annotationPath(snapshot: PackageSnapshot, id: string): string {
   return `${snapshot.manifest.annotations ?? "annotations"}/${id}.json`;
 }
 
+function samePortableValue(left: unknown, right: unknown): boolean {
+  return revisionOf(left as JsonValue) === revisionOf(right as JsonValue);
+}
+
 export class PackageCommands {
   readonly repository: PackageRepository;
 
@@ -106,9 +111,11 @@ export class PackageCommands {
     identity: CommandIdentity,
   ): Promise<PackageSnapshot> {
     const annotation = buildAnnotation(input);
-    if (
-      snapshot.annotations.some((candidate) => candidate.id === annotation.id)
-    ) {
+    const existing = snapshot.annotations.find(
+      (candidate) => candidate.id === annotation.id,
+    );
+    if (existing) {
+      if (samePortableValue(existing, annotation)) return snapshot;
       throw new PackageCommandError(
         `Annotation ${annotation.id} already exists`,
       );
@@ -146,12 +153,13 @@ export class PackageCommands {
       throw new PackageCommandError(
         "A direct review reply must be non-empty and human-authored",
       );
-    if (
-      (annotation.replies ?? []).some(
-        (candidate) => candidate.id === input.reply.id,
-      )
-    )
+    const existingReply = (annotation.replies ?? []).find(
+      (candidate) => candidate.id === input.reply.id,
+    );
+    if (existingReply) {
+      if (samePortableValue(existingReply, input.reply)) return snapshot;
       throw new PackageCommandError(`Reply ${input.reply.id} already exists`);
+    }
     const updated: DstarAnnotation = {
       ...annotation,
       replies: [...(annotation.replies ?? []), input.reply],
@@ -245,12 +253,6 @@ export class PackageCommands {
     input: ProposalSubmissionInput,
     identity: CommandIdentity,
   ): Promise<PackageSnapshot> {
-    if (
-      input.change &&
-      snapshot.changes.some((candidate) => candidate.id === input.change?.id)
-    ) {
-      throw new PackageCommandError(`Change ${input.change.id} already exists`);
-    }
     if (!input.change && !input.reply) {
       throw new PackageCommandError(
         "A proposal submission requires a change or reply",
@@ -264,10 +266,20 @@ export class PackageCommands {
     }
     const writes = new Map<string, Uint8Array>();
     if (input.change) {
-      writes.set(
-        changePath(snapshot, input.change.id),
-        encodeJson(asJson(input.change)),
+      const existingChange = snapshot.changes.find(
+        (candidate) => candidate.id === input.change?.id,
       );
+      if (existingChange) {
+        if (!samePortableValue(existingChange, input.change))
+          throw new PackageCommandError(
+            `Change ${input.change.id} already exists`,
+          );
+      } else {
+        writes.set(
+          changePath(snapshot, input.change.id),
+          encodeJson(asJson(input.change)),
+        );
+      }
     }
     if (input.reply) {
       if (!input.annotationId)
@@ -279,22 +291,27 @@ export class PackageCommands {
         throw new PackageCommandError(
           `Annotation ${input.annotationId} does not exist`,
         );
-      if (
-        (annotation.replies ?? []).some(
-          (candidate) => candidate.id === input.reply?.id,
-        )
-      )
-        throw new PackageCommandError(`Reply ${input.reply.id} already exists`);
-      writes.set(
-        annotationPath(snapshot, annotation.id),
-        encodeJson(
-          asJson({
-            ...annotation,
-            replies: [...(annotation.replies ?? []), input.reply],
-          }),
-        ),
+      const existingReply = (annotation.replies ?? []).find(
+        (candidate) => candidate.id === input.reply?.id,
       );
+      if (existingReply) {
+        if (!samePortableValue(existingReply, input.reply))
+          throw new PackageCommandError(
+            `Reply ${input.reply.id} already exists`,
+          );
+      } else {
+        writes.set(
+          annotationPath(snapshot, annotation.id),
+          encodeJson(
+            asJson({
+              ...annotation,
+              replies: [...(annotation.replies ?? []), input.reply],
+            }),
+          ),
+        );
+      }
     }
+    if (writes.size === 0) return snapshot;
     return this.repository.commit(snapshot, {
       expectedSnapshotId: identity.expectedSnapshotId,
       transactionType: "proposal",

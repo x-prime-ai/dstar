@@ -33,7 +33,7 @@ import {
   type Stats,
 } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export const MCP_TOOL_NAMES = Object.freeze([
   "get_manifest",
@@ -226,6 +226,19 @@ async function readDraft(root: string): Promise<GenesisDraft> {
   return value;
 }
 
+function publicGenesisRequest(draft: GenesisDraft): JsonValue {
+  const { request } = draft;
+  return asJson({
+    documentId: request.documentId,
+    title: request.title,
+    profiles: request.profiles,
+    actor: request.actor,
+    body: request.body,
+    createdAt: request.createdAt,
+    allowedSourceIds: request.sources?.sources.map((source) => source.id) ?? [],
+  });
+}
+
 export class DstarMcpBroker {
   readonly mode: "document" | "genesis";
   readonly principalId: string;
@@ -272,15 +285,18 @@ export class DstarMcpBroker {
     const broker = new DstarMcpBroker(options);
     if (options.mode === "document") {
       const snapshot = await broker.#snapshot();
-      if (snapshot.inventory.length <= 256)
-        broker.#resourcePollPaths = Object.freeze(
-          snapshot.inventory.map((item) =>
-            join(broker.#packageRoot!, item.path),
-          ),
-        );
+      const pollPaths = new Set<string>([broker.#packageRoot!]);
+      for (const item of snapshot.inventory) {
+        const path = join(broker.#packageRoot!, item.path);
+        pollPaths.add(path);
+        pollPaths.add(dirname(path));
+      }
+      if (pollPaths.size <= 512)
+        broker.#resourcePollPaths = Object.freeze([...pollPaths]);
     } else {
       await readDraft(broker.#draftRoot!);
       broker.#resourcePollPaths = Object.freeze([
+        broker.#draftRoot!,
         join(broker.#draftRoot!, "draft.json"),
         join(broker.#draftRoot!, "proposal.json"),
       ]);
@@ -296,13 +312,17 @@ export class DstarMcpBroker {
     return { type: "human", id: this.principalId };
   }
 
-  #begin(signal?: AbortSignal): void {
+  #checkSession(signal?: AbortSignal): void {
     checkAbort(signal);
     if (this.#now().getTime() >= Date.parse(this.expiresAt))
       throw new McpBrokerError(
         "CAPABILITY_EXPIRED",
         "The DSTAR session expired",
       );
+  }
+
+  #begin(signal?: AbortSignal): void {
+    this.#checkSession(signal);
     if (this.#remainingCalls <= 0)
       throw new McpBrokerError(
         "BUDGET_EXCEEDED",
@@ -311,7 +331,7 @@ export class DstarMcpBroker {
     this.#remainingCalls -= 1;
   }
 
-  #finish(value: JsonValue, readBytes = 0): JsonValue {
+  #consume(value: JsonValue, readBytes = 0): void {
     const outputBytes = byteLength(value);
     if (
       readBytes > this.#remainingReadBytes ||
@@ -323,6 +343,10 @@ export class DstarMcpBroker {
       );
     this.#remainingReadBytes -= readBytes;
     this.#remainingOutputBytes -= outputBytes;
+  }
+
+  #finish(value: JsonValue, readBytes = 0): JsonValue {
+    this.#consume(value, readBytes);
     return value;
   }
 
@@ -343,7 +367,7 @@ export class DstarMcpBroker {
     return this.#repository!.open(this.#packageRoot!);
   }
 
-  async listResources(): Promise<readonly DstarMcpResourceDescriptor[]> {
+  async #listResources(): Promise<readonly DstarMcpResourceDescriptor[]> {
     if (this.mode === "genesis") {
       const draft = await readDraft(this.#draftRoot!);
       return Object.freeze([
@@ -407,12 +431,21 @@ export class DstarMcpBroker {
     ]);
   }
 
+  async listResources(
+    signal?: AbortSignal,
+  ): Promise<readonly DstarMcpResourceDescriptor[]> {
+    this.#begin(signal);
+    const resources = await this.#listResources();
+    this.#consume(asJson(resources), byteLength(resources));
+    return resources;
+  }
+
   async readResource(
     rawUri: string,
     signal?: AbortSignal,
   ): Promise<DstarMcpResourceContent> {
     this.#begin(signal);
-    if (!(await this.listResources()).some((item) => item.uri === rawUri))
+    if (!(await this.#listResources()).some((item) => item.uri === rawUri))
       throw new McpBrokerError(
         "CAPABILITY_DENIED",
         "The resource is outside this document scope",
@@ -424,7 +457,7 @@ export class DstarMcpBroker {
         (item) => resourceUri("source", item.id) === rawUri,
       );
       if (rawUri === "dstar://genesis/request")
-        value = asJson({ request: draft.request });
+        value = asJson({ request: publicGenesisRequest(draft) });
       else if (source) value = asJson({ source });
       else throw new McpBrokerError("NOT_FOUND", "Resource not found");
     } else {
@@ -473,9 +506,12 @@ export class DstarMcpBroker {
     }> = [];
     const changedPaths = new Set<string>();
     const changedUris = async (): Promise<readonly string[]> => {
-      const resources = await this.listResources();
+      this.#checkSession();
+      const paths = [...changedPaths];
+      changedPaths.clear();
+      const resources = await this.#listResources();
       const uris = new Set<string>();
-      for (const path of changedPaths) {
+      for (const path of paths) {
         const normalized = path.replaceAll("\\", "/");
         if (normalized === "manifest.json")
           uris.add("dstar://document/manifest");
@@ -499,7 +535,6 @@ export class DstarMcpBroker {
             if (item.uri.startsWith("dstar://projection/")) uris.add(item.uri);
         }
       }
-      changedPaths.clear();
       return [...uris].sort();
     };
     const schedule = (filename?: string) => {
@@ -509,7 +544,7 @@ export class DstarMcpBroker {
         timer = undefined;
         void changedUris()
           .then((uris) => listener({ uris, listChanged: true }))
-          .catch(() => listener({ uris: [], listChanged: true }));
+          .catch(() => undefined);
       }, 50);
       timer.unref?.();
     };
@@ -551,7 +586,7 @@ export class DstarMcpBroker {
       return this.#finish(
         asJson({
           mode: "genesis",
-          request: draft.request,
+          request: publicGenesisRequest(draft),
           remaining: this.#remaining(),
         }),
       );
@@ -716,27 +751,38 @@ export class DstarMcpBroker {
     const source = sources?.sources.find((item) => item.id === sourceId);
     if (!source)
       throw new McpBrokerError("NOT_FOUND", "The source does not exist");
+    const sourceBytes = byteLength(source);
+    if (sourceBytes > maxBytes)
+      throw new McpBrokerError(
+        "BUDGET_EXCEEDED",
+        "The source exceeds maxBytes",
+      );
     return this.#finish(
       asJson({ source, remaining: this.#remaining() }),
-      Math.min(byteLength(source), maxBytes),
+      sourceBytes,
     );
   }
 
-  #proposal(input: {
-    idempotencyKey: string;
-    baseChange: string;
-    baseRevision: string;
-    operations: readonly unknown[];
-    motivatedBy?: unknown;
-    sourceIds?: unknown;
-  }): DstarChange {
+  #proposal(
+    input: {
+      idempotencyKey: string;
+      baseChange: string;
+      baseRevision: string;
+      operations: readonly unknown[];
+      motivatedBy?: unknown;
+      sourceIds?: unknown;
+    },
+    id?: string,
+  ): DstarChange {
     if (!input.idempotencyKey)
       throw new McpBrokerError(
         "INVALID_ARGUMENT",
         "idempotencyKey must not be empty",
       );
     return buildUpdateProposal({
-      id: portableId("change", `${this.principalId}\0${input.idempotencyKey}`),
+      id:
+        id ??
+        portableId("change", `${this.principalId}\0${input.idempotencyKey}`),
       idempotencyKey: input.idempotencyKey,
       author: this.#principal(),
       baseChange: input.baseChange,
@@ -761,10 +807,28 @@ export class DstarMcpBroker {
   ): Promise<JsonValue> {
     this.#begin(signal);
     const snapshot = await this.#snapshot();
-    const proposal = this.#proposal({
-      ...input,
-      idempotencyKey: input.idempotencyKey ?? "simulation",
-    });
+    const simulationSeed = revisionOf(
+      asJson({
+        principalId: this.principalId,
+        input,
+      }),
+    );
+    let attempt = 0;
+    let simulationId = portableId("change_simulation", simulationSeed);
+    while (snapshot.changes.some((item) => item.id === simulationId)) {
+      attempt += 1;
+      simulationId = portableId(
+        "change_simulation",
+        `${simulationSeed}\0${attempt}`,
+      );
+    }
+    const proposal = this.#proposal(
+      {
+        ...input,
+        idempotencyKey: input.idempotencyKey ?? "simulation",
+      },
+      simulationId,
+    );
     const simulation = simulateUpdateChange(
       { ...snapshot, changes: [...snapshot.changes, proposal] },
       proposal.id,
@@ -834,6 +898,15 @@ export class DstarMcpBroker {
         }),
         byteLength(input),
       );
+    const plannedResult = asJson({
+      status: "pending-human-decision",
+      changeId: stableProposal.id,
+      simulation,
+      snapshotId: snapshot.snapshotId,
+      canonicalRevision: snapshot.manifest.revision,
+      remaining: this.#remaining(),
+    });
+    this.#consume(plannedResult, byteLength(input));
     try {
       const result = await new PackageCommands(
         this.#repository!,
@@ -845,17 +918,14 @@ export class DstarMcpBroker {
           idempotencyKey: `mcp-proposal:${this.principalId}:${input.idempotencyKey}`,
         },
       );
-      return this.#finish(
-        asJson({
-          status: "pending-human-decision",
-          changeId: stableProposal.id,
-          simulation,
-          snapshotId: result.snapshotId,
-          canonicalRevision: result.manifest.revision,
-          remaining: this.#remaining(),
-        }),
-        byteLength(input),
-      );
+      return asJson({
+        status: "pending-human-decision",
+        changeId: stableProposal.id,
+        simulation,
+        snapshotId: result.snapshotId,
+        canonicalRevision: result.manifest.revision,
+        remaining: this.#remaining(),
+      });
     } catch (error) {
       throw packageError(error);
     }
@@ -903,6 +973,13 @@ export class DstarMcpBroker {
         }),
         byteLength(input),
       );
+    const plannedResult = asJson({
+      replyId: reply.id,
+      annotationId: input.annotationId,
+      snapshotId: snapshot.snapshotId,
+      remaining: this.#remaining(),
+    });
+    this.#consume(plannedResult, byteLength(input));
     try {
       const result = await new PackageCommands(
         this.#repository!,
@@ -914,15 +991,12 @@ export class DstarMcpBroker {
           idempotencyKey: `mcp-reply:${this.principalId}:${input.idempotencyKey}`,
         },
       );
-      return this.#finish(
-        asJson({
-          replyId: reply.id,
-          annotationId: input.annotationId,
-          snapshotId: result.snapshotId,
-          remaining: this.#remaining(),
-        }),
-        byteLength(input),
-      );
+      return asJson({
+        replyId: reply.id,
+        annotationId: input.annotationId,
+        snapshotId: result.snapshotId,
+        remaining: this.#remaining(),
+      });
     } catch (error) {
       throw packageError(error);
     }
@@ -993,17 +1067,16 @@ export class DstarMcpBroker {
         "IDEMPOTENCY_MISMATCH",
         "The draft already contains a different genesis proposal",
       );
+    const result = asJson({
+      status: "pending-human-decision",
+      proposalId: proposal.id,
+      documentRevision: documentRevision(input.document as DstarDocument),
+      remaining: this.#remaining(),
+    });
+    this.#consume(result, byteLength(input));
     try {
       if (!existing) await stageGenesisProposal(this.#draftRoot!, proposal);
-      return this.#finish(
-        asJson({
-          status: "pending-human-decision",
-          proposalId: proposal.id,
-          documentRevision: documentRevision(input.document as DstarDocument),
-          remaining: this.#remaining(),
-        }),
-        byteLength(input),
-      );
+      return result;
     } catch (error) {
       throw packageError(error);
     }
