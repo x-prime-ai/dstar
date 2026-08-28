@@ -174,6 +174,18 @@ export function validateHtml(files: Files): HtmlIndex {
     treeAdapter: adapter,
     sourceCodeLocationInfo: true,
   });
+  // Check the whole tree before elementText recursively indexes descendants.
+  // Checking only during indexing lets a stable ancestor recurse past the cap.
+  const pending = doc.children.map((node) => ({ node, depth: 0 }));
+  let nodeCount = 0;
+  while (pending.length) {
+    const { node, depth } = pending.pop()!;
+    if (++nodeCount > 30000 || depth > 80)
+      throw new Error("HTML resource limit exceeded");
+    if (isTag(node))
+      for (const child of node.children)
+        pending.push({ node: child, depth: depth + 1 });
+  }
   const elements: HtmlIndex["elements"] = Object.create(null);
   let count = 0,
     elementCount = 0,

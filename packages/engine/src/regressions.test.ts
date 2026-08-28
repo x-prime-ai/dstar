@@ -60,6 +60,16 @@ const target = (exact: string, prefix = "", suffix = ""): Target => ({
 });
 
 describe("HTML5 comment text", () => {
+  it("rejects deep trees before recursively indexing a stable ancestor", () => {
+    expect(() =>
+      index(
+        '<div data-dstar-id="intro">' +
+          "<div>".repeat(5000) +
+          "deep" +
+          "</div>".repeat(5001),
+      ),
+    ).toThrow("HTML resource limit exceeded");
+  });
   it("normalizes source newlines and pre leading LF without changing canonical bytes", () => {
     const f = setup(
       '<p data-dstar-id="intro">first\r\nsecond\rthird</p><pre data-dstar-id="pre">\r\nalpha</pre><pre data-dstar-id="entity">&#10;beta&#13;gamma</pre>',
