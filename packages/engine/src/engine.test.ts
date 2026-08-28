@@ -81,6 +81,38 @@ describe("byte deltas", () => {
     ).toThrow();
   });
 });
+
+it("persists reply idempotency under the write lock without resolving or accepting", () => {
+  const f = setup(),
+    p = f.propose(null);
+  const target: Target = {
+    revision: p.revision,
+    element: "intro",
+    selector: { type: "element" },
+  };
+  const c = f.repo.comment({ target, body: "Please edit", author: "human" });
+  const first = f.repo.reply(c.id, "Proposing", "agent", "reply-key");
+  const stateId = f.repo.snapshot().stateId;
+  const reopened = new Repository(f.root);
+  expect(reopened.reply(c.id, "Proposing", "agent", "reply-key")).toEqual(
+    first,
+  );
+  expect(reopened.snapshot().stateId).toBe(stateId);
+  expect(() => reopened.reply(c.id, "Changed", "agent", "reply-key")).toThrow(
+    "Idempotency",
+  );
+  expect(() => reopened.reply(c.id, "Proposing", "human", "reply-key")).toThrow(
+    "Idempotency",
+  );
+  const other = reopened.comment({ target, body: "Another", author: "human" });
+  expect(() =>
+    reopened.reply(other.id, "Proposing", "agent", "reply-key"),
+  ).toThrow("Idempotency");
+  // Existing human/CLI callers may still omit the optional fourth argument.
+  expect(reopened.reply(c.id, "Thanks", "human").replies).toHaveLength(2);
+  expect(reopened.snapshot().revision).toBeNull();
+  expect(reopened.snapshot().state.comments[0]?.status).toBe("open");
+});
 describe("canonical HTML workflow", () => {
   it("creates a pending genesis, accepts the exact candidate, and reopens without Git", () => {
     const f = setup(),

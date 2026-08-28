@@ -7,6 +7,7 @@ export {
   validateTarget,
   resolveTarget,
   mediaType,
+  filePath,
 } from "./html.js";
 // The agent surface intentionally has no accept/reject/resolve entry point.
 export function open(root: string) {

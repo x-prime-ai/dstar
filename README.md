@@ -49,10 +49,16 @@ pnpm dstar validate ./candidate
 pnpm dstar propose ./my-document.dstar --candidate ./candidate --base sha256:EXACT_HASH_FROM_INSPECT --request "Describe the edit" --key second
 ```
 
-Refresh the Viewer to review the pending result. A proposal never changes the
+The Viewer updates the review queue as proposals arrive. A proposal never changes the
 accepted document. The agent CLI intentionally has no accept/reject/resolve
 commands. See the [skill workflow](skills/dstar-documents/references/authoring.md)
 and [comment commands](skills/dstar-documents/references/comments.md).
+
+When the browser supports WebMCP, the top-level Viewer also registers four
+document/review tools for browser agents. They can read exact versions, propose
+complete HTML/CSS/assets and reply to comments; acceptance remains an explicit
+Viewer action. See [WebMCP interfaces and limits](design/webmcp.md). Browsers
+without WebMCP retain normal Viewer functionality.
 
 ## Storage
 

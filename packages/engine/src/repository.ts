@@ -530,16 +530,33 @@ export class Repository {
       return comment;
     });
   }
-  reply(id: string, body: string, author: string): Comment {
+  reply(id: string, body: string, author: string, key?: string): Comment {
     textField(body, "reply");
     textField(author, "author", 200);
+    if (key !== undefined) textField(key, "key", 200);
     return this.transaction((state) => {
+      if (key !== undefined) {
+        for (const comment of state.comments) {
+          const previous = comment.replies.find((r) => r.key === key);
+          if (!previous) continue;
+          if (
+            comment.id !== id ||
+            previous.body !== body ||
+            previous.author !== author
+          )
+            throw new Error(
+              "Idempotency key already used for a different reply",
+            );
+          return comment;
+        }
+      }
       const c = state.comments.find((c) => c.id === id);
       if (!c) throw new Error("Unknown comment");
       c.replies.push({
         id: randomUUID(),
         body,
         author,
+        ...(key === undefined ? {} : { key }),
         createdAt: new Date().toISOString(),
       });
       this.save(state);

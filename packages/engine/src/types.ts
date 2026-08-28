@@ -38,7 +38,13 @@ export interface Comment {
   author: string;
   createdAt: string;
   status: "open" | "resolved";
-  replies: { id: string; author: string; body: string; createdAt: string }[];
+  replies: {
+    id: string;
+    author: string;
+    body: string;
+    createdAt: string;
+    key?: string;
+  }[];
 }
 export interface Storage {
   encoding: "gzip-blob" | "gzip-delta-v1";

@@ -21,6 +21,10 @@
         <div id="proposals"></div>
         <h2>Accepted history</h2>
         <div id="history"></div>
+        <h2>Rejected proposals</h2>
+        <div id="rejected"></div>
+        <p class="hint" id="webmcp-status">Checking WebMCP support…</p>
+        <small id="sync-status" role="status">Live</small>
         <p class="hint">
           HTML is the document.<br />Changes are proposed before they are
           accepted.
@@ -47,6 +51,7 @@
             id="preview"
             title="Document preview"
             sandbox="allow-scripts"
+            allow="tools 'none'"
             referrerpolicy="no-referrer"
           ></iframe>
           <p id="empty">Select a proposal to review its first version.</p>
@@ -55,6 +60,10 @@
           <div>
             <strong id="request"></strong>
             <p id="storage"></p>
+            <p id="stale" hidden>
+              Stale base: ask for a new proposal against the current head. This
+              candidate cannot be accepted.
+            </p>
           </div>
           <button id="reject">Reject</button
           ><button id="accept" class="primary">Accept version</button>

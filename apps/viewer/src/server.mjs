@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { open, mediaType, resolveTarget } from "@dstar/engine";
 import { decisions } from "@dstar/engine/decisions";
+import { agentRoute } from "./agent-api.mjs";
 
 const publicFile = (path) =>
   readFileSync(new URL(`../public/${path}`, import.meta.url));
@@ -31,8 +32,17 @@ export async function startViewer(root, port = 0) {
         path = url.pathname;
       if (
         req.method === "GET" &&
-        ["/", "/app.js", "/preview-state.js", "/style.css"].includes(path)
+        [
+          "/",
+          "/app.js",
+          "/preview-state.js",
+          "/review-state.js",
+          "/webmcp.js",
+          "/style.css",
+        ].includes(path)
       ) {
+        res.setHeader("Origin-Agent-Cluster", "?1");
+        res.setHeader("Permissions-Policy", "tools=(self)");
         res.setHeader(
           "Content-Security-Policy",
           "default-src 'self'; script-src 'self'; style-src 'self'; frame-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
@@ -49,6 +59,7 @@ export async function startViewer(root, port = 0) {
       }
       const frame = /^\/frame\/([a-f0-9]{48})\/(.+)$/.exec(path);
       if (req.method === "GET" && frame) {
+        res.setHeader("Permissions-Policy", "tools=()");
         const capability = capabilities.get(frame[1]);
         if (!capability)
           return json(404, { error: "Expired preview; refresh" });
@@ -97,6 +108,7 @@ export async function startViewer(root, port = 0) {
         req.headers.authorization !== `Bearer ${token}`
       )
         return json(401, { error: "Viewer authorization required" });
+      if (await agentRoute({ engine, req, json, path, origin })) return;
       if (req.method === "GET" && path === "/api/state") {
         const s = engine.snapshot();
         return json(200, {

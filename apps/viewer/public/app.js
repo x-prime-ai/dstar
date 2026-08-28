@@ -1,7 +1,14 @@
 import { PreviewState } from "./preview-state.js";
+import {
+  RefreshGate,
+  reviewContext,
+  selectionFromEvent,
+} from "./review-state.js";
+import { registerWebMCP } from "./webmcp.js";
 
 const $ = (id) => document.getElementById(id);
 const previewState = new PreviewState();
+const refreshGate = new RefreshGate();
 let previewTimer;
 const canAccept = () =>
   previewState.canAccept(selected, current?.state.head, showingBase);
@@ -43,8 +50,9 @@ const note = (message) => {
     $("status").textContent = "";
   }, 7000);
 };
-const api = async (path, body) => {
+const api = async (path, body, signal) => {
   const response = await fetch(`/api/${path}`, {
+    signal,
     headers: {
       Authorization: `Bearer ${token}`,
       ...(body ? { "Content-Type": "application/json" } : {}),
@@ -52,7 +60,11 @@ const api = async (path, body) => {
     ...(body ? { method: "POST", body: JSON.stringify(body) } : {}),
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error);
+  if (!response.ok) {
+    const error = new Error(data.error);
+    error.code = data.code;
+    throw error;
+  }
   return data;
 };
 const safely =
@@ -89,7 +101,13 @@ async function preview(id) {
     $("preview").removeAttribute("src");
     return;
   }
-  const loaded = await api(`preview/${id}`);
+  let loaded;
+  try {
+    loaded = await api(`preview/${id}`);
+  } catch (error) {
+    if (serial === previewSerial) previewState.fail();
+    throw error;
+  }
   if (serial !== previewSerial) return;
   frame = loaded;
   previewState.reset(frame);
@@ -102,16 +120,19 @@ async function preview(id) {
   // iframe load also fires for HTTP error pages; it is never approval evidence.
   $("preview").src = frame.url;
 }
-async function select(id) {
+async function select(id, { keepPreview = false } = {}) {
   selected = current.state.proposals.find((p) => p.id === id);
-  showingBase = false;
+  if (!keepPreview) showingBase = false;
   $("view-label").textContent = selected
-    ? `${selected.status === "pending" ? "Candidate" : "Version"} · ${selected.revision.slice(7, 19)}`
+    ? `${showingBase ? "Base" : selected.status === "pending" ? "Candidate" : "Version"} · ${(showingBase ? selected.base : selected.revision).slice(7, 19)}`
     : "No accepted version";
   $("decision").hidden = selected?.status !== "pending";
   $("diff-panel").hidden = !selected;
   $("compare").hidden = !selected?.parent;
-  $("compare").textContent = "Show base";
+  $("compare").textContent = showingBase ? "Show candidate" : "Show base";
+  $("accept").disabled = !canAccept();
+  $("stale").hidden =
+    selected?.status !== "pending" || selected.parent === current.state.head;
   $("diff").replaceChildren();
   if (selected) {
     $("request").textContent = selected.request;
@@ -166,7 +187,7 @@ async function select(id) {
     .forEach((button) =>
       button.classList.toggle("active", button.dataset.proposal === id),
     );
-  await preview(id);
+  if (!keepPreview) await preview(id);
 }
 function comments() {
   $("count").textContent = current.state.comments.filter(
@@ -224,8 +245,17 @@ function comments() {
     $("comments").append(article);
   }
 }
-async function refresh() {
-  current = await api("state");
+async function refresh({ retryPreview = false } = {}) {
+  const serial = refreshGate.begin();
+  const next = await api("state");
+  if (!refreshGate.accept(serial, next.state.generation)) return;
+  if (current?.stateId === next.stateId) {
+    if (retryPreview && previewState.status === "failed")
+      await preview(showingBase ? selected?.parent : selected?.id);
+    return;
+  }
+  const previousId = selected?.id;
+  current = next;
   $("title").textContent = current.title;
   $("revision").textContent = current.revision
     ? `HEAD ${current.revision.slice(7, 23)}`
@@ -233,6 +263,7 @@ async function refresh() {
   for (const [container, status] of [
     ["proposals", "pending"],
     ["history", "accepted"],
+    ["rejected", "rejected"],
   ]) {
     $(container).replaceChildren();
     for (const p of [...current.state.proposals]
@@ -253,13 +284,15 @@ async function refresh() {
       );
   }
   comments();
-  await select(
-    selected?.id ??
-      current.state.head ??
-      current.state.proposals.find((p) => p.status === "pending")?.id,
-  );
+  const id =
+    previousId ??
+    current.state.head ??
+    current.state.proposals.find((p) => p.status === "pending")?.id;
+  await select(id, { keepPreview: !!previousId && previousId === id });
+  if (retryPreview && previewState.status === "failed")
+    await preview(showingBase ? selected?.parent : selected?.id);
 }
-$("refresh").onclick = safely(refresh);
+$("refresh").onclick = safely(() => refresh({ retryPreview: true }));
 $("width").onchange = () => {
   $("preview").style.width = $("width").value;
 };
@@ -312,15 +345,14 @@ addEventListener("message", (event) => {
       note("Preview resources failed to load. Refresh before accepting.");
     return;
   }
-  if (
-    event.source !== $("preview").contentWindow ||
-    event.origin !== "null" ||
-    event.data?.kind !== "dstar-selection" ||
-    event.data.capability !== frame?.capability ||
-    event.data.target?.revision !== frame?.revision
-  )
-    return;
-  target = event.data.target;
+  const selection = selectionFromEvent(
+    event,
+    $("preview").contentWindow,
+    frame,
+    previewState,
+  );
+  if (!selection) return;
+  target = selection;
   $("selection").textContent =
     target.selector.type === "element"
       ? `Element: ${target.element}`
@@ -338,9 +370,79 @@ $("whole-element").onclick = () => {
 $("comment-form").onsubmit = safely(async (event) => {
   event.preventDefault();
   if (!target) return;
-  await api("comments", { target, body: $("body").value });
-  $("body").value = "";
+  const body = $("body").value;
+  await api("comments", { target, body });
+  if ($("body").value === body) $("body").value = "";
   note("Comment added to the selected revision");
   await refresh();
 });
 safely(refresh)();
+let registration,
+  lifecycle = 0,
+  pollEpoch = 0,
+  pollTimer;
+async function connectTools() {
+  const serial = ++lifecycle;
+  const result = await registerWebMCP({
+    document,
+    api,
+    getReviewContext: () =>
+      reviewContext(selected, showingBase, frame, previewState, target),
+    onMutation: async (result, route) => {
+      await refresh();
+      const updated =
+        route === "proposals"
+          ? current?.state.proposals.some((p) => p.id === result.proposal.id)
+          : result.comment.replies.every((reply) =>
+              current?.state.comments
+                .find((c) => c.id === result.comment.id)
+                ?.replies.some((r) => r.id === reply.id),
+            );
+      note(
+        !updated
+          ? "Agent change saved; waiting for Viewer sync"
+          : route === "proposals"
+            ? `Proposal available in review queue: ${result.proposal.request}`
+            : "Agent reply added",
+      );
+      return !!updated;
+    },
+  });
+  if (serial !== lifecycle) {
+    result.dispose();
+    return;
+  }
+  registration = result;
+  $("webmcp-status").textContent =
+    result.status === "registered"
+      ? "WebMCP connected · 4 tools · proposals only"
+      : result.status === "unsupported"
+        ? "WebMCP unavailable · manual review works normally"
+        : "WebMCP registration failed · manual review works normally";
+}
+async function poll() {
+  const epoch = pollEpoch;
+  try {
+    if (!document.hidden) {
+      await refresh();
+      $("sync-status").textContent = "Live";
+    }
+  } catch {
+    $("sync-status").textContent = "Sync failed · retrying";
+  }
+  if (epoch === pollEpoch) pollTimer = setTimeout(poll, 3000);
+}
+addEventListener("pagehide", () => {
+  ++lifecycle;
+  ++pollEpoch;
+  registration?.dispose();
+  clearTimeout(pollTimer);
+});
+addEventListener("pageshow", (event) => {
+  if (event.persisted) {
+    connectTools();
+    poll();
+  }
+});
+connectTools();
+pollTimer = setTimeout(poll, 3000);

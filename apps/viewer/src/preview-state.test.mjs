@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
 import { PreviewState } from "../public/preview-state.js";
+import {
+  RefreshGate,
+  reviewContext,
+  selectionFromEvent,
+} from "../public/review-state.js";
 
 const frame = { capability: "cap-a", revision: "rev-a" };
 const proposal = { status: "pending", parent: "base", revision: "rev-a" };
@@ -71,4 +76,79 @@ it("clears readiness immediately when switching or clearing previews", () => {
   gate.reset();
   expect(accepts()).toBe(false);
   expect(gate.receive(event, source)).toBe(false);
+});
+
+it("discards out-of-order refreshes and older document generations", () => {
+  const gate = new RefreshGate();
+  const a = gate.begin(),
+    b = gate.begin();
+  expect(gate.accept(b, 4)).toBe(true);
+  expect(gate.accept(a, 3)).toBe(false);
+  expect(gate.accept(gate.begin(), 2)).toBe(false);
+  expect(gate.accept(gate.begin(), 5)).toBe(true);
+});
+it("preserves exact selection revision for candidate/base and never rebinds it to a new head", () => {
+  const selected = {
+    id: "proposal",
+    base: "base-rev",
+    revision: "candidate-rev",
+  };
+  const target = {
+    revision: "base-rev",
+    element: "intro",
+    selector: { type: "element" },
+  };
+  const ready = { status: "ready" };
+  expect(
+    reviewContext(selected, true, { revision: "base-rev" }, ready, target),
+  ).toEqual({
+    review: {
+      proposalId: "proposal",
+      showingBase: true,
+      revision: "base-rev",
+      previewStatus: "ready",
+    },
+    selection: target,
+  });
+  expect(
+    reviewContext(selected, false, { revision: "candidate-rev" }, ready, target)
+      .selection,
+  ).toBeNull();
+  expect(
+    reviewContext(selected, true, { revision: "candidate-rev" }, ready, target)
+      .review.previewStatus,
+  ).toBe("loading");
+  expect(
+    reviewContext(
+      selected,
+      true,
+      { revision: "base-rev" },
+      { status: "failed" },
+      target,
+    ).selection,
+  ).toBeNull();
+});
+it("accepts selections only from the ready exact frame, ignoring delayed old-frame messages", () => {
+  const source = {},
+    frame = { capability: "capability", revision: "rev" },
+    ready = { status: "ready" };
+  const target = {
+    revision: "rev",
+    element: "intro",
+    selector: { type: "text-range", exact: "hello" },
+  };
+  const event = {
+    source,
+    origin: "null",
+    data: { kind: "dstar-selection", capability: frame.capability, target },
+  };
+  expect(selectionFromEvent(event, source, frame, ready)).toBe(target);
+  for (const [e, f, status] of [
+    [event, frame, { status: "loading" }],
+    [event, { ...frame, capability: "new-capability" }, ready],
+    [{ ...event, source: {} }, frame, ready],
+    [{ ...event, origin: "https://evil.invalid" }, frame, ready],
+    [event, { ...frame, revision: "other" }, ready],
+  ])
+    expect(selectionFromEvent(e, source, f, status)).toBeNull();
 });
