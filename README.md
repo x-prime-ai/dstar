@@ -111,3 +111,7 @@ pnpm check:links
 
 Viewer tests need permission to listen on loopback. The broader `pnpm verify`
 also covers the retained legacy implementation.
+
+See the [integration validation record](design/integration-validation.md) for
+the tested browser/HTTP flows and the remaining native Chrome/container/TLS
+verification limits.

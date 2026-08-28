@@ -1024,3 +1024,115 @@ it("allows identical retries after a busy Engine without leaking the lock path",
   expect(engine.snapshot().stateId).toBe(before);
   expect((await propose("busy-retry")).proposal.status).toBe("pending");
 });
+
+it("keeps all agent routes inside configured authority and persists retries across restart", async () => {
+  const { root, temp, engine, proposal } = fixture();
+  const token = "integration-test-credential-" + "x".repeat(48);
+  const tokenFile = join(temp, "viewer-token");
+  writeFileSync(tokenFile, token, { mode: 0o600 });
+  const options = {
+    externalOrigin: "https://review.example.test:8443",
+    tokenFile,
+  };
+  let viewer = await start(root, 0, options);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Origin: options.externalOrigin,
+    "Content-Type": "application/json",
+  };
+  const post = (path, body, extra = {}) =>
+    wire(viewer, path, {
+      method: "POST",
+      headers: { ...headers, ...extra },
+      body: JSON.stringify(body),
+    });
+  const api = async (path, body) => {
+    const response = await post(path, body);
+    expect(response.status).toBe(200);
+    expect(response.text).not.toContain(token);
+    expect(response.text).not.toContain(tokenFile);
+    return response.json();
+  };
+  await api(`/api/proposals/${proposal.id}/accept`, {
+    revision: proposal.revision,
+    stateId: engine.snapshot().stateId,
+  });
+  const selection = {
+    revision: proposal.revision,
+    element: "intro",
+    selector: {
+      type: "text-range",
+      start: 6,
+      end: 7,
+      unit: "unicode-code-point",
+      exact: "🌍",
+    },
+  };
+  const comment = (
+    await post("/api/comments", { target: selection, body: "Keep the globe" })
+  ).json();
+  const review = {
+    proposalId: proposal.id,
+    revision: proposal.revision,
+    showingBase: false,
+    previewStatus: "ready",
+  };
+  const context = await api("/api/agent/context", { review, selection });
+  expect(context.selection).toEqual(selection);
+  expect(context.comments[0].target.revision).toBe(proposal.revision);
+  expect(context.head.revision).toBe(proposal.revision);
+  const document = await api("/api/agent/document", {
+    revision: proposal.revision,
+  });
+  // Exceeds the ordinary 64 KiB POST cap, proving the agent body reader is used.
+  const request = {
+    base: proposal.revision,
+    request: "Configured origin candidate",
+    key: "configured-proposal",
+    files: document.files.map((file) => ({
+      ...file,
+      content:
+        file.content.replace("Hello 🌍", "Hello 🌍 updated") +
+        " ".repeat(70000),
+    })),
+  };
+  const pending = (await api("/api/agent/proposals", request)).proposal;
+  expect(engine.snapshot().revision).toBe(proposal.revision);
+  const reply = {
+    commentId: comment.id,
+    body: "Candidate is ready",
+    key: "configured-reply",
+  };
+  await api("/api/agent/reply", reply);
+  const before = engine.snapshot().stateId;
+  for (const route of ["context", "document", "proposals", "reply"])
+    for (const denied of [
+      { Authorization: "Bearer wrong" },
+      { Host: "evil.example.test" },
+      { Origin: "https://evil.example.test" },
+      { "X-Forwarded-Host": "review.example.test:8443" },
+    ]) {
+      const result = await post(`/api/agent/${route}`, {}, denied);
+      expect(result.status).toBe(denied.Authorization ? 401 : 403);
+    }
+  expect(engine.snapshot().stateId).toBe(before);
+  const preview = (
+    await wire(viewer, `/api/preview/${pending.id}`, { headers })
+  ).json();
+  await close(viewer.server);
+  viewer = await start(root, 0, options);
+  expect((await wire(viewer, preview.url)).status).toBe(404);
+  expect((await api("/api/agent/proposals", request)).proposal.id).toBe(
+    pending.id,
+  );
+  expect((await api("/api/agent/reply", reply)).comment.replies).toHaveLength(
+    1,
+  );
+  const reopened = await api("/api/agent/context", { review, selection });
+  expect(reopened.stateId).toBe(before);
+  expect(reopened.head.revision).toBe(proposal.revision);
+  expect(reopened.comments[0].status).toBe("open");
+  expect(
+    (await api("/api/agent/document", { revision: pending.revision })).files,
+  ).toEqual(request.files);
+});

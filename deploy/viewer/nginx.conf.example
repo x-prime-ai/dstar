@@ -10,6 +10,8 @@ server {
     if ($http_host != "review.example.com") { return 403; }
 
     location / {
+        # Match the agent JSON cap (decoded files are separately capped at 32 MiB).
+        client_max_body_size 48m;
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         # Drop all original headers, including arbitrary X-Forwarded-* names,

@@ -89,6 +89,14 @@ query strings and `/frame/` paths. Do not cache authenticated state or previews.
 The example is not a provisioned TLS setup; validate certificates, limits and
 proxy configuration separately before exposure.
 
+The proxy example sets `client_max_body_size 48m` to match the agent JSON
+request cap (Nginx otherwise defaults to 1 MiB; see
+[client_max_body_size](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)).
+Decoded candidate files remain limited to 32 MiB by the Engine/agent API.
+Compose gives `/tmp` 64 MiB so an allowed candidate can be staged; budget
+additional memory and proxy temporary disk for concurrent requests. These
+limits are not a load-test or production capacity guarantee.
+
 Use a **different origin, credential, package root and volume for every
 instance**. Do not host instances at different paths of one browser origin or
 reuse credentials. There is no global credential store, package picker,
