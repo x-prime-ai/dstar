@@ -1,0 +1,35 @@
+services:
+  viewer:
+    build:
+      context: ../..
+      dockerfile: deploy/viewer/Dockerfile
+    environment:
+      DSTAR_PACKAGE_ROOT: /data/document.dstar
+      DSTAR_BIND_HOST: 0.0.0.0
+      DSTAR_PORT: "3000"
+      DSTAR_EXTERNAL_ORIGIN: ${DSTAR_EXTERNAL_ORIGIN:?Set the unique HTTPS origin for this instance}
+      DSTAR_VIEWER_TOKEN_FILE: /run/secrets/viewer_token
+    # Only a host-local TLS proxy can reach this published port by default.
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - document_data:/data
+    secrets:
+      - viewer_token
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+volumes:
+  document_data:
+
+secrets:
+  viewer_token:
+    file: ${DSTAR_VIEWER_TOKEN_FILE:?Set the host path of this instance's credential file}

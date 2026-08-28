@@ -5,6 +5,7 @@
   "type": "module",
   "exports": "./src/server.mjs",
   "scripts": {
+    "start": "node src/start.mjs",
     "test": "vitest run"
   },
   "dependencies": {

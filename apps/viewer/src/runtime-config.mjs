@@ -1,0 +1,248 @@
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+} from "node:fs";
+import { isIP } from "node:net";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
+
+const loopback = (host) =>
+  host === "::1" || (isIP(host) === 4 && host.startsWith("127."));
+const fail = (message) => {
+  throw new Error(message);
+};
+
+// Canonical origins only: never normalize userinfo, paths or ambiguous input
+// into a trusted value. TLS is terminated by a separately configured proxy.
+function externalOrigin(value) {
+  if (value === undefined) return undefined;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    fail("Invalid externalOrigin: use a canonical HTTPS origin");
+  }
+  if (
+    typeof value !== "string" ||
+    value !== url.origin ||
+    url.protocol !== "https:"
+  )
+    fail("Invalid externalOrigin: use a canonical HTTPS origin without a path");
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  if (
+    !isIP(hostname) &&
+    (hostname.length > 253 ||
+      !hostname
+        .split(".")
+        .every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)))
+  )
+    fail(
+      "externalOrigin must have a literal IP or DNS hostname, without wildcards",
+    );
+  return value;
+}
+
+// Resolve existing ancestors too, so aliases cannot place the credential in
+// the document tree. The Engine independently rejects package symlinks.
+function physicalPath(path) {
+  try {
+    return realpathSync(path);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    return resolve(physicalPath(dirname(path)), basename(path));
+  }
+}
+
+function readTokenFile(path, root) {
+  if (typeof path !== "string" || !isAbsolute(path))
+    fail("tokenFile must be an absolute path outside the package root");
+  let fd;
+  try {
+    const inside = relative(physicalPath(root), physicalPath(path));
+    if (
+      !inside ||
+      (!inside.startsWith(`..${sep}`) && inside !== ".." && !isAbsolute(inside))
+    )
+      fail("Credential is inside the package");
+    // O_NONBLOCK avoids hanging on a FIFO; O_NOFOLLOW rejects a swapped symlink.
+    fd = openSync(
+      path,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.size > 258) fail("Invalid credential file");
+    return readFileSync(fd, "utf8").replace(/\r?\n$/, "");
+  } catch {
+    // Never echo the path, file contents or host-supplied credentials.
+    fail(
+      "Cannot read tokenFile: use a small regular file outside the package root",
+    );
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/** Explicit options only: programmatic/local callers never inherit process.env. */
+export function resolveViewerConfig(root, port = 0, options = {}) {
+  if (!options || typeof options !== "object" || Array.isArray(options))
+    fail("Viewer options must be an object");
+  for (const key of Object.keys(options))
+    if (!["host", "externalOrigin", "token", "tokenFile"].includes(key))
+      fail("Unknown Viewer option");
+  if (typeof root !== "string" || !root.trim() || root.includes("\0"))
+    fail("A package root is required");
+  const host = options.host === undefined ? "127.0.0.1" : options.host;
+  if (typeof host !== "string" || !isIP(host))
+    fail("host must be an IPv4 or IPv6 address");
+  if (!Number.isInteger(port) || port < 0 || port > 65535)
+    fail("port must be an integer from 0 through 65535");
+  const origin = externalOrigin(options.externalOrigin);
+  if (!loopback(host) && !origin)
+    fail(
+      "Non-loopback binding requires externalOrigin and an explicit credential",
+    );
+  if (origin && !isAbsolute(root))
+    fail("externalOrigin requires an absolute persistent package root");
+  const resolvedRoot = resolve(root);
+  if (options.token !== undefined && options.tokenFile !== undefined)
+    fail("Configure only one of token or tokenFile");
+  const explicit =
+    options.token !== undefined || options.tokenFile !== undefined;
+  if (origin && !explicit)
+    fail("externalOrigin requires an explicit token or tokenFile");
+  const token =
+    options.tokenFile !== undefined
+      ? readTokenFile(options.tokenFile, resolvedRoot)
+      : options.token === undefined
+        ? randomBytes(24).toString("hex")
+        : options.token;
+  if (
+    typeof token !== "string" ||
+    token.length < 48 ||
+    token.length > 256 ||
+    /[^A-Za-z0-9_-]/.test(token)
+  )
+    fail(
+      "Credential must contain 48–256 base64url characters; generate it randomly",
+    );
+  return Object.freeze({
+    root: resolvedRoot,
+    host,
+    port,
+    externalOrigin: origin,
+    token,
+    ephemeral: !explicit,
+  });
+}
+
+/** Environment is consumed only by the dedicated persistent-service entrypoint. */
+export function viewerConfigFromEnv(env = process.env) {
+  const names = [
+    "DSTAR_PACKAGE_ROOT",
+    "DSTAR_BIND_HOST",
+    "DSTAR_PORT",
+    "DSTAR_EXTERNAL_ORIGIN",
+    "DSTAR_VIEWER_TOKEN",
+    "DSTAR_VIEWER_TOKEN_FILE",
+  ];
+  for (const name of names)
+    if (
+      env[name] !== undefined &&
+      (typeof env[name] !== "string" || !env[name].trim())
+    )
+      fail(`Empty ${name} is not allowed`);
+  if (!env.DSTAR_PACKAGE_ROOT || !isAbsolute(env.DSTAR_PACKAGE_ROOT))
+    fail("DSTAR_PACKAGE_ROOT must be an absolute path");
+  if (
+    env.DSTAR_PORT !== undefined &&
+    (!/^(0|[1-9][0-9]{0,4})$/.test(env.DSTAR_PORT) ||
+      env.DSTAR_PORT !== env.DSTAR_PORT.trim())
+  )
+    fail("DSTAR_PORT must be a decimal port number");
+  // Persistent services must never generate unreported ephemeral credentials.
+  if (
+    env.DSTAR_VIEWER_TOKEN === undefined &&
+    env.DSTAR_VIEWER_TOKEN_FILE === undefined
+  )
+    fail("Set DSTAR_VIEWER_TOKEN or DSTAR_VIEWER_TOKEN_FILE");
+  const port = env.DSTAR_PORT === undefined ? 0 : Number(env.DSTAR_PORT);
+  const options = {
+    host: env.DSTAR_BIND_HOST,
+    externalOrigin: env.DSTAR_EXTERNAL_ORIGIN,
+    token: env.DSTAR_VIEWER_TOKEN,
+    tokenFile: env.DSTAR_VIEWER_TOKEN_FILE,
+  };
+  // Validate before opening the Engine or binding a socket.
+  const config = resolveViewerConfig(env.DSTAR_PACKAGE_ROOT, port, options);
+  return {
+    root: config.root,
+    port: config.port,
+    options: {
+      host: config.host,
+      externalOrigin: config.externalOrigin,
+      token: config.token,
+    },
+  };
+}
+
+export function viewerOrigin(config, boundPort) {
+  const host = isIP(config.host) === 6 ? `[${config.host}]` : config.host;
+  return config.externalOrigin ?? `http://${host}:${boundPort}`;
+}
+
+/** No proxy-derived authority, allowlists, forwarded-header trust or URL roots. */
+export function trustedRequestUrl(req, origin) {
+  const critical = new Set(["host", "origin", "authorization", "content-type"]);
+  const seen = new Set();
+  for (let i = 0; i < req.rawHeaders.length; i += 2) {
+    const name = req.rawHeaders[i].toLowerCase();
+    if (name === "forwarded" || name.startsWith("x-forwarded-")) return null;
+    if (critical.has(name) && seen.has(name)) return null;
+    seen.add(name);
+  }
+  if (req.headers.host !== new URL(origin).host) return null;
+  const target = req.url;
+  if (
+    !target?.startsWith("/") ||
+    target.startsWith("//") ||
+    /[\\#\s]/.test(target)
+  )
+    return null;
+  try {
+    const path = target.split("?")[0];
+    for (const segment of path.split("/")) {
+      const decoded = decodeURIComponent(segment);
+      if (
+        [".", ".."].includes(decoded) ||
+        /[/\\]/.test(decoded) ||
+        [...decoded].some(
+          (character) =>
+            character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+        )
+      )
+        return null;
+    }
+    const url = new URL(target, origin);
+    return url.origin === origin ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+export function authorized(req, token) {
+  const supplied = req.headers.authorization;
+  if (typeof supplied !== "string" || supplied.length > 263) return false;
+  const hash = (text) => createHash("sha256").update(text).digest();
+  return timingSafeEqual(hash(supplied), hash(`Bearer ${token}`));
+}

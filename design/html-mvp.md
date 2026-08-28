@@ -131,7 +131,13 @@ The Viewer uses a sandbox without allow-same-origin, a nonce-authorized trusted
 bridge, restrictive CSP and no package-authored scripts. Host chrome and
 decision controls are outside the content frame. Frame capabilities grant only
 immutable preview reads. A separate session token gates APIs; POST also requires
-exact loopback Origin and JSON content type. The session URL is a local secret.
+the exact configured Origin and JSON content type. The default is a loopback
+origin and ephemeral token; the session URL is a local secret. The optional
+[persistent runtime](../deploy/viewer/README.md) requires host-provisioned
+credentials and a single explicit HTTPS external origin for non-loopback
+binding. Host and Origin are never inferred from forwarded headers; all
+Forwarded/X-Forwarded-* headers are rejected. The fixed package root is set at
+startup, not selected by a request. This does not add multi-user identities.
 Accept stays disabled until the trusted bridge acknowledges the current frame
 capability and exact revision after page, stylesheet, image and font checks.
 All canonical assets are checked, including backgrounds and hidden slides.

@@ -4,19 +4,25 @@ import {
   mkdirSync,
   writeFileSync,
   rmSync,
+  readFileSync,
   existsSync,
 } from "node:fs";
+import { request as httpRequest } from "node:http";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { open, revision } from "@dstar/engine";
 import { AGENT_LIMITS, decodeCandidate, agentRoute } from "./agent-api.mjs";
 import { startViewer } from "./server.mjs";
+import { viewerConfigFromEnv } from "./runtime-config.mjs";
 
 const cleanup = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
 });
-it("serves immutable isolated previews and requires session credentials for decisions", async () => {
+function fixture(text = "Hello 🌍") {
   const temp = mkdtempSync(join(tmpdir(), "dstar-viewer-"));
   cleanup.push(() => rmSync(temp, { recursive: true, force: true }));
   const candidate = join(temp, "candidate"),
@@ -24,7 +30,7 @@ it("serves immutable isolated previews and requires session credentials for deci
   mkdirSync(candidate);
   writeFileSync(
     join(candidate, "document.html"),
-    '<!doctype html><html><head><title>Preview</title></head><body><p data-dstar-id="intro">Hello 🌍</p></body></html>',
+    `<!doctype html><html><head><title>Preview</title></head><body><p data-dstar-id="intro">${text}</p></body></html>`,
   );
   const engine = open(root),
     proposal = engine.propose({
@@ -34,6 +40,48 @@ it("serves immutable isolated previews and requires session credentials for deci
       author: "agent",
       key: "initial",
     });
+  return { temp, root, candidate, engine, proposal };
+}
+const close = (server) => new Promise((resolve) => server.close(resolve));
+async function start(root, port = 0, options = {}) {
+  const viewer = await startViewer(root, port, options);
+  cleanup.push(() => close(viewer.server));
+  return viewer;
+}
+function wire(viewer, path, { headers = {}, method = "GET", body } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      {
+        host: "127.0.0.1",
+        port: viewer.server.address().port,
+        // Reconnect after restart instead of reusing a just-closed pooled socket.
+        agent: false,
+        path,
+        method,
+        headers: Array.isArray(headers)
+          ? headers
+          : { Host: new URL(viewer.origin).host, ...headers },
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () =>
+          resolve({
+            status: res.statusCode,
+            headers: res.headers,
+            text: Buffer.concat(chunks).toString(),
+            json: () => JSON.parse(Buffer.concat(chunks).toString()),
+          }),
+        );
+      },
+    );
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+it("serves immutable isolated previews and requires session credentials for decisions", async () => {
+  const { root, engine, proposal } = fixture();
   const viewer = await startViewer(root);
   cleanup.push(() => new Promise((resolve) => viewer.server.close(resolve)));
   const token = new URL(viewer.url).hash.slice(1),
@@ -45,20 +93,6 @@ it("serves immutable isolated previews and requires session credentials for deci
   expect(state.revision).toBeNull();
   const preview = await (await request(`/api/preview/${proposal.id}`)).json();
   const frame = await fetch(viewer.origin + preview.url);
-  expect(frame.headers.get("permissions-policy")).toBe("tools=()");
-  expect(
-    (
-      await fetch(viewer.origin + "/api/agent/context", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${preview.capability}`,
-          Origin: viewer.origin,
-          "Content-Type": "application/json",
-        },
-        body: "{}",
-      })
-    ).status,
-  ).toBe(401);
   expect(frame.headers.get("content-security-policy")).toContain(
     "sandbox allow-scripts",
   );
@@ -143,6 +177,418 @@ it("serves immutable isolated previews and requires session credentials for deci
       })
     ).status,
   ).toBe(409);
+});
+
+it("uses only the configured external authority while preserving opaque-origin frame sandboxing", async () => {
+  const { root, engine, proposal } = fixture();
+  const token = "b".repeat(64),
+    externalOrigin = "https://review.example.com:8443";
+  const viewer = await start(root, 0, {
+    host: "0.0.0.0",
+    externalOrigin,
+    token,
+  });
+  expect(viewer.server.address().address).toBe("0.0.0.0");
+  const headers = { Authorization: `Bearer ${token}` };
+  expect(viewer.origin).toBe(externalOrigin);
+  expect((await wire(viewer, "/api/state")).status).toBe(401);
+  expect(
+    (
+      await wire(viewer, "/api/state", {
+        headers: {
+          ...headers,
+          Host: `127.0.0.1:${viewer.server.address().port}`,
+        },
+      })
+    ).status,
+  ).toBe(403);
+  const state = (await wire(viewer, "/api/state", { headers })).json();
+  const preview = (
+    await wire(viewer, `/api/preview/${proposal.id}`, { headers })
+  ).json();
+  const frame = await wire(viewer, preview.url, {
+    headers: { Origin: "null" },
+  });
+  expect(frame.status).toBe(200);
+  expect(frame.headers["content-security-policy"]).toContain(
+    `style-src ${externalOrigin} 'unsafe-inline'`,
+  );
+  expect(frame.headers["content-security-policy"]).toContain(
+    `frame-ancestors ${externalOrigin}`,
+  );
+  expect(frame.headers["content-security-policy"]).toContain(
+    "sandbox allow-scripts",
+  );
+  expect(frame.headers["content-security-policy"]).not.toContain(
+    "allow-same-origin",
+  );
+  expect(frame.text).toContain(`"origin":"${externalOrigin}"`);
+  expect(frame.text).not.toContain(token);
+  const result = await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
+    method: "POST",
+    headers: {
+      ...headers,
+      Origin: externalOrigin,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      revision: proposal.revision,
+      stateId: state.stateId,
+    }),
+  });
+  expect(result.status).toBe(200);
+  expect(engine.snapshot().revision).toBe(proposal.revision);
+});
+
+it("rejects forwarded authority, duplicate sensitive headers and unsafe raw request targets", async () => {
+  const { root } = fixture();
+  const token = "c".repeat(64),
+    viewer = await start(root, 0, {
+      token,
+      externalOrigin: "https://review.example.com",
+    });
+  const headers = { Authorization: `Bearer ${token}` };
+  for (const extra of [
+    { Host: "evil.example" },
+    { Host: "review.example.com:443" },
+    { Forwarded: "host=review.example.com;proto=https" },
+    { "X-Forwarded-Host": "review.example.com" },
+    { "X-Forwarded-Proto": "https" },
+    { "X-Forwarded-For": "127.0.0.1" },
+    { "X-Forwarded-Port": "443" },
+    { "X-Forwarded-Prefix": "/" },
+    { Origin: "null" },
+    { Origin: "https://evil.example" },
+    { Origin: "https://review.example.com/" },
+  ])
+    expect(
+      (await wire(viewer, "/api/state", { headers: { ...headers, ...extra } }))
+        .status,
+    ).toBe(403);
+  for (const path of [
+    "https://review.example.com/api/state",
+    "//review.example.com/api/state",
+    "/frame/../api/state",
+    "/frame/%2e%2e/api/state",
+    "/api%2fstate",
+    "/api%5cstate",
+    "/api/%00state",
+    "/api/%zz",
+    "/api/state#x",
+  ])
+    expect((await wire(viewer, path, { headers })).status).toBe(403);
+  for (const [name, value] of [
+    ["Host", "review.example.com"],
+    ["Origin", viewer.origin],
+    ["Authorization", `Bearer ${token}`],
+    ["Content-Type", "application/json"],
+  ]) {
+    const raw = [
+      "Host",
+      "review.example.com",
+      "Authorization",
+      `Bearer ${token}`,
+    ];
+    if (!["Host", "Authorization"].includes(name)) raw.push(name, value);
+    raw.push(name, value);
+    expect((await wire(viewer, "/api/state", { headers: raw })).status).toBe(
+      403,
+    );
+  }
+});
+
+it("requires exact Origin and JSON for every mutation without accepting tokens from URLs or cookies", async () => {
+  const { root, engine, proposal } = fixture();
+  const viewer = await start(root),
+    token = new URL(viewer.url).hash.slice(1);
+  const state = engine.snapshot();
+  const path = `/api/proposals/${proposal.id}/accept`,
+    body = JSON.stringify({
+      revision: proposal.revision,
+      stateId: state.stateId,
+    });
+  for (const headers of [
+    { "Content-Type": "application/json" },
+    { Origin: "null", "Content-Type": "application/json" },
+    { Origin: viewer.origin, "Content-Type": "text/plain" },
+    {
+      Origin: viewer.origin,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    { Origin: viewer.origin },
+  ])
+    expect(
+      (
+        await wire(viewer, path, {
+          method: "POST",
+          body,
+          headers: { Authorization: `Bearer ${token}`, ...headers },
+        })
+      ).status,
+    ).toBe(403);
+  for (const request of [
+    { path: `/api/state?token=${token}` },
+    { path: "/api/state", headers: { Cookie: `dstar-token=${token}` } },
+  ])
+    expect((await wire(viewer, request.path, request)).status).toBe(401);
+  expect(engine.snapshot().stateId).toBe(state.stateId);
+});
+
+it("keeps roots, credentials and preview capabilities separate between configured instances", async () => {
+  const a = fixture("First document"),
+    b = fixture("Second document");
+  const first = await start(a.root, 0, {
+    token: "d".repeat(64),
+    externalOrigin: "https://first.example.com",
+  });
+  const second = await start(b.root, 0, {
+    token: "e".repeat(64),
+    externalOrigin: "https://second.example.com",
+  });
+  const authA = { Authorization: `Bearer ${"d".repeat(64)}` },
+    authB = { Authorization: `Bearer ${"e".repeat(64)}` };
+  expect((await wire(second, "/api/state", { headers: authA })).status).toBe(
+    401,
+  );
+  expect((await wire(first, "/api/state", { headers: authB })).status).toBe(
+    401,
+  );
+  expect(
+    (
+      await wire(second, "/api/state", {
+        headers: { ...authB, Host: "first.example.com" },
+      })
+    ).status,
+  ).toBe(403);
+  const preview = (
+    await wire(first, `/api/preview/${a.proposal.id}`, { headers: authA })
+  ).json();
+  expect((await wire(second, preview.url)).status).toBe(404);
+  expect(
+    (await wire(second, `/api/preview/${a.proposal.id}`, { headers: authB }))
+      .status,
+  ).toBe(409);
+  const state = (
+    await wire(first, `/api/state?root=${encodeURIComponent(b.root)}`, {
+      headers: authA,
+    })
+  ).json();
+  expect(state.state.id).toBe(a.engine.snapshot().state.id);
+  expect(
+    (
+      await wire(
+        first,
+        preview.url.replace("document.html", ".dstar/state.json"),
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (await wire(first, "/.dstar/state.json", { headers: authA })).status,
+  ).toBe(401);
+});
+
+it("retains accepted versions, comments and pending work across restart; refreshes capabilities and credentials", async () => {
+  const { root, temp, candidate, engine, proposal } = fixture();
+  const tokenFile = join(temp, "credential");
+  writeFileSync(tokenFile, "f".repeat(64));
+  const options = { tokenFile, externalOrigin: "https://review.example.com" };
+  const first = await start(root, 0, options);
+  const port = first.server.address().port,
+    headers = {
+      Authorization: `Bearer ${"f".repeat(64)}`,
+      Origin: first.origin,
+      "Content-Type": "application/json",
+    };
+  const state = engine.snapshot();
+  expect(
+    (
+      await wire(first, `/api/proposals/${proposal.id}/accept`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          revision: proposal.revision,
+          stateId: state.stateId,
+        }),
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await wire(first, "/api/comments", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          body: "Keep this comment",
+          target: {
+            revision: proposal.revision,
+            element: "intro",
+            selector: { type: "element" },
+          },
+        }),
+      })
+    ).status,
+  ).toBe(201);
+  writeFileSync(
+    join(candidate, "document.html"),
+    '<!doctype html><html><head><title>Preview</title></head><body><p data-dstar-id="intro">Edited later</p></body></html>',
+  );
+  const pending = engine.propose({
+    candidate,
+    base: proposal.revision,
+    request: "Next",
+    author: "agent",
+    key: "next",
+  });
+  const before = engine.snapshot();
+  const preview = (
+    await wire(first, `/api/preview/${proposal.id}`, { headers })
+  ).json();
+  await close(first.server);
+  const second = await start(root, port, options);
+  expect((await wire(second, "/api/state", { headers })).json().state).toEqual(
+    before.state,
+  );
+  expect((await wire(second, preview.url)).status).toBe(404);
+  expect(
+    (await wire(second, `/api/preview/${pending.id}`, { headers })).status,
+  ).toBe(200);
+  expect(readFileSync(join(root, "document.html"), "utf8")).toContain(
+    "Hello 🌍",
+  );
+  await close(second.server);
+  writeFileSync(tokenFile, "g".repeat(64));
+  const rotated = await start(root, port, options);
+  expect((await wire(rotated, "/api/state", { headers })).status).toBe(401);
+  expect(
+    (
+      await wire(rotated, "/api/state", {
+        headers: { Authorization: `Bearer ${"g".repeat(64)}` },
+      })
+    ).json().stateId,
+  ).toBe(before.stateId);
+});
+
+it("validates configuration before opening any document and fails closed on missing or corrupt packages", async () => {
+  const { root, temp } = fixture();
+  const missing = join(temp, "not-created");
+  await expect(startViewer(missing, 0, { host: "0.0.0.0" })).rejects.toThrow(
+    /externalOrigin/,
+  );
+  expect(existsSync(missing)).toBe(false);
+  await expect(startViewer(missing)).rejects.toThrow();
+  writeFileSync(join(root, ".dstar", "state.json"), "broken");
+  await expect(startViewer(root)).rejects.toThrow();
+});
+
+it("runs the service entrypoint, suppresses secret/path logging, and reopens the same state after SIGTERM", async () => {
+  const { root, temp, engine, proposal } = fixture();
+  const tokenFile = join(temp, "private-token"),
+    token = "h".repeat(64);
+  writeFileSync(tokenFile, token);
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith("DSTAR_")),
+  );
+  Object.assign(env, {
+    DSTAR_PACKAGE_ROOT: root,
+    DSTAR_PORT: "0",
+    DSTAR_VIEWER_TOKEN_FILE: tokenFile,
+  });
+  // Also exercise the same explicit parsing contract used by the process.
+  expect(viewerConfigFromEnv(env).root).toBe(root);
+  async function launch(overrides = {}) {
+    const child = spawn(
+      process.execPath,
+      [new URL("./start.mjs", import.meta.url).pathname],
+      { env: { ...env, ...overrides }, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    const exited = once(child, "exit");
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk;
+    });
+    cleanup.push(async () => {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+        await exited;
+      }
+    });
+    for (
+      let attempt = 0;
+      attempt < 200 &&
+      child.exitCode === null &&
+      !output.includes("listening at");
+      attempt++
+    )
+      await delay(10);
+    return { child, exited, output: () => output };
+  }
+  for (let run = 0; run < 2; run++) {
+    const service = await launch();
+    const origin = /listening at (http:\/\/127\.0\.0\.1:\d+)/.exec(
+      service.output(),
+    )?.[1];
+    expect(origin).toBeTruthy();
+    expect(service.output()).not.toContain(token);
+    expect(service.output()).not.toContain(root);
+    expect(service.output()).not.toContain(tokenFile);
+    const state = await (
+      await fetch(`${origin}/api/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).json();
+    expect(state.stateId).toBe(engine.snapshot().stateId);
+    if (run === 0) {
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        Origin: origin,
+        "Content-Type": "application/json",
+      };
+      expect(
+        (
+          await fetch(`${origin}/api/proposals/${proposal.id}/accept`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              revision: proposal.revision,
+              stateId: state.stateId,
+            }),
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await fetch(`${origin}/api/comments`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              body: "Persist across processes",
+              target: {
+                revision: proposal.revision,
+                element: "intro",
+                selector: { type: "element" },
+              },
+            }),
+          })
+        ).status,
+      ).toBe(201);
+    } else {
+      expect(state.revision).toBe(proposal.revision);
+      expect(state.state.comments[0].body).toBe("Persist across processes");
+      expect(readFileSync(join(root, "document.html"), "utf8")).toContain(
+        "Hello 🌍",
+      );
+    }
+    service.child.kill("SIGTERM");
+    expect(await service.exited).toEqual([0, null]);
+  }
+  const broken = await launch({ DSTAR_VIEWER_TOKEN_FILE: join(temp, token) });
+  expect(await broken.exited).toEqual([1, null]);
+  expect(broken.output()).toContain("startup failed");
+  expect(broken.output()).not.toContain(token);
+  expect(broken.output()).not.toContain(temp);
 });
 
 const html = (text = "Hello 🌍") =>

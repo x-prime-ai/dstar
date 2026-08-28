@@ -4,3 +4,6 @@ dist/
 coverage/
 *.log
 *.tsbuildinfo
+.env
+.env.local
+deploy/viewer/secrets/

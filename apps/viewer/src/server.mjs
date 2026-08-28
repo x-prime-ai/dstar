@@ -4,14 +4,21 @@ import { readFileSync } from "node:fs";
 import { open, mediaType, resolveTarget } from "@dstar/engine";
 import { decisions } from "@dstar/engine/decisions";
 import { agentRoute } from "./agent-api.mjs";
+import {
+  authorized,
+  resolveViewerConfig,
+  trustedRequestUrl,
+  viewerOrigin,
+} from "./runtime-config.mjs";
 
 const publicFile = (path) =>
   readFileSync(new URL(`../public/${path}`, import.meta.url));
 const secret = () => randomBytes(24).toString("hex");
-export async function startViewer(root, port = 0) {
-  const engine = open(root),
-    review = decisions(root),
-    token = secret();
+export async function startViewer(root, port = 0, options = {}) {
+  const config = resolveViewerConfig(root, port, options);
+  const engine = open(config.root),
+    review = decisions(config.root),
+    token = config.token;
   engine.snapshot();
   const capabilities = new Map();
   let origin;
@@ -26,10 +33,10 @@ export async function startViewer(root, port = 0) {
       res.end(JSON.stringify(data));
     };
     try {
-      if (req.headers.host !== new URL(origin).host)
-        return json(403, { error: "Invalid host" });
-      const url = new URL(req.url, origin),
-        path = url.pathname;
+      const url = trustedRequestUrl(req, origin);
+      if (!url)
+        return json(403, { error: "Invalid request authority or target" });
+      const path = url.pathname;
       if (
         req.method === "GET" &&
         [
@@ -103,11 +110,10 @@ export async function startViewer(root, port = 0) {
           );
         return res.end(bytes);
       }
-      if (
-        !path.startsWith("/api/") ||
-        req.headers.authorization !== `Bearer ${token}`
-      )
+      if (!path.startsWith("/api/") || !authorized(req, token))
         return json(401, { error: "Viewer authorization required" });
+      if (req.headers.origin !== undefined && req.headers.origin !== origin)
+        return json(403, { error: "Invalid review origin" });
       if (await agentRoute({ engine, req, json, path, origin })) return;
       if (req.method === "GET" && path === "/api/state") {
         const s = engine.snapshot();
@@ -193,8 +199,8 @@ export async function startViewer(root, port = 0) {
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", resolve);
+    server.listen(config.port, config.host, resolve);
   });
-  origin = `http://127.0.0.1:${server.address().port}`;
+  origin = viewerOrigin(config, server.address().port);
   return { server, origin, url: `${origin}/#${token}` };
 }

@@ -60,6 +60,11 @@ complete HTML/CSS/assets and reply to comments; acceptance remains an explicit
 Viewer action. See [WebMCP interfaces and limits](design/webmcp.md). Browsers
 without WebMCP retain normal Viewer functionality.
 
+For a protected, fixed-document Node service, see the
+[persistent Viewer setup](deploy/viewer/README.md). It adds explicit runtime
+configuration, a Node 22 container and TLS-proxy/volume guidance; the local
+`serve` command above is unchanged. Nothing is deployed automatically.
+
 ## Storage
 
 ```text
