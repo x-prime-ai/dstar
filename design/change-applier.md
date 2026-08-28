@@ -1,106 +1,144 @@
 # Change Applier
 
-Status: **Draft**
+> Earlier design exploration, not the implemented contract. The smaller
+> Engine/CLI/Viewer architecture and exact current behavior are documented in
+> [architecture](architecture.md) and [HTML-first MVP](html-mvp.md).
+> MCP/SDK integration, assignment and broader guarantees here are deferred.
+
+Status: **Redesign draft**
 
 ## Purpose and authority
 
-The Change Applier is the deterministic gate between a pending proposal and
-canonical package state. It validates and simulates proposed operations, builds
-the review model, records an explicit human decision, and atomically
-materializes an accepted result. It never chooses content or decides on behalf
-of a human.
+The Change Applier is the deterministic gate between a complete pending
+candidate and canonical package state. It validates the exact candidate,
+computes review and storage representations, records an explicit human
+decision, and atomically advances the accepted head. It never chooses content
+or decides on behalf of a person.
 
-Proposal authorship and decision authority are independent. A valid portable
-actor may author a proposal. Only a human actor may accept, reject, supersede,
-or resolve canonical review state.
+Proposal authorship and decision authority are independent. A human or service
+actor may author a proposal. Only an authorized human actor may accept, reject,
+or supersede it.
 
-## Interface
+## Candidate contract
 
-```ts
-interface ChangeApplier {
-  simulate(snapshot: PackageSnapshot, changeId: ChangeId): SimulationResult;
-  accept(command: AcceptChangeCommand): Promise<PackageCommit>;
-  reject(command: RejectChangeCommand): Promise<PackageCommit>;
-  supersede(command: SupersedeChangeCommand): Promise<PackageCommit>;
-}
+An update proposal contains:
 
-interface AcceptChangeCommand {
-  expectedSnapshotId: SnapshotId;
-  idempotencyKey: string;
-  changeId: ChangeId;
-  actor: HumanActor;
-  expectedResultRevision: Revision;
-}
-```
+- exact `baseChange` and `baseRevision`;
+- the complete candidate canonical file set or references to staged bounded
+  files;
+- actor, request, motivation, and source provenance;
+- candidate revision computed from the complete result; and
+- derived storage patches and review diff, which can be recomputed and are not
+  trusted from the caller.
 
-`expectedResultRevision` binds the decision to the exact deterministic result
-the reviewer saw. Historical materialization shares the operation engine but
-exposes no mutation method.
+Agents submit complete candidates because arbitrary HTML and CSS design is more
+expressive than a universal portable DOM-operation vocabulary. DSTAR derives
+the compact accepted history itself.
 
 ## Simulation
 
-Simulation is pure for a snapshot and proposal. It returns `applicable`,
-`stale-base`, `local-conflict`, or `invalid`, together with per-operation
-results, diagnostics, semantic diff, and the computed result revision.
+Simulation is pure for one snapshot and candidate. It returns `applicable`,
+`stale-base`, `invalid`, or `unsafe`, together with diagnostics, the exact
+candidate revision, before/after preview handles, semantic review diff, asset
+inventory changes, and proposed storage entries.
 
 Validation proceeds in this order:
 
-1. require an update in `proposed` state and validate all portable references;
-2. resolve `baseChange` and verify its accepted revision equals `baseRevision`;
-3. compare those explicit bases with the current manifest;
-4. apply serialized operations to an isolated indexed copy;
-5. validate identity, containment, profiles, references, and assets; and
-6. compute the RFC 8785 document revision and semantic diff.
+1. verify the proposal state, actor, references, and explicit base;
+2. require the declared base to equal the current accepted head;
+3. inventory candidate files with resource limits and path containment;
+4. parse and validate HTML, CSS, URLs, assets, and stable IDs;
+5. require all meaningful candidate content to be review-addressable;
+6. compute the complete candidate revision;
+7. compute a DOM-, CSS-, and asset-aware review diff;
+8. select exact-base patches or replacement blobs for physical history; and
+9. replay the selected storage representation and require its result to equal
+   the candidate revision.
 
-A stale proposal is never silently rebased. A caller must submit a new proposal
-with new explicit bases.
+Unsafe input is rejected rather than silently sanitized after preview. A
+candidate preparation tool may normalize formatting before submission, but the
+bytes shown to the reviewer are the bytes accepted.
 
-Each operation sees earlier operations in the same proposal. Preconditions are
-checked immediately before application, and the first failure prevents later
-operations from being considered applied. Unicode text offsets are code-point
-offsets; JavaScript UTF-16 slicing is not used without conversion.
+## Review diff
 
-The six operation algorithms follow the normative definitions in
-[`spec/0.1/changes.md`](../spec/0.1/changes.md): `replace_text`,
-`replace_inline`, `insert_node`, `delete_node`, `move_node`, and `set_attrs`.
-The applier performs no implicit normalization, target guessing, asset fetch,
-or unrelated collaboration-state mutation.
+The review diff is keyed primarily by stable `data-dstar-id` values. It reports:
+
+- inserted, removed, and moved elements;
+- text changes at Unicode code-point ranges;
+- meaningful attribute and accessibility changes;
+- class and inline-style changes;
+- stylesheet and custom-property changes;
+- asset additions, removals, and reference changes; and
+- the fraction of meaningful DOM rewritten or stripped of stable identity.
+
+A raw line diff may be available for inspection but is not the primary human
+explanation. A high rewrite ratio is a visible warning because it increases
+review cost and comment-anchor loss; it does not block an intentional redesign.
+
+## Storage change
+
+A portable accepted change records the exact transition without requiring full
+snapshot duplication:
+
+```ts
+interface FileChange {
+  path: PackagePath;
+  operation: "add" | "modify" | "delete";
+  baseDigest?: Digest;
+  resultDigest?: Digest;
+  storage: PatchReference | BlobReference;
+}
+
+interface AcceptedChange {
+  id: ChangeId;
+  parent: ChangeId | null;
+  baseRevision: Revision | null;
+  resultRevision: Revision;
+  files: readonly FileChange[];
+  proposal: ProposalProvenance;
+  decision: HumanDecision;
+}
+```
+
+Patches require exact base bytes. They never use line-context guessing. Asset
+objects are content-addressed and reused across versions.
 
 ## Decisions
 
-Acceptance requires a fresh snapshot, matching bases, a human actor, a clean
-simulation, an exact result revision, strict package validation, and a matching
-or unused idempotency key. One recoverable transaction writes:
+Acceptance requires a fresh snapshot, matching base, human actor, clean
+simulation, exact candidate revision, verified storage replay, strict package
+validation, and a matching or unused idempotency key.
 
-- the new canonical document;
-- the accepted change with its human decision; and
-- the manifest with matching `revision` and `headChange`.
+One recoverable transaction writes the new current canonical files, immutable
+objects, accepted change and decision, and matching manifest head. Rejection
+and supersession update proposal state only.
 
-Rejection and supersession only update the proposed change. They never alter
-canonical content. Motivating comments remain independent and are not resolved
-automatically.
+Genesis follows the same boundary without a parent revision. Its complete
+candidate becomes the initial checkpoint or replacement object set after a
+separate human acceptance.
 
-Genesis uses the same document/profile validation with no prior package. A
-caller may stage one proposed `create_document` change that preserves the human
-draft request. A separate human acceptance creates the package in a previously
-unused `.dstar` directory.
+## Historical materialization
 
-## History and assets
+To materialize a version, the runtime:
 
-Version materialization validates the accepted chain from genesis through the
-requested change, replays operations, and verifies every recorded result
-revision. It materializes canonical content only; current annotations, sources,
-assets, and projections are never presented as historical snapshots.
+1. chooses genesis or the nearest verified ancestor checkpoint;
+2. applies each accepted file change in parent order;
+3. verifies every file result digest and complete document revision;
+4. validates the materialized HTML package; and
+5. returns immutable bytes labeled with the accepted change and revision.
 
-The 0.1 update vocabulary cannot add or delete asset files. Genesis may stage
-initial assets; update proposals may only reference assets already present.
+Current comments are not rewritten into a historical snapshot. The review
+client resolves each comment against the version it originally targeted and may
+also attempt explicit recovery at the current head.
 
 ## Tests
 
-- golden before/change/after vectors for all operations;
-- Unicode boundaries and ordered multi-operation dependencies;
-- stale bases, conflicts, atomic failure, and no silent rebase;
-- exact-result human acceptance and idempotent retry;
-- genesis and accepted-chain materialization;
-- corrupted history and head/document mismatch; and
-- property checks comparing incremental indexes with rebuilt trees.
+- full candidate validation and deterministic result revisions;
+- DOM/CSS/asset review-diff fixtures;
+- text and binary patch round trips;
+- patch-versus-blob storage selection;
+- stale bases, no fuzzy application, and no silent rebase;
+- exact-result human decisions and idempotent retry;
+- large intentional redesigns and rewrite-ratio warnings;
+- genesis, checkpoints, and accepted-chain materialization; and
+- corrupted patches, objects, checkpoints, and manifest/head mismatches.

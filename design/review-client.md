@@ -1,93 +1,124 @@
 # Review Client
 
-Status: **Draft**
+> Earlier design exploration, not the implemented contract. The smaller
+> Engine/CLI/Viewer architecture and exact current behavior are documented in
+> [architecture](architecture.md) and [HTML-first MVP](html-mvp.md).
+> MCP/SDK integration, assignment and broader guarantees here are deferred.
+
+Status: **Redesign draft**
 
 ## Purpose
 
-The review client is the human interface for reading, precise discussion,
-human assignment, proposal inspection, and decisions. It is not a canonical
-rich-text editor.
+The review client is the human interface for reading the canonical HTML,
+creating precise discussion, assigning responsibility, inspecting candidate
+changes, and making decisions. It is not a direct HTML editor.
 
 Its primary surfaces are:
 
-1. a canonical or projection reader;
+1. a sandboxed canonical document frame;
 2. a review rail for comments, replies, status, and human assignee;
-3. proposal review with deterministic before/after output and conflicts; and
-4. an inspector for manifest, profiles, sources, revisions, and diagnostics.
+3. exact before/after candidate preview with DOM, CSS, and asset differences;
+4. accepted version history and target-recovery status; and
+5. package, source, provenance, and security diagnostics.
 
-There is no executor, task, or run-status surface. A person may use any external
-tool to help with an assigned comment, but that activity is outside DSTAR.
+## Sandboxed document boundary
 
-## Read-only content boundary
+Canonical HTML is untrusted and never `contenteditable` in the review client.
+It runs in a sandboxed frame without workspace credentials, direct filesystem
+paths, arbitrary scripts, forms, popups, or remote network access.
 
-Canonical and projection content is never `contenteditable`. Selection,
-navigation, copying, and comment composition cannot mutate canonical content.
-Any content change arrives as a pending proposal and requires a separate human
-decision.
+A small trusted selection bridge may report bounded selection facts to the host
+through a narrow message protocol. The host independently validates every
+reported element ID, offset, and quotation against the exact package snapshot.
 
-All displayed content uses a view adapter:
+## Stable element identity
+
+Every meaningful reviewable element carries a unique `data-dstar-id`. Wrapper
+or decorative elements may omit it. The client never serializes DOM paths,
+XPath, CSS layout positions, React keys, or transient node references as primary
+identity.
 
 ```ts
-interface ReviewableViewAdapter {
-  source(): "document" | ProjectionId;
-  sourceRevision(): Revision;
-  captureSelection(range: Range): SelectionCaptureResult;
-  revealTarget(target: Target): RevealResult;
-  currentText(target: Target): string | undefined;
+interface ElementTarget {
+  sourceRevision: Revision;
+  element: DstarElementId;
+  selector: { type: "element" };
+}
+
+interface TextTarget {
+  sourceRevision: Revision;
+  element: DstarElementId;
+  selector: {
+    type: "text-range";
+    start: number;
+    end: number;
+    unit: "unicode-code-point";
+    exact: string;
+    prefix?: string;
+    suffix?: string;
+  };
 }
 ```
 
-The canonical renderer maps semantic elements with `data-dstar-node` and keeps
-an in-memory DOM-text-run map from UTF-16 browser offsets to canonical Unicode
-code-point offsets. Projection selection uses validated `data-dstar-segment`
-markers and copies source mappings into canonical targets. Transient DOM
-references are never serialized.
+Text offsets address the element's normalized visible text stream. Generated
+CSS content is excluded and cannot carry the only meaningful copy of text.
+Adapters convert browser UTF-16 offsets to Unicode code-point offsets.
 
-Selection capture verifies exact text, prefix/suffix context, source revision,
-and target resolution before opening a composer. Unsupported, mixed, stale, or
-unmapped selections fail visibly instead of producing approximate portable
-anchors.
+## Comments and recovery
 
-## Comments and human assignment
+A comment records its original target and revision permanently. To display it
+at another revision, the resolver proceeds conservatively:
 
-Creating a comment records purpose, scope, target, redundant canonical targets,
-body, human author, optional human assignee, and open status. Replies and
-resolution are explicit commands. Resolution requires a human actor.
+1. resolve the same stable element ID;
+2. require exact quotation at the stored range when unchanged;
+3. otherwise use exact quotation plus prefix/suffix inside that element;
+4. report `ambiguous` when multiple matches remain; or
+5. report `orphaned` when the element or text no longer has a reliable target.
 
-Assignment is only workflow metadata about accountable people:
+The client never silently chooses another element. Original quotation and
+revision remain visible even after successful recovery.
 
-```ts
-annotation.assignee?: HumanActor
-```
+Element comments cover layout, style, image choice, animation intent, or the
+element as a whole. A future region selector may add viewport and normalized
+geometry for comments on whitespace or responsive composition; it is not
+required for the first milestone.
 
-Assigning or reassigning does not start work, invoke software, grant a
-capability, or create another portable object.
+Assignment remains human responsibility metadata. Assigning a comment does not
+start software, grant capabilities, or create a portable task lifecycle.
 
-## Proposal review
+## Candidate review
 
-The proposal view shows author, time, explicit bases, motivations, sources,
-ordered operations, diagnostics, semantic diff, and computed result revision.
+The proposal surface shows:
+
+- proposal author, request, evidence, explicit base, and candidate revision;
+- sandboxed before and after frames using identical viewport settings;
+- DOM changes grouped by stable element ID;
+- text, attribute, class, inline style, stylesheet, and asset changes;
+- stable IDs removed or replaced and comments placed at risk;
+- rewrite ratio and security/accessibility diagnostics; and
+- exact acceptance state and human decision.
+
 Accept is enabled only for a fresh, applicable simulation and requires explicit
-human confirmation bound to that result revision. Reject and supersede are
-separate human decisions. Stale proposals cannot be rebased by the UI; a new
-proposal must be submitted against new bases.
+confirmation bound to the candidate revision. The UI never silently rebases a
+stale proposal.
 
-Accepted-version history is inspection-only. It materializes canonical content
-from the accepted chain and labels any present-day collaboration metadata as
-current.
+## Version inspection
 
-## Service contract
+Accepted history is inspection-only. Selecting a version materializes and
+verifies its exact HTML, CSS, and assets before showing it. Checkpoints and
+patches are storage details and are not exposed as competing document states.
 
-The browser uses the loopback workspace service with a session token and fresh
-snapshot IDs. It may create/reply/resolve/assign annotations and perform human
-proposal decisions. MCP is a separate proposal-only boundary and is never used
-by the browser to smuggle canonical decisions.
+The UI can compare any two materialized revisions using the same semantic diff
+engine used for proposals.
 
 ## Tests
 
-- canonical and projection selection, including Unicode and stale mappings;
-- comment creation, reply, resolution, and human-only assignment;
-- no task/executor controls or direct content editing;
-- deterministic proposal simulation and disabled stale acceptance;
-- exact-revision human decisions; and
+- element and text selection across Unicode, nested marks, and mixed DOM nodes;
+- stable target recovery, ambiguity, and orphan behavior;
+- sandbox bridge spoofing and stale snapshot rejection;
+- comment, reply, assignment, and resolution persistence;
+- exact before/after preview and DOM/CSS/asset diff presentation;
+- warnings for removed IDs and high rewrite ratio;
+- disabled stale acceptance and exact-revision human decisions;
+- historical materialization labels; and
 - keyboard, focus, contrast, zoom, and screen-reader behavior.

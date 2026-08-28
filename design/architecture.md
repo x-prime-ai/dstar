@@ -1,222 +1,73 @@
-# Reference Architecture
+# Reference architecture
 
-Status: **Draft**
+Status: implemented local MVP; development format, not a stable public SDK.
 
-## 1. Boundaries
-
-The first implementation preserves three hard boundaries:
-
-1. `document.json` is the only canonical content source.
-2. Every canonical mutation crosses an immutable proposal plus explicit human
-   decision boundary.
-3. Portable state remains usable without the reference application or the
-   software that originally invoked it.
-
-DSTAR is caller-independent. SDK and MCP operations may be invoked by any
-external application, but the protocol and runtime do not model that
-application's executor, session, task, model, or provider.
-
-## 2. Components
+## Three responsibilities
 
 ```text
-Browser review app
-       |
-       v
-Workspace service / CLI
-       |
-       +-- MCP adapter -----------> any compatible MCP client
-       +-- Review service ---------> annotations + human assignment
-       +-- Change service ---------> simulation + human decisions
-       +-- Render service ---------> deterministic views
-       |
-       v
-Package repository -> Validator -> Pure DSTAR core
-       |
-       +-- portable .dstar package
-       +-- non-portable local runtime store
+Agent + DSTAR skill ──CLI──> Engine <──private local adapter── Viewer
+                              │                             │
+                    proposal/delta/history          preview/select/comment
+                              │                     human accept/reject
+                              ▼
+                       portable directory
 ```
 
-The pure core owns schemas, revisions, indexes, profiles, selectors, operations,
-history, and diagnostics. It has no filesystem, UI, MCP, network, model, or
-provider dependency.
+The Engine is independent of the Viewer. Its proposal operation derives and
+stores candidate revision, compact byte deltas and review summaries immediately.
+A Viewer is not needed to prepare a proposal or reconstruct historical HTML.
 
-The package repository is the only component mapping protocol objects to
-filesystem paths. It opens immutable snapshots and commits logical mutations
-through locks and recovery journals.
+The Viewer does not calculate or own versions. Its local server reads immutable
+materializations and submits comment or human decision commands to the Engine.
+There is no new MCP service, workflow backend, projection renderer or public SDK.
 
-The review service creates annotations/replies, assigns an annotation to a
-human, resolves targets, and commits explicit human lifecycle decisions.
+## Code
 
-The MCP adapter translates a fixed package/draft plus fixed human principal to
-public SDK calls. It exposes proposal production but no decision service.
+- `packages/engine`: file inventory, HTML/CSS validation, hashes, byte deltas,
+  materialization, comments, proposals and locked/journaled writes.
+- `packages/engine/src/cli.ts`: validate, inspect, export, propose, comment, reply.
+- `packages/engine/src/decisions.ts`: internal adapter for human decisions;
+  deliberately absent from the agent command set.
+- `apps/viewer`: loopback HTTP adapter and static browser UI.
+- `scripts/dstar.mjs`: repository launcher, including `serve`.
+- `skills/dstar-documents`: agent operating instructions and format references.
 
-## 3. Processes
+Legacy modules remain unchanged and are not dependencies of the new Engine.
 
-### Workspace service
+## Authoring and proposal
 
-`dstar serve <document.dstar>` starts a loopback-only service with a random
-port, bearer token, CSRF protection, and origin checks. It watches package
-files, exposes versioned snapshots/commands, and streams invalidations.
+The agent edits a full candidate directory separate from the accepted package.
+The Engine compares it with the exact inspected base, rejects unsafe or stale
+input, preserves raw canonical bytes, computes file/object hashes and selects
+delta or replacement storage. It records a pending proposal with bounded
+stable-ID review summaries. The accepted checkout and head remain unchanged.
 
-### CLI
+The candidate can be viewed directly from its immutable storage objects.
+Subsequent changes to the agent's staging directory do not change the proposal.
 
-The CLI calls the same SDK services in-process. Decision commands require an
-interactive human confirmation and exact simulated result revision.
+## Decisions
 
-### MCP
+The Viewer labels the exact candidate, permits base/candidate switching and
+opens a confirmation dialog. Acceptance supplies proposal ID, candidate hash
+and current state hash. Under a write lock the Engine verifies all three,
+checks the exact parent is still head and materializes/verifies the stored
+candidate. It journals checkout paths, installs files, and atomically switches
+the authoritative state last.
 
-```text
-dstar mcp document <document.dstar> --principal <human-id>
-dstar mcp genesis <draft> --principal <human-id>
-```
+Reject records a decision without changing canonical files. Human resolution
+changes only comment state. The filesystem is trusted; these are workflow/API
+boundaries, not protection against a local process that can rewrite metadata.
 
-The process scope fixes its target and principal. Tool arguments cannot change
-either. There is no DSTAR task start or portable execution lifecycle.
+## Comments and layout
 
-## 4. State ownership
+Both Engine and trusted selection bridge use `dom-text-v1`, not a generated
+JSON content tree. Text ranges use Unicode code points; images/layout can use
+element targets. Comment origins never change, and recovery is explicit.
+Slides use optional body/section hints plus authored CSS; the Viewer only
+supplies navigation.
 
-| State | Authority | Location |
-| --- | --- | --- |
-| Canonical content | DSTAR package | `document.json` |
-| Revision/head | DSTAR package | `manifest.json` |
-| Comments/replies/human assignment | DSTAR package | `annotations/` |
-| Proposals/decisions | DSTAR package | `changes/` |
-| Sources/assets | DSTAR package | `sources.json`, `assets/` |
-| Projections/maps | DSTAR package | `projections/` |
-| Locks, journals, idempotency, caches | Reference runtime | external runtime root |
-| Authentication and caller execution | Integrating application | outside DSTAR |
+The HTML is sandboxed away from review controls. Preview URLs grant immutable
+read-only content, while a different local session secret gates review APIs.
+The frame never receives that secret.
 
-Portable state is never dependent on a runtime database row. Reopening package
-files rebuilds all authoritative indexes.
-
-## 5. Service contracts
-
-```ts
-interface PackageRepository {
-  open(path: AbsolutePath): Promise<PackageSnapshot>;
-  commit(command: PackageCommit): Promise<PackageSnapshot>;
-  watch(path: AbsolutePath, listener: SnapshotListener): Disposable;
-}
-
-interface DstarValidator {
-  validate(snapshot: PackageSnapshot, role?: ConformanceRole): Diagnostic[];
-}
-
-interface ProposalService {
-  simulate(snapshot: PackageSnapshot, proposal: DstarChange): SimulationResult;
-  record(command: RecordProposalCommand): Promise<PackageSnapshot>;
-}
-
-interface ChangeApplier {
-  accept(command: AcceptChangeCommand): Promise<PackageSnapshot>;
-  reject(command: RejectChangeCommand): Promise<PackageSnapshot>;
-  supersede(command: SupersedeChangeCommand): Promise<PackageSnapshot>;
-}
-
-interface VersionMaterializer {
-  list(snapshot: PackageSnapshot): readonly CanonicalVersionSummary[];
-  materialize(snapshot: PackageSnapshot, changeId: ChangeId): VersionMaterialization;
-}
-```
-
-Every mutation contains an expected snapshot ID and idempotency key. Proposal
-commands additionally retain explicit canonical base change and revision.
-
-## 6. Snapshot model
-
-A `PackageSnapshot` contains parsed immutable protocol objects, source bytes,
-indexes, diagnostics, projection freshness, and a runtime-only inventory hash.
-The snapshot ID changes for collaboration/projection changes even when the
-canonical revision is unchanged.
-
-Every read evaluates exactly one validated snapshot. A proposal submitted after
-the package advances retains its declared bases and is visibly stale; no layer
-silently rewrites it.
-
-## 7. Workflows
-
-### Genesis
-
-```text
-human request + sources
-    -> local draft
-    -> SDK/MCP client stages genesis proposal under that human principal
-    -> deterministic validation and preview
-    -> separate human acceptance
-    -> atomic package materialization
-```
-
-### Comment and assignment
-
-```text
-browser Range
-    -> semantic/projection selector
-    -> validated annotation write
-    -> optional human assignee
-```
-
-Assignment returns immediately and starts nothing. The assignee decides outside
-DSTAR whether and how to use another application to read, reply, or propose.
-
-### Proposal
-
-```text
-client reads manifest/comment/nodes
-    -> submits explicit base + ordered operations
-    -> core validates and simulates
-    -> node runtime records pending proposal
-    -> annotation remains open; canonical head is unchanged
-```
-
-### Human decision
-
-```text
-pending proposal
-    -> deterministic simulation and semantic diff
-    -> interactive human confirmation
-    -> atomic accept/reject/supersede transaction
-```
-
-Only acceptance changes `document.json`, manifest revision, and head.
-
-## 8. Local API
-
-Reads include snapshot, document, versions, projections, annotations, changes,
-simulations, and sources. Commands include annotation creation/reply/assignment/
-resolution, proposal decisions, projection regeneration, and source
-registration.
-
-The local review API may expose human decision commands because it is an
-authenticated human surface. The MCP adapter intentionally does not compose or
-export those methods.
-
-## 9. Consistency and failures
-
-- Reads use immutable snapshots; one package commit runs at a time.
-- Writes reopen and compare the expected snapshot after acquiring the lock.
-- Unexpected external changes invalidate pending commands.
-- Renderer failure never blocks canonical access or decisions.
-- MCP/client disconnect never changes canonical content.
-- Acceptance crashes recover before package reopen.
-- Historical materialization never falls back to unverified cache content.
-
-## 10. Security and observability
-
-The workspace service is loopback-only. Package paths, JSON, HTML, assets,
-sources, and MCP arguments are untrusted and bounded. Proposal surfaces expose
-no decision handle. External caller identity cannot be supplied through
-model-controlled tool arguments; the launcher fixes the human principal.
-
-Logs record correlation ID, operation name, outcome, duration, byte counts, and
-diagnostic codes without document bodies. External applications own any richer
-execution telemetry outside DSTAR.
-
-## 11. Open design work
-
-- portable split/merge identity lineage;
-- real-time concurrent annotation editing;
-- remote identity and authorization;
-- deterministic packed `.dstar.zip`;
-- portable event-log history for assignment/reassignment;
-- profile discovery and distribution; and
-- retention rules for old projection provenance.
+See [the concrete MVP contract](html-mvp.md) for exact encodings and limits.

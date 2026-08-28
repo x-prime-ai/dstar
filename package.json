@@ -9,6 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "dstar": "node scripts/dstar.mjs",
     "build": "pnpm --recursive --if-present build",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:consumer": "pnpm --filter @dstar/sdk-consumer build",

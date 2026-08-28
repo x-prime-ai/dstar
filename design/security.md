@@ -1,81 +1,103 @@
 # Security Design
 
-Status: **Draft**
+> Earlier design exploration, not the implemented contract. The smaller
+> Engine/CLI/Viewer architecture and exact current behavior are documented in
+> [architecture](architecture.md) and [HTML-first MVP](html-mvp.md).
+> MCP/SDK integration, assignment and broader guarantees here are deferred.
+
+Status: **Redesign draft**
 
 ## Posture and trust boundaries
 
-A `.dstar` package is untrusted structured content, not an application bundle.
-Opening one must not execute code, escape its root, fetch remote resources, or
-mutate canonical content. Provenance is declared metadata, not a signature.
+A `.dstar` package is untrusted document content, not an application bundle.
+This is especially important because canonical content is now HTML and CSS.
+Opening a package must not execute package code, escape its root, fetch remote
+subresources, access workspace credentials, or mutate accepted state.
 
-Untrusted inputs include package paths and bytes, canonical content, comments,
-sources, stored projections, MCP arguments, and external client output. Trusted
-code includes the protocol core, installed renderers/profiles, the local review
-application, and authenticated human decision controls.
+Untrusted inputs include package paths and bytes, HTML, CSS, assets, comments,
+sources, patches, checkpoints, MCP arguments, and agent-generated candidates.
+Trusted code includes the protocol core, package runtime, HTML/CSS parsers and
+validators, sandbox bridge, review application, and authenticated human
+decision controls.
 
-## Package and service controls
+## Package controls
 
-The package runtime rejects traversal, links, special files, duplicate JSON
-keys, excessive sizes/depth/counts, invalid profiles, broken references, and
-revision/history mismatches. It never constructs shell commands from package
-data and uses expected snapshots, hashes, locks, and recoverable transactions.
+The runtime rejects traversal, links, special files, duplicate JSON keys,
+excessive files or bytes, decompression bombs, invalid content digests, broken
+references, duplicate stable IDs, patch mismatches, and revision/history
+inconsistency.
+
+Content-addressed object names are verified from bytes before use. A checkpoint
+is trusted only after complete materialization and revision verification.
+Patches apply only to their exact base digest and never use fuzzy matching.
+
+## Canonical HTML and CSS
+
+Canonical presentation is parsed and validated before preview or acceptance.
+The 0.1 safe subset forbids:
+
+- scripts, inline event handlers, forms, popups, and top navigation;
+- remote stylesheets, imports, fonts, media, frames, and network fetches;
+- `javascript:`, `data:` active content, extension, and host-file URLs;
+- active inline SVG, plugin content, and unsupported embeds;
+- CSS capable of loading undeclared external resources; and
+- meaningful text that exists only in generated CSS content.
+
+Safe package-local images and media use validated paths, MIME allowlists,
+bounded ranges, `nosniff`, and restrictive response headers. SVG is served as a
+sandboxed image or attachment, never injected as trusted DOM.
+
+## Browser isolation
+
+The canonical document runs in a sandboxed frame with a restrictive CSP and no
+workspace token. Review rails, proposal controls, and human decision UI live
+outside that frame so package CSS cannot hide or imitate them.
+
+The optional selection bridge has a narrow message schema. The host validates
+frame origin/channel, snapshot token, stable element ID, range, and quotation
+against its own parsed index. The frame cannot invoke package mutation or
+decision commands.
+
+Trusted slide navigation or other viewer behavior is application code selected
+by a manifest runtime identifier. Package-authored JavaScript is not supported
+in 0.1.
+
+## Candidate boundary
+
+An agent may submit a complete candidate, but it cannot declare its own output
+safe, compute authoritative diffs, choose a human identity, or accept the
+result. The service independently inventories, parses, validates, hashes,
+diffs, and previews candidate bytes.
+
+Unsafe candidates fail visibly. The acceptance UI binds the decision to the
+exact candidate revision and uses the same validated bytes shown in the after
+preview. There is no post-preview sanitizer that can alter accepted output.
+
+## MCP and service controls
 
 The workspace service binds to loopback, uses a high-entropy launch token,
-validates Origin and CSRF state, accepts bounded JSON only, rejects wildcard
-CORS, rate-limits mutations, and returns sensitive data with `no-store`.
+validates Origin and CSRF state, rejects wildcard CORS, rate-limits mutations,
+and returns sensitive content with `no-store`.
 
-## MCP boundary
+The stdio MCP process is fixed to one package or genesis draft and one human
+principal. Tool arguments cannot select filesystem paths, identity, authority,
+or wider scope. MCP exposes proposal production but no accept, reject,
+supersede, resolve, or canonical-write tool.
 
-The stdio MCP process is launched for exactly one document or genesis draft and
-one human principal. Tool arguments cannot select a filesystem path, identity,
-authority level, or wider scope. Calls have expiry and byte/call budgets.
+## Untrusted instructions and secrets
 
-MCP exposes bounded reads, simulation, pending proposal submission, and comment
-reply. It exposes no assignment, resolution, accept, reject, supersede, or
-canonical-write tool. Tool metadata is not authorization; every call is
-validated at the broker and package-command layers. The external client's
-implementation type is irrelevant to DSTAR.
+HTML text, comments, source files, CSS strings, and captured evidence may
+contain hostile instructions. DSTAR treats them as data. They cannot change
+tool policy, grant authority, forge a human decision, or select credentials.
 
-## Rendered content and assets
-
-Stored HTML is sanitized and shown only in a sandboxed frame with scripts,
-forms, popups, top navigation, remote connections, and active embeds disabled.
-Selection attributes are checked against the projection index. Package content
-receives no local API token.
-
-Assets use opaque routes, snapshot/path revalidation, allowlisted MIME types,
-`nosniff`, bounded ranges, and attachment disposition for active or unsupported
-formats. SVG is never injected as trusted inline markup.
-
-## Untrusted instructions and data minimization
-
-Document and source text may contain hostile instructions. DSTAR treats it as
-data: it cannot change tool policy, select identity, forge a human decision, or
-bypass deterministic validation. Read surfaces are bounded, proposal arguments
-are schema checked, and canonical changes always require an exact-diff human
-decision.
-
-Secrets and provider credentials are outside DSTAR. They are never stored in a
-package, projection, source, change, runtime log, browser response, or MCP
-result. Local logs contain IDs, sizes, timings, and diagnostic codes rather
-than document bodies.
-
-Annotation `audience` is disclosure metadata, not encryption. Filesystem access
-can reveal package content. Implementations enforce requested disclosure scope
-at their own presentation boundaries without treating it as cryptographic
-access control.
-
-## UI integrity
-
-The review application labels pending versus accepted state, shows exact bases
-and deterministic result revision, disables decisions for stale/invalid
-simulations, names the deciding human, and has no auto-accept path. Proposal
-creation and canonical decision remain separate commands even when initiated
-from one user session.
+Secrets and provider credentials remain outside the package, candidate,
+history objects, browser frame, MCP result, and logs. Logs contain IDs, byte
+counts, timings, outcomes, and diagnostic codes rather than document bodies.
 
 ## Verification
 
-Security tests cover path/symlink attacks, parser and resource limits, HTML/SVG
-payloads, loopback authentication, stale writes, MCP scope and budget failures,
-forbidden decision tools, provenance tampering, idempotency mismatch, and
+Security tests cover path and symlink attacks, object/checkpoint corruption,
+patch confusion, parser limits, HTML/CSS/URL payloads, SVG and MIME confusion,
+sandbox escape, selection-bridge spoofing, loopback authentication, stale
+writes, MCP scope, forbidden decision tools, provenance tampering, and
 dependency/license auditing.

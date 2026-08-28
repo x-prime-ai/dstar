@@ -1,39 +1,36 @@
 # MCP Server Design
 
-Status: **Draft**
+> Earlier design exploration, not the implemented contract. The smaller
+> Engine/CLI/Viewer architecture and exact current behavior are documented in
+> [architecture](architecture.md) and [HTML-first MVP](html-mvp.md).
+> MCP/SDK integration, assignment and broader guarantees here are deferred.
+
+Status: **Redesign draft**
 
 ## 1. Boundary
 
-The MCP server is a thin, non-normative adapter over `@dstar/core` and
-`@dstar/node`. It exposes one fixed document or genesis draft to any compatible
-MCP client. DSTAR does not know whether the client is interactive software,
-automation, or another runtime.
+The MCP server is a thin adapter over the canonical-HTML core and package
+runtime. It exposes one fixed document or genesis draft to a compatible client.
+The launcher fixes package scope, authenticated human principal, expiry,
+budgets, and filesystem handles unavailable to tool arguments.
 
-The launcher fixes:
-
-- document package or genesis draft;
-- authenticated human principal;
-- expiry and byte/call budgets; and
-- filesystem/runtime handles unavailable to tool arguments.
-
-The principal is the person on whose authority the client is operating. MCP
-does not serialize an executor identity, runtime session, model, provider,
-delegation, or task into the package.
+DSTAR does not record the client's model, provider, session, executor,
+delegation, or task lifecycle in portable state.
 
 ## 2. Authority
 
 MCP tools may:
 
-- read the fixed document, annotations, sources, and mappings;
-- simulate update operations;
+- read the fixed manifest and bounded canonical files;
+- inspect stable elements, comments, sources, styles, and assets;
+- simulate a complete candidate against an explicit base;
 - append a reply attributed to the fixed human principal;
-- store a pending update proposal attributed to that principal; and
-- stage a pending genesis proposal for that principal's fixed draft.
+- record a pending candidate proposal; and
+- stage a pending genesis candidate.
 
 MCP exposes no tool for accepting, rejecting, superseding, resolving, changing
-identity, opening another package, arbitrary paths, shell execution, or
-unrestricted network access. Proposal submission never changes canonical
-content.
+identity, selecting another package, arbitrary filesystem access, shell
+execution, or unrestricted network access.
 
 ## 3. Process modes
 
@@ -45,95 +42,71 @@ dstar mcp genesis <draft> --principal <human-id>
 The first transport is stdio. Standard output contains only MCP messages;
 redacted diagnostics use standard error.
 
-The process capability is server-held and never crosses MCP. There is no
-`taskToken`, `start_task`, executor assignment, or task lifecycle. Calls consume
-the process-level budget directly.
-
 ## 4. Tools
 
-| Tool | Mode | Effect |
-| --- | --- | --- |
-| `get_manifest` | both | Current manifest or fixed genesis request |
-| `list_comments` | document | Comment summaries, optionally assigned to the principal |
-| `get_node` | document | Canonical node, ancestors, and bounded neighbors |
-| `search_document` | document | Deterministic local text search |
-| `get_annotation` | document | One portable annotation thread |
-| `get_source` | both | Source metadata without implicit fetching |
-| `simulate_update` | document | Pure validation, applicability, and semantic diff |
-| `submit_proposal` | document | Persist one pending update proposal |
-| `reply_comment` | document | Append one reply under the principal |
-| `submit_genesis` | genesis | Stage one pending genesis proposal |
+| Tool                 | Mode     | Effect                                                                     |
+| -------------------- | -------- | -------------------------------------------------------------------------- |
+| `get_manifest`       | both     | Current manifest or fixed genesis request                                  |
+| `get_document`       | document | Bounded canonical HTML and declared file inventory                         |
+| `get_element`        | document | Stable element HTML, text, ancestors, nearby elements, and relevant styles |
+| `search_document`    | document | Deterministic search over normalized visible text                          |
+| `list_comments`      | document | Comment summaries, optionally assigned to the principal                    |
+| `get_annotation`     | document | One portable annotation thread and target status                           |
+| `get_source`         | both     | Source metadata without implicit fetching                                  |
+| `simulate_candidate` | document | Validate complete candidate and return revision/diff diagnostics           |
+| `submit_candidate`   | document | Persist one pending candidate proposal                                     |
+| `reply_comment`      | document | Append one reply under the fixed principal                                 |
+| `submit_genesis`     | genesis  | Stage one pending complete genesis candidate                               |
 
-Every update simulation/submission supplies explicit `baseChange` and
-`baseRevision`. Removing task state must not allow the server to silently move
-a proposal to a head that the client did not inspect. A stale proposal may be
-retained for review; it is never silently rebased or accepted.
+Candidate simulation and submission include explicit `baseChange` and
+`baseRevision`. Candidate files are bounded and may refer only to staged assets
+admitted by the server-held draft or package scope.
 
 Terminal writes are idempotent by principal plus caller-supplied idempotency
-key. Repeating the same command returns the original portable result when it is
-still current; reusing a key with different arguments fails.
+key. A stale candidate may be retained for inspection but is never silently
+rebased or accepted.
 
 ## 5. Resources
 
-Resources are optional URI-addressed views of the same fixed scope:
+Optional Resources expose the same fixed scope:
 
-| URI | Contents |
-| --- | --- |
-| `dstar://document/manifest` | Current manifest |
-| `dstar://document/node/{nodeId}` | Canonical node context |
-| `dstar://annotation/{annotationId}` | Annotation thread |
-| `dstar://source/{sourceId}` | Source metadata |
-| `dstar://projection/{projectionId}/mapping` | Projection mapping |
-| `dstar://genesis/request` | Public fixed genesis request fields |
+| URI                                    | Contents                     |
+| -------------------------------------- | ---------------------------- |
+| `dstar://document/manifest`            | Current manifest             |
+| `dstar://document/html`                | Canonical `document.html`    |
+| `dstar://document/element/{elementId}` | Stable element context       |
+| `dstar://document/style/{styleId}`     | Declared stylesheet content  |
+| `dstar://annotation/{annotationId}`    | Annotation thread            |
+| `dstar://source/{sourceId}`            | Source metadata              |
+| `dstar://genesis/request`              | Fixed public genesis request |
 
 Resources grant no additional mutation authority. Clients without Resource
-support use equivalent read tools. Change notifications are best-effort
-invalidation hints; every read reopens a validated snapshot.
+support use equivalent read tools.
 
-The public genesis request contains `documentId`, `title`, `profiles`, `actor`,
-`body`, `createdAt`, and `allowedSourceIds`. The server-held output path and the
-embedded source collection are not exposed through either this Resource or
-`get_manifest`; source metadata remains available only through the scoped
-`dstar://source/{sourceId}` Resource and `get_source` tool.
+## 6. Candidate transport
 
-## 6. MCP App
+Small HTML/CSS files may be supplied directly. Larger candidates use bounded
+staging handles created by the fixed genesis/document process; handles cannot
+name host paths or outlive their scope. Asset bytes are digested and validated
+before candidate simulation.
 
-The optional MCP App packages the same renderer and review controller used by
-the standalone UI. Its tool calls still pass through host policy and the DSTAR
-server. Embedding the UI does not expose hidden human-decision commands.
+The server recomputes identity, safety, candidate revision, semantic review
+diff, and storage representation. Caller-provided hashes or diffs are hints
+only.
 
-## 7. Compatibility
+## 7. MCP App
 
-Raw tool names use ASCII letters, digits, and underscores. Adapter input schemas
-are small and flattened without `$ref`, `oneOf`, or `allOf`. Results include
-compact JSON text and may repeat the object as `structuredContent`.
+An optional MCP App may package the same sandboxed viewer and review controller
+used by the standalone UI. The canonical HTML remains in a nested untrusted
+frame. Embedding the UI does not expose hidden human-decision commands.
 
-The adapter is tool-complete; Resources and Apps degrade explicitly. The
-normative DSTAR schemas remain independent of MCP schema limitations.
+## 8. Verification
 
-## 8. Security and errors
+Tests cover fixed package/draft isolation, principal immutability, bounded HTML
+and asset reads, stable-element context, comment read/reply, complete candidate
+simulation/submission, explicit stale bases, idempotent retries, inability to
+discover decision methods, Resources fallback, and protocol-only stdout.
 
-All tool arguments and document data are untrusted. The adapter validates IDs,
-limits, bases, operations, profile rules, and package state. Errors return
-stable safe codes and omit package paths, secrets, and document bodies.
-
-Tool descriptions and annotations are presentation hints, not authorization.
-Authorization comes only from the server-held process scope and the absence of
-decision methods from this adapter.
-
-## 9. Verification
-
-Tests cover:
-
-- MCP negotiation, stdio lifecycle, and stable public tool names;
-- fixed document/draft isolation and principal immutability;
-- no task/delegation/token surface;
-- direct comment read/reply and proposal submission;
-- explicit base handling, stale proposals, and idempotent retries;
-- inability to discover or invoke human-decision methods;
-- resource list/read/subscription and tool-only fallback; and
-- protocol-only stdout plus redacted diagnostics.
-
-A release test submits an update through a generic MCP client and verifies that
-canonical revision and head remain unchanged until a separate interactive human
-decision accepts the proposal.
+A release test submits a candidate through a generic MCP client and verifies
+that canonical revision and head remain unchanged until a separate interactive
+human decision accepts it.

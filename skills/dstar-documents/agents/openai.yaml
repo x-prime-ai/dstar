@@ -1,0 +1,4 @@
+interface:
+  display_name: "DSTAR Documents"
+  short_description: "Create and review collaborative HTML documents"
+  default_prompt: "Use $dstar-documents to create or revise a reviewable DSTAR HTML document."

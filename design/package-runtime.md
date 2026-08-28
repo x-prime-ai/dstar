@@ -1,91 +1,148 @@
 # Package Runtime
 
-Status: **Draft**
+> Earlier design exploration, not the implemented contract. The smaller
+> Engine/CLI/Viewer architecture and exact current behavior are documented in
+> [architecture](architecture.md) and [HTML-first MVP](html-mvp.md).
+> MCP/SDK integration, assignment and broader guarantees here are deferred.
+
+Status: **Redesign draft**
 
 ## Boundary
 
-`@dstar/node` is the filesystem boundary around the pure `@dstar/core`. It
-opens untrusted package trees into immutable snapshots and applies validated,
-recoverable mutations. It contains no model/provider integration, executor
-registry, task scheduler, or portable workflow engine.
+The package runtime opens untrusted `.dstar` directories into immutable
+snapshots and applies validated, recoverable mutations. It contains no model,
+provider, executor registry, task scheduler, or portable workflow engine.
 
 Opening a package performs a bounded inventory, rejects links and special
-files, parses duplicate-key-aware I-JSON, validates schemas and profiles,
-checks references and revisions, and validates the accepted history chain.
-Unknown optional profile content remains inspectable but makes mutation
-read-only when safe semantics are unavailable.
+files, parses duplicate-key-aware JSON metadata, parses HTML and CSS with
+resource limits, validates stable identity and references, computes the
+canonical file-set revision, and verifies the accepted history chain.
 
 ## Snapshot
 
 ```ts
-interface PackageSnapshot extends InMemoryPackage {
-  root: string;
+interface PackageSnapshot {
+  root: AbsolutePath;
   snapshotId: SnapshotId;
+  documentRevision: Revision;
+  headChange: ChangeId;
   inventory: readonly InventoryEntry[];
+  htmlIndex: HtmlIdentityIndex;
   diagnostics: readonly Diagnostic[];
   writable: boolean;
 }
 ```
 
-`snapshotId` hashes the complete safe inventory and is runtime-only. Manifest
-`revision` and `headChange` remain the portable canonical state. A comment,
-proposal, projection, or asset write may change the snapshot without changing
-the canonical revision.
+`snapshotId` hashes the complete safe inventory and is runtime-only. The
+portable `documentRevision` binds the canonical HTML, styles, assets, and
+declared viewer-runtime behavior. A comment or pending proposal may change the
+snapshot without changing the document revision.
+
+## File classes
+
+Every package path belongs to one explicit class:
+
+- canonical presentation: `document.html`, declared CSS, and referenced assets;
+- collaboration: annotations and replies;
+- history: changes, content-addressed objects, and checkpoints;
+- evidence: source metadata and captured source files; or
+- manifest and indexes.
+
+The repository never grants a command arbitrary path-write authority. A
+candidate command supplies a bounded logical file set that is independently
+classified and validated.
 
 ## Commands and transactions
 
-Public commands express logical mutations rather than arbitrary paths. The
-repository independently restricts each transaction type:
-
 ```ts
 type TransactionType =
-  | "genesis" | "annotation" | "evidence" | "proposal"
-  | "decision" | "accept-change" | "projection";
+  | "genesis"
+  | "annotation"
+  | "evidence"
+  | "proposal"
+  | "decision"
+  | "accept-change"
+  | "checkpoint";
 ```
 
-Annotation commands create threads, append direct human replies, resolve, or
-set an optional human assignee. Proposal commands may add a proposed update or
-reply but cannot write the canonical document or manifest head. Decision and
-accepted-change commands require human authority at the command layer.
+Proposal commands can record a candidate and its derived patches but cannot
+advance the canonical head. Decision and accepted-change commands require human
+authority at the command layer.
 
 Every mutation carries an expected snapshot ID and idempotency key. Repeating
 the same command returns its already-current result; reusing a key with
-different arguments fails. Callers that need stable retry after later package
-advancement use deterministic portable IDs and compare existing objects.
+different arguments fails.
+
+## Content-addressed objects and patches
+
+Objects are named by digest and immutable. The same asset or replacement blob
+is stored once even when referenced by many versions.
+
+For each changed canonical file, history stores either:
+
+- an exact-base textual or binary patch;
+- a compressed replacement object; or
+- a reference to an object that already exists.
+
+The selector is an implementation optimization. A portable change records base
+digest, result digest, encoding, and object path so any implementation can
+materialize the same bytes. If a patch is not materially smaller than a
+replacement object, the runtime stores the replacement.
+
+Patch application requires an exact base digest and verifies the result digest.
+Fuzzy application is forbidden.
+
+## Checkpoints
+
+A checkpoint is a compressed, complete canonical file set for one accepted
+revision. It is a replay accelerator, not a new version or authority source.
+
+The runtime may create one when any configured threshold is reached:
+
+- accepted changes since the nearest checkpoint;
+- accumulated patch bytes relative to materialized document size; or
+- measured historical materialization latency.
+
+Checkpoint creation verifies the accepted chain first, writes the compressed
+candidate atomically, reopens it, and verifies its document revision. Removing
+all checkpoints must not make accepted history unrecoverable.
 
 ## Atomicity and recovery
 
-Writes take an external per-package lock, reopen the package, verify snapshot
-and file hashes, validate an in-memory candidate, then journal staged files and
-backups outside the package. Targets are installed with the manifest last for
-canonical acceptance. The package is reopened and validated before the new
-snapshot is published.
+Writes take an external per-package lock, reopen the package, verify the
+expected snapshot and file digests, validate an in-memory candidate, then
+journal staged files and backups outside the package. The manifest is installed
+last when acceptance advances canonical state.
 
 Recovery completes a fully installed journal, recognizes a fully old state, or
 restores every old file from verified backups. An unverifiable mixed state is
 read-only and reports recovery-required diagnostics.
 
-An accepted update transaction contains exactly the new document, the accepted
-change, and the matching manifest. Projection regeneration is a separate
-transaction and stale projections remain explicitly stale.
+An accepted update transaction installs:
+
+- the new current canonical files;
+- new immutable objects required by history;
+- the accepted change and human decision; and
+- the manifest with matching revision and head.
 
 ## Runtime store and watching
 
 The external runtime directory stores locks, journals, backups, idempotency
-records, disposable caches, and redacted diagnostics. Portable objects remain
-authoritative files and reopening can rebuild all indexes.
+records, disposable parsed DOM indexes, semantic diffs, preview snapshots, and
+redacted diagnostics. Portable files remain authoritative.
 
-File-watch events trigger a fresh safe inventory; event paths are never trusted.
-A valid external edit creates a new snapshot. Invalid or provenance-breaking
-edits put the workspace into inspect-only mode. The runtime never watches or
-serves paths reached through links.
+File-watch events trigger a fresh safe inventory. A valid out-of-band edit that
+breaks the accepted revision chain puts the workspace into inspect-only mode;
+the runtime never invents provenance for it.
 
 ## Tests
 
-- valid/invalid package inventories and root containment;
-- bounded parsing and profile capability behavior;
-- stale/concurrent writers and idempotency mismatch;
-- crash injection at every transaction step;
-- external edits and inspect-only transitions;
-- accepted-change atomicity and projection staleness; and
-- round-trip preservation of supported extension content.
+- package containment, links, special files, and bounded inventory;
+- HTML/CSS parser limits and stable ID validation;
+- canonical file-set revision vectors;
+- object deduplication and exact-base patch replay;
+- patch-versus-replacement threshold selection;
+- checkpoint creation, deletion, and verified materialization;
+- stale writers, idempotency mismatch, and crash injection;
+- out-of-band edits and inspect-only transitions; and
+- old-or-new atomic acceptance with no hybrid package state.

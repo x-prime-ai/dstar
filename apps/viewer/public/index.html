@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSTAR Review</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">DSTAR<span>REVIEW</span></a>
+      <div class="document">
+        <strong id="title">Opening document…</strong
+        ><small id="revision"></small>
+      </div>
+      <button id="refresh">Refresh</button>
+    </header>
+    <main>
+      <aside class="navigation">
+        <h2>Review queue</h2>
+        <div id="proposals"></div>
+        <h2>Accepted history</h2>
+        <div id="history"></div>
+        <p class="hint">
+          HTML is the document.<br />Changes are proposed before they are
+          accepted.
+        </p>
+      </aside>
+      <section class="workspace">
+        <div class="toolbar">
+          <span id="view-label">Accepted document</span>
+          <div>
+            <label
+              >Width
+              <select id="width">
+                <option value="100%">Fit</option>
+                <option value="768px">768 px</option>
+                <option value="390px">390 px</option>
+              </select></label
+            ><button id="previous-slide" title="Previous slide">←</button
+            ><button id="next-slide" title="Next slide">→</button
+            ><button id="compare" hidden>Show base</button>
+          </div>
+        </div>
+        <div class="canvas">
+          <iframe
+            id="preview"
+            title="Document preview"
+            sandbox="allow-scripts"
+            referrerpolicy="no-referrer"
+          ></iframe>
+          <p id="empty">Select a proposal to review its first version.</p>
+        </div>
+        <section id="decision" hidden>
+          <div>
+            <strong id="request"></strong>
+            <p id="storage"></p>
+          </div>
+          <button id="reject">Reject</button
+          ><button id="accept" class="primary">Accept version</button>
+        </section>
+        <details id="diff-panel" hidden>
+          <summary>Change details</summary>
+          <div id="diff"></div>
+        </details>
+      </section>
+      <aside class="comments">
+        <h2>Comments <span id="count"></span></h2>
+        <p class="hint">
+          Select text in the preview, or Alt-click an image or element. A
+          selection must stay within one stable element.
+        </p>
+        <form id="comment-form">
+          <label for="body" id="selection">Select something to comment</label
+          ><textarea
+            id="body"
+            placeholder="What should change?"
+            required
+          ></textarea
+          ><button class="primary" id="add-comment" disabled>Add comment</button
+          ><button type="button" id="whole-element" hidden>
+            Use whole element
+          </button>
+        </form>
+        <div id="comments"></div>
+      </aside>
+    </main>
+    <dialog id="confirmation">
+      <form method="dialog">
+        <h2 id="confirmation-title">Confirm review decision</h2>
+        <p id="confirmation-detail"></p>
+        <textarea id="reply-text" aria-label="Reply text" hidden></textarea>
+        <button value="cancel">Cancel</button>
+        <button value="confirm" class="primary">Confirm</button>
+      </form>
+    </dialog>
+    <div id="status" role="status"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
