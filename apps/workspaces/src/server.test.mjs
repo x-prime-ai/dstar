@@ -120,8 +120,8 @@ async function create(service) {
   return response.json();
 }
 
-function access(result) {
-  const url = new URL(result.sessions.ownerUrl);
+function access(result, role = "owner") {
+  const url = new URL(result.sessions[`${role}Url`]);
   return { host: url.host, origin: url.origin, token: url.hash.slice(1) };
 }
 
@@ -140,8 +140,12 @@ describe("online workspace service", () => {
     const second = await create(service);
     const one = access(first);
     const two = access(second);
+    const oneReviewer = access(first, "reviewer");
+    const twoReviewer = access(second, "reviewer");
     expect(first.workspace.id).not.toBe(second.workspace.id);
     expect(one.token).not.toBe(two.token);
+    expect(oneReviewer.token).not.toBe(one.token);
+    expect(oneReviewer.token).not.toBe(twoReviewer.token);
     expect(managementUrls).toEqual([first.manageUrl, second.manageUrl]);
 
     const oneState = await wire(service, one.host, "/api/state", {
@@ -152,6 +156,15 @@ describe("online workspace service", () => {
     });
     expect(oneState.status).toBe(200);
     expect(twoState.status).toBe(200);
+    expect(oneState.json().session.role).toBe("owner");
+    expect(
+      (
+        await wire(service, oneReviewer.host, "/api/state", {
+          token: oneReviewer.token,
+        })
+      ).json().session.role,
+    ).toBe("reviewer");
+    expect(oneState.json()).not.toHaveProperty("workspaceManagementUrl");
     expect(
       (await wire(service, two.host, "/api/state", { token: one.token }))
         .status,
@@ -225,12 +238,20 @@ describe("online workspace service", () => {
       (await wire(service, two.host, "/api/state", { token: handoffToken }))
         .status,
     ).toBe(401);
+    expect(
+      (
+        await wire(service, twoReviewer.host, "/api/state", {
+          token: oneReviewer.token,
+        })
+      ).status,
+    ).toBe(401);
   });
 
   it("drains reset, rotates links and capabilities, and restores the seed", async () => {
     const { service, proposal } = await serviceFixture();
     const created = await create(service);
-    const old = access(created);
+    const old = access(created),
+      oldReviewer = access(created, "reviewer");
     const state = (
       await wire(service, old.host, "/api/state", { token: old.token })
     ).json();
@@ -250,16 +271,26 @@ describe("online workspace service", () => {
         exact: "Seed",
       },
     };
-    const comment = await wire(service, old.host, "/api/comments", {
+    expect(state.session.role).toBe("owner");
+    expect(state.workspaceManagementUrl).toBe(created.manageUrl);
+    const reviewerState = (
+      await wire(service, oldReviewer.host, "/api/state", {
+        token: oldReviewer.token,
+      })
+    ).json();
+    expect(reviewerState.session.role).toBe("reviewer");
+    expect(reviewerState).not.toHaveProperty("workspaceManagementUrl");
+    const commentResponse = await wire(service, old.host, "/api/comments", {
       method: "POST",
-      token: old.token,
-      origin: old.origin,
+      token: oldReviewer.token,
+      origin: oldReviewer.origin,
       body: JSON.stringify({
         body: "Will be reset",
         target,
       }),
     });
-    expect(comment.status).toBe(201);
+    expect(commentResponse.status).toBe(201);
+    const comment = commentResponse.json();
     const handoffId = "22222222-2222-4222-8222-222222222222";
     const handoffToken = "j".repeat(64);
     expect(
@@ -272,19 +303,66 @@ describe("online workspace service", () => {
             id: handoffId,
             accessToken: handoffToken,
             context: {
-              selection: target,
-              action: { kind: "comment", target, draft: "" },
-              review: {
-                revision: target.revision,
-                proposalId: proposal.id,
-                showingBase: false,
-                previewStatus: "ready",
+              selection: null,
+              action: {
+                kind: "address-comment",
+                commentId: comment.id,
+                target: comment.target,
+                draft: "",
               },
+              review: null,
+              focusedCommentId: comment.id,
             },
           }),
         })
       ).status,
     ).toBe(201);
+    const context = {
+      selection: null,
+      action: {
+        kind: "address-comment",
+        commentId: comment.id,
+        target: comment.target,
+        draft: "",
+      },
+      review: null,
+      focusedCommentId: comment.id,
+    };
+    expect(
+      (
+        await wire(service, old.host, "/api/agent/context", {
+          method: "POST",
+          token: handoffToken,
+          origin: old.origin,
+          body: JSON.stringify(context),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await wire(
+          service,
+          old.host,
+          `/api/handoffs/${handoffId}/reply-draft`,
+          {
+            method: "POST",
+            token: handoffToken,
+            origin: old.origin,
+            body: JSON.stringify({
+              commentId: comment.id,
+              body: "Draft before reset",
+            }),
+          },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await wire(service, old.host, `/api/handoffs/${handoffId}`, {
+          token: old.token,
+        })
+      ).json().replyDraft.body,
+    ).toBe("Draft before reset");
 
     const [first, raced] = await Promise.all([
       wire(
@@ -320,19 +398,58 @@ describe("online workspace service", () => {
       ),
     ).toBe(true);
     const reset = successful.json();
-    const next = access(reset);
+    const next = access(reset),
+      nextReviewer = access(reset, "reviewer");
     expect(reset.workspace.generation).toBe(2);
     expect(next.origin).toBe(old.origin);
     expect(next.token).not.toBe(old.token);
+    expect(nextReviewer.token).not.toBe(oldReviewer.token);
+    expect(nextReviewer.token).not.toBe(next.token);
     expect(
       (await wire(service, old.host, "/api/state", { token: old.token }))
         .status,
     ).toBe(401);
+    expect(
+      (
+        await wire(service, oldReviewer.host, "/api/state", {
+          token: oldReviewer.token,
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await wire(
+          service,
+          "manage.review.test",
+          `/api/v1/workspaces/${created.workspace.id}`,
+          { token: old.token },
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await wire(
+          service,
+          "manage.review.test",
+          `/api/v1/workspaces/${created.workspace.id}/reset`,
+          {
+            method: "POST",
+            token: nextReviewer.token,
+            origin: "https://manage.review.test",
+            body: "{}",
+          },
+        )
+      ).status,
+    ).toBe(401);
     expect((await wire(service, next.host, preview.url)).status).toBe(404);
     for (const [method, path] of [
+      ["GET", "/api/state"],
       ["GET", `/api/handoffs/${handoffId}`],
       ["POST", `/api/handoffs/${handoffId}/reply-draft`],
       ["POST", `/api/handoffs/${handoffId}/revoke`],
+      ["POST", "/api/agent/context"],
+      ["POST", "/api/agent/document"],
+      ["POST", "/api/agent/proposals"],
     ])
       expect(
         (
@@ -346,9 +463,94 @@ describe("online workspace service", () => {
       ).toBe(401);
     expect(
       (
-        await wire(service, next.host, "/api/state", { token: next.token })
-      ).json().state.comments,
-    ).toHaveLength(0);
+        await wire(service, next.host, `/api/handoffs/${handoffId}/revoke`, {
+          method: "POST",
+          token: old.token,
+          origin: next.origin,
+          body: "{}",
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await wire(service, next.host, `/api/handoffs/${handoffId}/revoke`, {
+          method: "POST",
+          token: next.token,
+          origin: next.origin,
+          body: "{}",
+        })
+      ).status,
+    ).toBe(404);
+    const nextState = (
+      await wire(service, next.host, "/api/state", { token: next.token })
+    ).json();
+    expect(nextState.state.comments).toHaveLength(0);
+    expect(nextState.session.role).toBe("owner");
+    expect(nextState.workspaceManagementUrl).toBe(reset.manageUrl);
+    expect(
+      (
+        await wire(service, nextReviewer.host, "/api/state", {
+          token: nextReviewer.token,
+        })
+      ).json(),
+    ).toMatchObject({ session: { role: "reviewer" } });
+    const nextTarget = { ...target, revision: nextState.revision };
+    const nextComment = (
+      await wire(service, nextReviewer.host, "/api/comments", {
+        method: "POST",
+        token: nextReviewer.token,
+        origin: nextReviewer.origin,
+        body: JSON.stringify({
+          target: nextTarget,
+          body: "New generation comment",
+        }),
+      })
+    ).json();
+    const nextHandoffId = "33333333-3333-4333-8333-333333333333";
+    const nextHandoffToken = "k".repeat(64);
+    const nextContext = {
+      review: null,
+      selection: null,
+      action: {
+        kind: "address-comment",
+        commentId: nextComment.id,
+        target: nextComment.target,
+        draft: "",
+      },
+      focusedCommentId: nextComment.id,
+    };
+    expect(
+      (
+        await wire(service, next.host, "/api/handoffs", {
+          method: "POST",
+          token: next.token,
+          origin: next.origin,
+          body: JSON.stringify({
+            id: nextHandoffId,
+            accessToken: nextHandoffToken,
+            context: nextContext,
+          }),
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await wire(
+          service,
+          next.host,
+          `/api/handoffs/${nextHandoffId}/reply-draft`,
+          {
+            method: "POST",
+            token: nextHandoffToken,
+            origin: next.origin,
+            body: JSON.stringify({
+              commentId: nextComment.id,
+              body: "New generation draft",
+            }),
+          },
+        )
+      ).status,
+    ).toBe(200);
   });
 
   it("survives restart with stable ids/links and rejects Host, Origin, and path selection", async () => {

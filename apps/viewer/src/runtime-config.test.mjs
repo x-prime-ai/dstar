@@ -164,6 +164,29 @@ it("configures distinct named roles, validates identity boundaries and preserves
     expect(() => resolveViewerConfig(root, 0, options)).toThrow();
 });
 
+it("accepts only a private canonical workspace management link", () => {
+  const { root } = fixture();
+  const management = `https://manage.review.test/workspaces/${"a".repeat(32)}#${"m".repeat(64)}`;
+  expect(
+    resolveViewerConfig(root, 0, { workspaceManagementUrl: management })
+      .workspaceManagementUrl,
+  ).toBe(management);
+  const local = `http://127.0.0.1:4173/workspaces/${"b".repeat(32)}#${"n".repeat(64)}`;
+  expect(
+    resolveViewerConfig(root, 0, { workspaceManagementUrl: local })
+      .workspaceManagementUrl,
+  ).toBe(local);
+  for (const value of [
+    "https://manage.review.test/",
+    `http://manage.review.test/workspaces/${"a".repeat(32)}#${"m".repeat(64)}`,
+    `https://manage.review.test/workspaces/${"a".repeat(32)}?leak=1#${"m".repeat(64)}`,
+    `https://manage.review.test/workspaces/${"a".repeat(32)}#short`,
+  ])
+    expect(() =>
+      resolveViewerConfig(root, 0, { workspaceManagementUrl: value }),
+    ).toThrow("Invalid workspaceManagementUrl");
+});
+
 it("loads owner and reviewer service credentials without storing them in the package", () => {
   const { root } = fixture(),
     reviewerToken = "d".repeat(64),

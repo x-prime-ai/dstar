@@ -1210,6 +1210,12 @@ function renderIdentity(publicSession) {
     $("viewer-identity").append(el("span", actor.role, "role-badge"));
   $("viewer-identity").hidden = false;
 }
+function renderWorkspaceManagement(url) {
+  const link = $("manage-workspace");
+  link.hidden = !url;
+  if (url) link.href = url;
+  else link.removeAttribute("href");
+}
 function versionButton(proposal, kind) {
   const button = el("button"),
     actor = actorCopy(proposal.author);
@@ -1256,6 +1262,7 @@ async function refresh({ retryPreview = false } = {}) {
   applySession();
   $("title").textContent = current.title;
   renderIdentity(current.session);
+  renderWorkspaceManagement(current.workspaceManagementUrl);
   $("revision").textContent = current.revision
     ? `HEAD ${current.revision.slice(7, 23)}`
     : "No accepted revision yet";

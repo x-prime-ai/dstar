@@ -47,18 +47,22 @@ credentials in URL fragments and removes the fragment from the address bar.
 | `POST /api/v1/workspaces/:id/reset` with `{}` | workspace owner bearer          | drained new generation and rotated URLs               |
 
 The success shape is
-`{workspace:{id,generation,createdAt,expiresAt},manageUrl,sessions}`. The default
-adapter exposes `{ownerUrl}` through the current legacy Viewer token. The
-Owner/Reviewer task composes without a workspace role system by supplying:
+`{workspace:{id,generation,createdAt,expiresAt},manageUrl,sessions}`. The built-in
+adapter creates distinct Owner and Reviewer tokens and display names for every
+generation, returns `{ownerUrl,reviewerUrl}`, and passes the Owner-only
+`workspaceManagementUrl` into Viewer. Custom identity provisioning can replace
+that policy with `sessionAdapter`:
 
 ```js
 sessionAdapter: {
   create({ ownerToken, randomToken }) {
+    const reviewerToken = randomToken();
     return {
       ownerToken,
+      reviewerToken,
       viewerOptions: {
         ownerToken,
-        reviewerToken: randomToken(),
+        reviewerToken,
         ownerDisplayName: "Owner",
         reviewerDisplayName: "Reviewer",
       },
@@ -76,17 +80,18 @@ sessionAdapter: {
 }
 ```
 
-`viewerOptions` is persisted as an opaque private generation credential file;
-the workspace service does not interpret roles. Reset calls the adapter again,
-so every configured role token rotates together. `ownerToken` is additionally
-the reset gate and must be preserved by the adapter. Do not store tokens in the
-DSTAR package or return them from Viewer APIs.
+`viewerOptions` is persisted as an opaque private generation credential file.
+Reset calls the adapter again, so Owner and Reviewer tokens rotate together.
+`ownerToken` is additionally the reset gate and must be preserved by a custom
+adapter. Do not store tokens in the DSTAR package or return them from Viewer
+APIs.
 
 The optional `start` hook receives the full owner-only management URL after the
-control listener has an origin. Once the Viewer redesign accepts a
-`workspaceManagementUrl` option, this hook can pass it through to the
-owner-only header/identity overflow link. It does not add reset logic to Viewer
-and does not touch Versions or Review changes DOM.
+control listener has an origin. The default passes it to Viewer's quiet
+**Manage workspace** overflow link. Viewer returns that URL only in an
+authenticated Owner state projection; Reviewer and scoped handoff state omit
+it. This does not add reset logic to Viewer and does not touch Versions or
+Review changes DOM.
 
 Common errors use stable codes: `owner_required` (`401`), `invalid_origin` or
 `invalid_authority` (`403`), `workspace_not_found` (`404`),
@@ -100,9 +105,9 @@ Common errors use stable codes: `owner_required` (`401`), `invalid_origin` or
   drains accepted requests. It then copies the seed, atomically switches
   metadata, rotates the complete session configuration, starts a new Viewer and
   deletes the old generation. Closing the old Viewer clears preview capabilities
-  and every process-local handoff record. This includes address-comment tokens,
-  reply drafts and revoke capabilities when the comment-agent routes are
-  integrated; workspace code does not duplicate those route semantics.
+  and every process-local handoff record, including address-comment tokens,
+  reply drafts and revoke capabilities. Workspace code does not duplicate those
+  route semantics.
 - Metadata, credentials and packages live under
   `WORKSPACE_ROOT/workspaces/<id>/`. Atomic metadata is the restart source of
   truth; abandoned staging and non-current generations are removed at startup.

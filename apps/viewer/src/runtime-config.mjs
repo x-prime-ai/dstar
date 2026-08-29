@@ -53,6 +53,32 @@ function externalOrigin(value) {
   return value;
 }
 
+function workspaceManagementUrl(value) {
+  if (value === undefined) return undefined;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    fail("Invalid workspaceManagementUrl");
+  }
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  const allowedProtocol =
+    url.protocol === "https:" ||
+    (url.protocol === "http:" && loopback(hostname));
+  if (
+    typeof value !== "string" ||
+    url.href !== value ||
+    !allowedProtocol ||
+    url.username ||
+    url.password ||
+    url.search ||
+    !/^\/workspaces\/[a-f0-9]{32}$/.test(url.pathname) ||
+    !/^#[A-Za-z0-9_-]{48,256}$/.test(url.hash)
+  )
+    fail("Invalid workspaceManagementUrl");
+  return value;
+}
+
 // Resolve existing ancestors too, so aliases cannot place the credential in
 // the document tree. The Engine independently rejects package symlinks.
 function physicalPath(path) {
@@ -155,6 +181,7 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
         "reviewerTokenFile",
         "ownerDisplayName",
         "reviewerDisplayName",
+        "workspaceManagementUrl",
       ].includes(key)
     )
       fail("Unknown Viewer option");
@@ -166,6 +193,7 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
   if (!Number.isInteger(port) || port < 0 || port > 65535)
     fail("port must be an integer from 0 through 65535");
   const origin = externalOrigin(options.externalOrigin);
+  const managementUrl = workspaceManagementUrl(options.workspaceManagementUrl);
   if (!loopback(host) && !origin)
     fail(
       "Non-loopback binding requires externalOrigin and an explicit credential",
@@ -223,6 +251,7 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
     host,
     port,
     externalOrigin: origin,
+    ...(managementUrl ? { workspaceManagementUrl: managementUrl } : {}),
     token: ownerToken,
     reviewerToken,
     credentials: Object.freeze({

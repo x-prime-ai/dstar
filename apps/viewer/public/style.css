@@ -158,6 +158,18 @@ header {
   border: 0;
   font-size: 12px;
 }
+.menu-content .menu-link {
+  display: block;
+  padding: 7px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+.menu-content .menu-link:hover,
+.menu-content .menu-link:focus-visible {
+  color: var(--green);
+  text-decoration: underline;
+}
 .connection-details {
   margin: 8px 4px 0;
   padding: 12px 4px 4px;

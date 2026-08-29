@@ -215,10 +215,19 @@ export function workspaceStore(options) {
     options.randomToken ?? (() => randomBytes(36).toString("base64url"));
   const makeSession =
     options.createSessionConfig ??
-    (({ ownerToken }) => ({
-      ownerToken,
-      viewerOptions: { token: ownerToken },
-    }));
+    (({ ownerToken, randomToken }) => {
+      const reviewerToken = randomToken();
+      return {
+        ownerToken,
+        reviewerToken,
+        viewerOptions: {
+          ownerToken,
+          reviewerToken,
+          ownerDisplayName: "Workspace Owner",
+          reviewerDisplayName: "Workspace Reviewer",
+        },
+      };
+    });
   mkdirSync(join(root, "workspaces"), { recursive: true, mode: 0o700 });
   mkdirSync(join(root, ".locks"), { recursive: true, mode: 0o700 });
   mkdirSync(join(root, ".staging"), { recursive: true, mode: 0o700 });

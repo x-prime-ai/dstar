@@ -79,13 +79,14 @@ accepted document. The agent CLI intentionally has no accept/reject/resolve
 commands. See the [skill workflow](skills/dstar-documents/references/authoring.md)
 and [comment commands](skills/dstar-documents/references/comments.md).
 
-When the browser supports WebMCP, the top-level Viewer also registers six
+When the browser supports WebMCP, the top-level Viewer registers seven
 document/review tools for browser agents. They can read exact versions, propose
-complete HTML/CSS/assets, prepare editable comment and suggestion drafts, and
-reply to comments; acceptance, posting and suggestion submission remain explicit
-Viewer actions. **Ask agent** copies a private, short-lived handoff prompt that
-contains no Owner/Reviewer credential for the
-already-open Viewer tab. See
+complete HTML/CSS/assets, prepare editable comment, suggestion and reply drafts,
+and post an explicit keyed agent reply. Acceptance, human reply posting,
+suggestion submission and resolution remain explicit Viewer actions. **Ask
+agent** copies a private, short-lived scoped handoff URL that contains no
+Owner/Reviewer session credential but does contain its own bearer credential;
+another Codex task can open it and return a draft. See
 [WebMCP interfaces and limits](design/webmcp.md). Browsers
 without WebMCP retain normal Viewer functionality.
 
@@ -97,8 +98,9 @@ configuration, a Node 22 container and TLS-proxy/volume guidance; the local
 For isolated, resettable copies of one read-only seed, see the
 [workspace service](apps/workspaces/README.md) and its
 [deployment boundaries](deploy/workspaces/README.md). It adds a separate
-control service without changing fixed-document `startViewer` or the persistent
-Viewer entrypoint. No public deployment is included.
+control service with isolated Owner/Reviewer links, Owner-only management and
+reset-driven credential rotation. It does not move reset lifecycle into Viewer
+or change fixed-document `startViewer`. No public deployment is included.
 
 ## Storage
 
@@ -140,6 +142,7 @@ them to open HTML-first packages or infer the new format.
 pnpm build
 pnpm --filter @dstar/engine test
 pnpm --filter @dstar/viewer test
+pnpm --filter @dstar/workspaces test
 pnpm lint
 pnpm typecheck
 pnpm check:links

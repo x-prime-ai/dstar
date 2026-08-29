@@ -64,6 +64,17 @@ describe("persistent workspace store", () => {
     });
     const [first, second] = await Promise.all([store.create(), store.create()]);
     expect(first.metadata.id).not.toBe(second.metadata.id);
+    expect(first.credentials.viewerOptions).toMatchObject({
+      ownerToken: first.credentials.ownerToken,
+      ownerDisplayName: "Workspace Owner",
+      reviewerDisplayName: "Workspace Reviewer",
+    });
+    expect(first.credentials.viewerOptions.reviewerToken).toMatch(
+      /^[A-Za-z0-9_-]{48,256}$/,
+    );
+    expect(first.credentials.viewerOptions.reviewerToken).not.toBe(
+      first.credentials.ownerToken,
+    );
     expect(store.load(first.metadata.id).packageRoot).not.toBe(
       store.load(second.metadata.id).packageRoot,
     );

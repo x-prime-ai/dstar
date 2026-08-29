@@ -29,7 +29,10 @@ function show(result) {
   document.querySelector("#generation").textContent =
     result.workspace.generation;
   document.querySelector("#expires").textContent = result.workspace.expiresAt;
-  document.querySelector("#open-review").href = result.sessions.ownerUrl;
+  document.querySelector("#open-owner").href = result.sessions.ownerUrl;
+  const reviewer = document.querySelector("#open-reviewer");
+  reviewer.hidden = !result.sessions.reviewerUrl;
+  if (result.sessions.reviewerUrl) reviewer.href = result.sessions.reviewerUrl;
   manage.hidden = false;
   create.hidden = true;
   status.textContent = "Workspace ready.";

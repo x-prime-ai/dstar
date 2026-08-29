@@ -329,6 +329,11 @@ export async function startViewer(root, port = 0, options = {}) {
         const s = engine.snapshot();
         return json(200, {
           session: publicPrincipal(principal),
+          ...(principal.kind === "session" &&
+          principal.role === "owner" &&
+          config.workspaceManagementUrl
+            ? { workspaceManagementUrl: config.workspaceManagementUrl }
+            : {}),
           state: s.state,
           stateId: s.stateId,
           revision: s.revision,

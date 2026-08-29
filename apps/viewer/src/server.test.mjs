@@ -930,6 +930,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
       reviewerToken,
       ownerDisplayName: "Olivia Owner",
       reviewerDisplayName: "Ravi Reviewer",
+      workspaceManagementUrl: `https://manage.review.test/workspaces/${"a".repeat(32)}#${"m".repeat(64)}`,
     },
     viewer = await start(root, 0, options),
     owner = {
@@ -956,6 +957,9 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
     role: "owner",
     identity: { displayName: "Olivia Owner", role: "owner" },
   });
+  expect(ownerState.workspaceManagementUrl).toBe(
+    options.workspaceManagementUrl,
+  );
   expect(ownerState.session.capabilities).toEqual(
     expect.arrayContaining(["decide", "resolve", "share", "handoff"]),
   );
@@ -975,6 +979,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
   expect(reviewerState.session.capabilities).not.toEqual(
     expect.arrayContaining(["decide", "resolve", "share"]),
   );
+  expect(reviewerState).not.toHaveProperty("workspaceManagementUrl");
   expect(JSON.stringify(reviewerState)).not.toContain(ownerToken);
   expect(
     (

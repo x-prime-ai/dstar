@@ -207,7 +207,11 @@ export async function startWorkspaceService(options) {
       ...(viewer.reviewerUrl ? { reviewerUrl: viewer.reviewerUrl } : {}),
     }));
   const startOptions =
-    options.sessionAdapter?.start ?? (({ viewerOptions }) => viewerOptions);
+    options.sessionAdapter?.start ??
+    (({ viewerOptions, workspaceManagementUrl }) => ({
+      ...viewerOptions,
+      workspaceManagementUrl,
+    }));
   const runtimes = new Map();
   const starts = new Map();
   const now = options.now ?? (() => Date.now());
@@ -412,7 +416,7 @@ export async function startWorkspaceService(options) {
       "X-Content-Type-Options": "nosniff",
     });
     response.end(
-      `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>DSTAR workspaces</title><link rel="stylesheet" href="/workspace.css"><main><h1>DSTAR review workspaces</h1><p id="status" role="status">Create an isolated copy of the review seed.</p><button id="create" type="button">Create workspace</button><section id="manage" hidden><dl><dt>Workspace</dt><dd id="workspace-id"></dd><dt>Generation</dt><dd id="generation"></dd><dt>Expires</dt><dd id="expires"></dd></dl><p><a id="open-review">Open review</a></p><button id="reset" type="button">Reset from seed</button></section></main><script type="module" src="/workspace.js"></script></html>`,
+      `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>DSTAR workspaces</title><link rel="stylesheet" href="/workspace.css"><main><h1>DSTAR review workspaces</h1><p id="status" role="status">Create an isolated copy of the review seed.</p><button id="create" type="button">Create workspace</button><section id="manage" hidden><dl><dt>Workspace</dt><dd id="workspace-id"></dd><dt>Generation</dt><dd id="generation"></dd><dt>Expires</dt><dd id="expires"></dd></dl><p><a id="open-owner">Open as Owner</a> <a id="open-reviewer">Open as Reviewer</a></p><button id="reset" type="button">Reset from seed</button></section></main><script type="module" src="/workspace.js"></script></html>`,
     );
   }
 
