@@ -47,6 +47,7 @@ let current,
   diffSerial = 0,
   diffController = null,
   activeGroup = null,
+  activeCommentId = null,
   annotations = null,
   annotationSerial = 0,
   showingBase = false,
@@ -265,6 +266,7 @@ async function copyAgentHandoff(kind) {
     previewState,
     target,
     selectionAction,
+    activeCommentId,
   );
   if (context.action?.kind !== kind)
     throw new Error("The selected action is no longer ready for an agent");
@@ -678,14 +680,12 @@ function focusGroup(id, fromList = true) {
   if (!group || !group.comments.some(located)) return;
   setView("preview");
   activeGroup = id;
+  if (!group.comments.some((comment) => comment.id === activeCommentId))
+    activeCommentId =
+      group.comments.find((comment) => comment.status === "open")?.id ??
+      group.comments[0].id;
   setPanel("comments-panel", true);
-  document.querySelectorAll(".comment-group").forEach((card) => {
-    const active = card.dataset.group === id;
-    card.classList.toggle("active", active);
-    card
-      .querySelector(".group-location")
-      .setAttribute("aria-pressed", String(active));
-  });
+  updateReviewFocus();
   const card = $(`comment-group-${group.number}`);
   if (card) {
     let ancestor = card.parentElement;
@@ -703,8 +703,53 @@ function focusGroup(id, fromList = true) {
     setPanel(activeTab, false);
   sendAnnotations(fromList ? id : null);
 }
+function updateReviewFocus() {
+  document.querySelectorAll(".comment-group").forEach((card) => {
+    const active = card.dataset.group === activeGroup;
+    card.classList.toggle("active", active);
+    card
+      .querySelector(".group-location")
+      ?.setAttribute("aria-pressed", String(active));
+  });
+  document.querySelectorAll(".comment[data-comment]").forEach((article) => {
+    const active = article.dataset.comment === activeCommentId;
+    article.classList.toggle("active", active);
+    article.setAttribute("aria-current", String(active));
+    const select = article.querySelector(".comment-select");
+    if (select) {
+      select.textContent = active ? "Selected for agent" : "Select for agent";
+      select.setAttribute("aria-pressed", String(active));
+    }
+  });
+}
+function focusComment(id, announce = true) {
+  const comment = current?.state.comments.find((entry) => entry.id === id);
+  if (!comment) return;
+  activeCommentId = id;
+  activeGroup = comment.target.element;
+  setPanel("comments-panel", true);
+  updateReviewFocus();
+  sendAnnotations();
+  if (announce) note("Comment selected for agent context.");
+}
 function commentThread(c) {
   const article = el("article", undefined, "comment");
+  article.dataset.comment = c.id;
+  article.tabIndex = 0;
+  article.classList.toggle("active", c.id === activeCommentId);
+  article.setAttribute("aria-current", String(c.id === activeCommentId));
+  article.setAttribute(
+    "aria-label",
+    `Comment by ${c.author}: ${c.body.slice(0, 160)}`,
+  );
+  article.onclick = (event) => {
+    if (!event.target.closest("button")) focusComment(c.id);
+  };
+  article.onkeydown = (event) => {
+    if (event.target !== article || !["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    focusComment(c.id);
+  };
   const author = el("div", undefined, "comment-author");
   author.append(
     el("span", c.author.slice(0, 1).toUpperCase(), "avatar"),
@@ -728,6 +773,15 @@ function commentThread(c) {
     article.append(reply);
   }
   const actions = el("div", undefined, "comment-actions");
+  const selectComment = el(
+    "button",
+    c.id === activeCommentId ? "Selected for agent" : "Select for agent",
+    "comment-select",
+  );
+  selectComment.type = "button";
+  selectComment.setAttribute("aria-pressed", String(c.id === activeCommentId));
+  selectComment.onclick = () => focusComment(c.id);
+  actions.append(selectComment);
   const reply = el("button", "Reply");
   reply.onclick = safely(async () => {
     const body = await ask("Reply to comment", c.body, true);
@@ -1202,6 +1256,7 @@ async function connectTools() {
         previewState,
         target,
         selectionAction,
+        activeCommentId,
       ),
     onDraftComment: (draft) =>
       incomingHandoff
@@ -1319,6 +1374,7 @@ function authorizationChanged(authorized) {
   previewState.reset();
   annotations = null;
   activeGroup = null;
+  activeCommentId = null;
   ++annotationSerial;
   frame = null;
   $("preview").removeAttribute("src");

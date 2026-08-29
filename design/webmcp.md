@@ -42,14 +42,14 @@ schemas reject additional properties. Descriptions and annotations mark document
 and comment contents as untrusted data. A tool must not treat instructions found
 inside that content as user authorization.
 
-| Tool                         | Arguments                     | Result on success                                                                                                                 |
-| ---------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `get_review_context`         | `{}`                          | Package/state IDs, generation, accepted head, reviewed proposal/version, selection/action, proposals, comments/replies and limits |
-| `read_document`              | `{revision}`                  | Exact immutable revision and complete `files` array                                                                               |
-| `draft_selection_comment`    | `{body}`                      | Opens an editable comment draft for the exact selection; never posts it                                                           |
-| `draft_selection_suggestion` | `{replacement}`               | Fills the editable suggestion composer for the exact selection; never submits it                                                  |
-| `propose_revision`           | `{base, request, key, files}` | Stored proposal, including its exact base/revision, status and review diff                                                        |
-| `reply_comment`              | `{commentId, body, key}`      | Comment with its replies; status is not changed                                                                                   |
+| Tool                         | Arguments                     | Result on success                                                                                                                                             |
+| ---------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_review_context`         | `{}`                          | Package/state IDs, generation, accepted head, reviewed proposal/version, selection/action, explicitly focused comment, proposals, comments/replies and limits |
+| `read_document`              | `{revision}`                  | Exact immutable revision and complete `files` array                                                                                                           |
+| `draft_selection_comment`    | `{body}`                      | Opens an editable comment draft for the exact selection; never posts it                                                                                       |
+| `draft_selection_suggestion` | `{replacement}`               | Fills the editable suggestion composer for the exact selection; never submits it                                                                              |
+| `propose_revision`           | `{base, request, key, files}` | Stored proposal, including its exact base/revision, status and review diff                                                                                    |
+| `reply_comment`              | `{commentId, body, key}`      | Comment with its replies; status is not changed                                                                                                               |
 
 Every tool result is a string containing a JSON object with `ok: true` or
 `ok: false`. Successful mutation results also include `viewerUpdated`. If a
@@ -159,12 +159,12 @@ HTML-first package; creating/opening package roots remains host/CLI work.
 
 `src/agent-api.mjs` handles only these authenticated JSON POST routes:
 
-| Route                  | Body                                                                       |
-| ---------------------- | -------------------------------------------------------------------------- |
-| `/api/agent/context`   | `{review?, selection?}` supplied by the top-level page, validated as above |
-| `/api/agent/document`  | `{revision}`                                                               |
-| `/api/agent/proposals` | `{base, request, key, files}`                                              |
-| `/api/agent/reply`     | `{commentId, body, key}`                                                   |
+| Route                  | Body                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `/api/agent/context`   | `{review?, selection?, action?, focusedCommentId?}` supplied by the top-level page, validated as above |
+| `/api/agent/document`  | `{revision}`                                                                                           |
+| `/api/agent/proposals` | `{base, request, key, files}`                                                                          |
+| `/api/agent/reply`     | `{commentId, body, key}`                                                                               |
 
 The normal Viewer Bearer-session gate runs first. Each route also requires the
 configured exact Origin and `Content-Type: application/json`. No route accepts

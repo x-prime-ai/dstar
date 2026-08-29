@@ -989,10 +989,17 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
       previewStatus: "ready",
     },
     selection: target,
+    focusedCommentId: c.id,
   };
   const context = await api("agent/context", contextArgs);
   expect(context.head).toBeNull();
   expect(context.selection).toEqual(target);
+  expect(context.focusedComment).toMatchObject({
+    id: c.id,
+    body: "Please revise this greeting",
+    status: "open",
+    viewedResolution: { status: "exact" },
+  });
   expect(context.comments[0].viewedResolution.status).toBe("exact");
   expect(context.resolutionRevision).toBe(p.revision);
   const suggestContext = await api("agent/context", {
@@ -1012,6 +1019,14 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
           kind: "comment",
           target: { ...target, element: "different" },
         },
+      })
+    ).code,
+  ).toBe("invalid_input");
+  expect(
+    (
+      await api("agent/context", {
+        ...contextArgs,
+        focusedCommentId: "22222222-2222-4222-8222-222222222222",
       })
     ).code,
   ).toBe("invalid_input");

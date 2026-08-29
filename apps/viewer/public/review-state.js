@@ -19,6 +19,7 @@ export function reviewContext(
   previewState,
   target,
   action = null,
+  focusedCommentId = null,
 ) {
   const revision =
     selected && (showingBase ? selected.base : selected.revision);
@@ -49,6 +50,7 @@ export function reviewContext(
               : {}),
           }
         : null,
+    ...(typeof focusedCommentId === "string" ? { focusedCommentId } : {}),
   };
 }
 
