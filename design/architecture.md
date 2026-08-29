@@ -34,6 +34,26 @@ There is no new MCP service, workflow backend, projection renderer or public SDK
 
 Legacy modules remain unchanged and are not dependencies of the new Engine.
 
+## Directory storage
+
+The portable artifact remains an ordinary directory, with no SQLite or Git
+runtime requirement. A small `.dstar/state.json` commits the head, generation
+and counts of separately stored proposal and comment-thread JSON records.
+Compressed content objects and exact-byte delta encodings remain unchanged.
+The Engine assembles the same logical JSON view for CLI/Viewer consumers.
+
+An undo journal protects cross-record metadata writes; the small state header is
+the commit point. Metadata recovery precedes checkout recovery. Acceptance writes
+only changed canonical paths, and each locked operation reuses its verified head
+instead of replaying it twice. Monolithic HTML-first metadata is read as-is and
+converted on its next real mutation. See [the storage contract](html-mvp.md) for
+layout, compatibility, limits and crash recovery.
+
+The Viewer verifies a snapshot when issuing a preview capability and serves its
+HTML/CSS/assets from a bounded in-memory cache. It does not cache mutable review
+state or use preview bytes as authority for decisions; those requests still run
+the Engine's current-state and history checks.
+
 ## Authoring and proposal
 
 The agent edits a full candidate directory separate from the accepted package.

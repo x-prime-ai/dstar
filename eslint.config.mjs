@@ -20,6 +20,8 @@ export default tseslint.config(
           "location",
           "history",
           "sessionStorage",
+          "navigator",
+          "URL",
           "fetch",
           "setTimeout",
           "clearTimeout",

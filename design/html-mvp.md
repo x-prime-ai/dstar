@@ -8,14 +8,59 @@ Development format: `dstar-html-0.2-dev`. No claim of compatibility with
 The root checkout holds the current accepted `document.html`, optional
 `styles.css`, `styles/**/*.css`, and local `assets/**`. Before genesis is
 accepted, these files do not exist in the destination package.
-`.dstar/state.json` records format, package ID, generation, head proposal ID,
-proposals/decisions and comments. `.dstar/objects/<64 lowercase hex>` contains
-immutable compressed objects. Copy the whole directory, not just the checkout,
-to retain review history. Locks and a recovery journal also live under `.dstar`
+`.dstar/state.json` is a small commit header. Proposal/decision records and
+comment threads live in separate JSON files; `.dstar/objects/<64 lowercase hex>`
+contains immutable compressed objects. Copy the whole directory, not just the
+checkout, to retain review history. Locks and recovery journals also live under `.dstar`
 while operations are in progress; do not copy a package mid-write.
 
 The metadata is collaboration/storage information, not a duplicate semantic
-document source. Old packages are rejected, never automatically reinterpreted.
+document source. There is no SQLite, Git executable or database service dependency.
+Pre-HTML-first `document.json` packages remain unsupported.
+
+### Directory metadata layout (`records-v1`)
+
+```text
+document.html
+styles.css                         # optional
+styles/                            # optional
+assets/                            # optional
+.dstar/
+  state.json                       # small authoritative commit header
+  proposals/00000000.json           # one proposal, decision and optional checkpoint
+  proposals/00000001.json
+  comments/00000000.json            # one comment thread, including replies
+  objects/<64 lowercase hex>        # compressed immutable file blobs/deltas
+  write.lock                       # only while an Engine operation holds the lock
+  metadata-journal.json             # only during metadata updates/recovery
+  journal.json                     # only during checkout updates/recovery
+```
+
+The header contains `format`, `storage: "records-v1"`, `id`, `generation`,
+`head`, `proposalCount` and `commentCount`. It contains no proposal/comment arrays
+and is capped at 4 KiB. Each collection uses zero-based, contiguous eight-digit
+decimal filenames up to its committed count. A file contains the corresponding
+proposal or comment JSON directly, including its stable UUID. The ordinal
+preserves insertion order without a growing root index; it is not the public ID.
+Record files are Engine-owned and must not be reordered or edited by hand.
+Files beyond the committed counts are not read; a write refuses to overwrite an
+untracked record at its next destination. Unknown files are never garbage-collected.
+
+The Engine and CLI still expose the complete logical `State` with ordered
+`proposals` and `comments` arrays. Physical storage fields do not enter the review
+state hash. A reply updates its thread record, not all proposals or other threads;
+accept/reject updates the affected proposal record. Existing replies remain
+inside their thread rather than introducing a file per message.
+
+Existing monolithic `dstar-html-0.2-dev` metadata remains readable without
+conversion on inspection or idempotent retries. The next actual mutation converts
+it under the same write lock and recovery protocol, preserving supported records,
+IDs, order, revision hashes, review decisions, selectors and compressed objects.
+Conversion is part of that mutation, not an extra generation. Older Engines
+which require the monolithic arrays reject the new header: new Engines read old
+bundles, but old Engines cannot read the new layout. Keep a pre-conversion
+whole-directory backup if older Engines must remain usable. No user bundle is
+batch-migrated on upgrade.
 
 ## Revision and storage encoding
 
@@ -51,6 +96,12 @@ digest/size, and the full revision at every applied step. The accepted chain is
 linear. Pending proposals can share a base; after one is accepted, siblings are
 stale and must be prepared again. Rejected proposals remain inspectable.
 
+During replay, the Engine hashes each decoded file and reuses those verified
+digests for unchanged files in subsequent revision manifests. Within one locked
+operation it also reuses the already-verified head materialization. Neither
+optimization skips object verification on the next operation or changes revision
+hashes. This is not a persistent cache that can hide later object corruption.
+
 Every 20th accepted proposal stores a full checkpoint manifest referencing
 compressed blobs. Identical objects reuse their content address. Checkpoints
 bound ordinary replay depth; original changes are retained so removing a
@@ -72,7 +123,8 @@ retry key returns its previous proposal; changed arguments under that key fail.
 
 Acceptance verifies proposal, exact candidate, current state hash and parent
 head under an exclusive `.dstar/write.lock`. It replays and validates candidate
-storage before modifying checkout. A journal lists only canonical paths; files
+storage before modifying checkout. A journal lists only changed canonical paths;
+unchanged assets and stylesheets are not rewritten. Changed files
 are installed before the authoritative state file is atomically replaced.
 Both installation and recovery remove obsolete journal-listed files first,
 prune only empty affected directories, then write target files. File/directory
@@ -87,6 +139,29 @@ The MVP does **not** steal locks automatically: inspect its PID, verify no write
 is running, remove only `.dstar/write.lock`, and reopen. Do not delete a recovery
 journal. Unexpected out-of-band checkout changes fail closed; the Engine does
 not silently incorporate them into history.
+
+Metadata updates first durably write `metadata-journal.json`, containing hashes
+of the exact before/after state headers (or legacy state) and before-images of
+only changed records. New records use a null before-image. The Engine then
+durably writes those records, atomically replaces `state.json` last, and removes
+the metadata journal. Newly created record/object parent directories are also
+synced. The journal format is `dstar-metadata-undo-v1`; record destinations are
+restricted to bounded ordinals in the two metadata collections.
+
+On reopen, metadata recovery runs **before** loading records or recovering the
+checkout. If the authoritative state matches the before hash, it restores the
+before-images and removes only journal-listed newly added record files. If it
+matches the after hash, the new records are already committed. If neither hash
+matches, recovery fails closed. Rollback is repeatable if recovery itself is
+interrupted. The checkout journal then restores canonical files to the recovered
+authoritative head.
+When an existing record already equals its before-image, rollback syncs its
+directory without allocating another full record file. A failed allocation
+(for example ENOSPC) therefore does not prevent reopening unchanged metadata.
+Different or missing records still require restoration; hardware errors or
+insufficient space for a necessary restoration are not silently ignored.
+Never delete either journal manually. Raw JSON readers, like raw HTML readers,
+do not receive transactional guarantees during writes.
 
 ## Comments
 
@@ -138,6 +213,15 @@ credentials and a single explicit HTTPS external origin for non-loopback
 binding. Host and Origin are never inferred from forwarded headers; all
 Forwarded/X-Forwarded-* headers are rejected. The fixed package root is set at
 startup, not selected by a request. This does not add multi-user identities.
+Each new preview capability obtains a freshly verified Engine snapshot. Its
+HTML, styles and images then reuse those pinned bytes without reloading comments
+or replaying history for every resource. The Viewer retains only files/revision,
+not review metadata, with a 64 MiB payload budget and at most 100 capabilities;
+oldest capabilities are evicted first and return 404 until refreshed. Closing
+the Viewer clears the cache. An issued preview can still display its verified
+bytes after disk contents change, but a fresh preview, current-state query or
+accept/reject/resolve operation always uses the Engine's current checks. Cached
+preview bytes never authorize a decision or bypass corrupt on-disk history.
 Accept stays disabled until the trusted bridge acknowledges the current frame
 capability and exact revision after page, stylesheet, image and font checks.
 All canonical assets are checked, including backgrounds and hidden slides.
@@ -152,10 +236,19 @@ schemas and larger adversarial/scale corpora are future hardening work.
 ## Current caps and limitations
 
 512 canonical files, 8 MiB per file, 32 MiB total and indexed text; 2,048 directory entries; 30,000 parsed HTML nodes and
-depth 80; 10,000 proposals/comments; 64 MiB metadata. Limits reject new work
+depth 80; 10,000 proposals/comments; 64 MiB aggregate live metadata (header plus
+record JSON). Undo journals are temporary, separately bounded, and may require
+additional disk space. Limits reject new work
 instead of discarding existing accepted versions. Reads/replay are synchronous
 and intended for modest local packages. Directory scanning and DOM indexing
-are not yet a hardened streaming implementation.
+are not yet a hardened streaming implementation. Full `inspect` and current
+mutations still load all metadata records and compare their serialized content;
+this change bounds ordinary write amplification, not metadata read complexity.
+Many small files can increase filesystem allocation and cold-open costs.
+The Viewer avoids multiplying these costs by serving each preview's resources
+from the same bounded, verified snapshot. Routine regression scenarios use
+20–50 comment threads and a few assets, not thousands of comments.
+Per-thread growth, pagination, packed metadata and retention remain future work.
 
-No branches/merge, CRDT, hosted auth, assignment, automatic agents, migration,
+No branches/merge, CRDT, hosted auth, assignment, automatic agents, pre-HTML migration,
 retention/GC, arbitrary scripts, semantic CSS-rule diff or stable public API.

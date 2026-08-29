@@ -8,45 +8,132 @@
   </head>
   <body>
     <header>
-      <a class="brand" href="/">DSTAR<span>REVIEW</span></a>
+      <a class="brand" href="/" aria-label="DSTAR home">DSTAR</a>
       <div class="document">
-        <strong id="title">Opening document…</strong
-        ><small id="revision"></small>
+        <strong id="title">Opening document…</strong>
       </div>
-      <button id="refresh">Refresh</button>
+      <nav class="header-actions" aria-label="Viewer panels">
+        <button
+          id="toggle-review"
+          aria-controls="review-sidebar"
+          aria-expanded="true"
+          disabled
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M15 4v16" />
+          </svg>
+          <span>Review</span
+          ><span id="review-count" class="count" hidden></span>
+        </button>
+        <details id="viewer-menu" class="viewer-menu">
+          <summary
+            class="icon-button"
+            aria-label="Viewer options"
+            title="Viewer options"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="5" cy="12" r="1" />
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="19" cy="12" r="1" />
+            </svg>
+          </summary>
+          <div class="menu-content">
+            <button id="copy-access-link" disabled>Copy access link</button>
+            <button id="refresh" disabled>Refresh document</button>
+            <div class="connection-details">
+              <small id="revision"></small>
+              <small id="sync-status" role="status"
+                >Authorization required</small
+              >
+              <p id="webmcp-status">Checking WebMCP support…</p>
+            </div>
+          </div>
+        </details>
+      </nav>
     </header>
-    <main>
-      <aside class="navigation">
-        <h2>Review queue</h2>
-        <div id="proposals"></div>
-        <h2>Accepted history</h2>
-        <div id="history"></div>
-        <h2>Rejected proposals</h2>
-        <div id="rejected"></div>
-        <p class="hint" id="webmcp-status">Checking WebMCP support…</p>
-        <small id="sync-status" role="status">Live</small>
-        <p class="hint">
-          HTML is the document.<br />Changes are proposed before they are
-          accepted.
-        </p>
-      </aside>
+    <section id="authorization" aria-labelledby="authorization-title">
+      <h1 id="authorization-title">Authorize Viewer</h1>
+      <p>
+        Open the complete private link printed by the running terminal,
+        including
+        <code>#session-token</code>, in this browser. Chrome and the in-app
+        browser do not share authorization; a link copied from the address bar
+        after it has loaded no longer includes the token.
+      </p>
+      <p>
+        Or use <strong>Copy access link</strong> in an already authorized Viewer
+        and paste it below. Keep this link private: it grants review and
+        decision access. WebMCP tools connect only after authorization succeeds.
+      </p>
+      <form id="authorize-form">
+        <label for="access-link">Private access link or session token</label>
+        <input
+          id="access-link"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          required
+        />
+        <button id="authorize" class="primary">Authorize</button>
+      </form>
+      <p id="authorization-error" role="status"></p>
+    </section>
+    <main id="review-app" hidden>
       <section class="workspace">
         <div class="toolbar">
+          <div class="view-switch" role="tablist" aria-label="Document view">
+            <button
+              id="view-preview"
+              role="tab"
+              aria-selected="true"
+              aria-controls="preview-panel"
+            >
+              Preview
+            </button>
+            <button
+              id="view-changes"
+              role="tab"
+              aria-selected="false"
+              aria-controls="diff-panel"
+              tabindex="-1"
+              disabled
+            >
+              Changes <span id="change-count" class="count" hidden></span>
+            </button>
+          </div>
           <span id="view-label">Accepted document</span>
-          <div>
-            <label
-              >Width
-              <select id="width">
-                <option value="100%">Fit</option>
-                <option value="768px">768 px</option>
-                <option value="390px">390 px</option>
+          <div id="preview-controls">
+            <label class="width-control"
+              ><span class="sr-only">Preview width</span>
+              <select id="width" title="Preview width">
+                <option value="100%">Fit to view</option>
+                <option value="768px">Tablet · 768 px</option>
+                <option value="390px">Mobile · 390 px</option>
               </select></label
-            ><button id="previous-slide" title="Previous slide">←</button
-            ><button id="next-slide" title="Next slide">→</button
+            ><button
+              id="previous-slide"
+              title="Previous slide"
+              aria-label="Previous slide"
+              hidden
+            >
+              ←</button
+            ><button
+              id="next-slide"
+              title="Next slide"
+              aria-label="Next slide"
+              hidden
+            >
+              →</button
             ><button id="compare" hidden>Show base</button>
           </div>
         </div>
-        <div class="canvas">
+        <div
+          class="canvas"
+          id="preview-panel"
+          role="tabpanel"
+          aria-labelledby="view-preview"
+        >
           <iframe
             id="preview"
             title="Document preview"
@@ -56,44 +143,171 @@
           ></iframe>
           <p id="empty">Select a proposal to review its first version.</p>
         </div>
-        <section id="decision" hidden>
-          <div>
-            <strong id="request"></strong>
+        <section
+          id="diff-panel"
+          class="changes-view"
+          role="tabpanel"
+          aria-labelledby="view-changes"
+          hidden
+        >
+          <div class="changes-heading">
+            <p class="eyebrow">VERSION CHANGES</p>
+            <h2 id="diff-title"></h2>
+            <p id="diff-versions" class="diff-versions"></p>
+            <div id="diff-stats" class="diff-stats"></div>
+          </div>
+          <div id="diff-warnings" class="diff-warnings" hidden></div>
+          <nav
+            id="diff-files"
+            class="diff-files"
+            aria-label="Changed files"
+          ></nav>
+          <div id="diff" class="diff-content" aria-live="polite"></div>
+          <details class="diff-technical">
+            <summary>Technical details</summary>
             <p id="storage"></p>
-            <p id="stale" hidden>
-              Stale base: ask for a new proposal against the current head. This
-              candidate cannot be accepted.
+          </details>
+        </section>
+      </section>
+      <aside
+        id="review-sidebar"
+        class="review-sidebar"
+        aria-label="Document review"
+      >
+        <div class="sidebar-heading">
+          <div class="review-tabs" role="tablist" aria-label="Review panels">
+            <button
+              id="tab-comments"
+              role="tab"
+              aria-controls="comments-panel"
+              aria-selected="true"
+            >
+              Comments <span id="count" class="count" hidden></span>
+            </button>
+            <button
+              id="tab-versions"
+              role="tab"
+              aria-controls="navigation"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              Versions <span id="proposal-count" class="count" hidden></span>
+            </button>
+          </div>
+          <button
+            id="close-review"
+            class="icon-button"
+            aria-label="Close review panel"
+          >
+            ×
+          </button>
+        </div>
+        <section
+          id="comments-panel"
+          class="comments"
+          role="tabpanel"
+          aria-labelledby="tab-comments"
+          tabindex="0"
+        >
+          <p id="comments-summary" class="panel-caption">
+            Comments are grouped by location.
+          </p>
+          <form id="comment-form" hidden>
+            <label for="body">New comment</label>
+            <blockquote id="selection"></blockquote>
+            <textarea
+              id="body"
+              placeholder="Write a comment…"
+              required
+            ></textarea>
+            <div class="composer-actions">
+              <button type="button" id="cancel-comment">Cancel</button
+              ><button class="primary" id="add-comment" disabled>
+                Post comment
+              </button>
+            </div>
+            <button type="button" class="text-button" id="whole-element" hidden>
+              Use whole element
+            </button>
+          </form>
+          <div id="comments-empty" class="empty-comments" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5a10 10 0 0 1 20 0Z"
+              /></svg
+            ><strong>No comments yet</strong>
+            <p>
+              Select text, then click the comment icon to start a conversation.
             </p>
           </div>
-          <button id="reject">Reject</button
-          ><button id="accept" class="primary">Accept version</button>
+          <details class="comment-help">
+            <summary>How to comment</summary>
+            <p>
+              Select text within one element, then click the comment icon. For
+              an image or a whole element, use Alt-click. Keyboard: select text,
+              then press Ctrl+Alt+M (⌘⌥M on Mac).
+            </p>
+          </details>
+          <div id="comments"></div>
         </section>
-        <details id="diff-panel" hidden>
-          <summary>Change details</summary>
-          <div id="diff"></div>
-        </details>
-      </section>
-      <aside class="comments">
-        <h2>Comments <span id="count"></span></h2>
-        <p class="hint">
-          Select text in the preview, or Alt-click an image or element. A
-          selection must stay within one stable element.
-        </p>
-        <form id="comment-form">
-          <label for="body" id="selection">Select something to comment</label
-          ><textarea
-            id="body"
-            placeholder="What should change?"
-            required
-          ></textarea
-          ><button class="primary" id="add-comment" disabled>Add comment</button
-          ><button type="button" id="whole-element" hidden>
-            Use whole element
-          </button>
-        </form>
-        <div id="comments"></div>
+        <section
+          class="navigation"
+          id="navigation"
+          role="tabpanel"
+          aria-labelledby="tab-versions"
+          tabindex="0"
+          hidden
+        >
+          <section id="version-detail" class="version-detail" hidden>
+            <p class="eyebrow">SELECTED VERSION</p>
+            <strong id="version-request"></strong>
+            <p id="version-summary" class="hint"></p>
+            <button id="inspect-changes">
+              View changes <span aria-hidden="true">↗</span>
+            </button>
+          </section>
+          <section id="decision" hidden>
+            <div>
+              <p id="stale" hidden>
+                Stale base: ask for a new proposal against the current head.
+                This candidate cannot be accepted.
+              </p>
+            </div>
+            <p id="decision-hint" class="hint" hidden>
+              Return to Preview to accept this version.
+            </p>
+            <div class="decision-actions">
+              <button id="reject">Reject</button
+              ><button id="accept" class="primary">Accept version</button>
+            </div>
+          </section>
+          <h3>To review</h3>
+          <div id="proposals"></div>
+          <details class="version-group">
+            <summary>Accepted history</summary>
+            <div id="history"></div>
+          </details>
+          <details class="version-group">
+            <summary>Rejected proposals</summary>
+            <div id="rejected"></div>
+          </details>
+        </section>
       </aside>
     </main>
+    <button
+      id="selection-comment"
+      class="selection-comment"
+      aria-label="Add comment to selection"
+      title="Add comment"
+      hidden
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5a10 10 0 0 1 20 0Z"
+        />
+        <path d="M12 7v8M8 11h8" />
+      </svg>
+    </button>
     <dialog id="confirmation">
       <form method="dialog">
         <h2 id="confirmation-title">Confirm review decision</h2>

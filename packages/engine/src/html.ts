@@ -297,42 +297,77 @@ export function validateHtml(files: Files): HtmlIndex {
 }
 
 export function resolveTarget(index: HtmlIndex, target: Target): Resolution {
+  const resolveRange = (
+    elementId: string,
+    s: Extract<Target["selector"], { type: "text-range" }>,
+  ): Resolution => {
+    const element = Object.hasOwn(index.elements, elementId)
+      ? index.elements[elementId]
+      : undefined;
+    if (!element) return { status: "orphaned" };
+    const text = [...element.text],
+      length = [...s.exact].length;
+    if (text.slice(s.start, s.end).join("") === s.exact)
+      return { status: "exact", start: s.start, end: s.end };
+    if (!length) return { status: "orphaned" };
+    const prefix = [...(s.prefix ?? "")];
+    const pattern = [...prefix, ...s.exact, ...(s.suffix ?? "")];
+    const fallback = new Uint32Array(pattern.length);
+    for (let i = 1, matched = 0; i < pattern.length; i++) {
+      while (matched && pattern[i] !== pattern[matched])
+        matched = fallback[matched - 1]!;
+      if (pattern[i] === pattern[matched]) matched++;
+      fallback[i] = matched;
+    }
+    let found: number | undefined;
+    for (let i = 0, matched = 0; i < text.length; i++) {
+      while (matched && text[i] !== pattern[matched])
+        matched = fallback[matched - 1]!;
+      if (text[i] === pattern[matched]) matched++;
+      if (matched !== pattern.length) continue;
+      if (found !== undefined) return { status: "ambiguous" };
+      found = i + 1 - pattern.length + prefix.length;
+      matched = fallback[matched - 1]!;
+    }
+    return found === undefined
+      ? { status: "orphaned" }
+      : { status: "recovered", start: found, end: found + length };
+  };
   const element = Object.hasOwn(index.elements, target.element)
     ? index.elements[target.element]
     : undefined;
   if (!element) return { status: "orphaned" };
   const s = target.selector;
   if (s.type === "element") return { status: "exact" };
-  const text = [...element.text],
-    length = [...s.exact].length;
-  if (text.slice(s.start, s.end).join("") === s.exact)
-    return { status: "exact", start: s.start, end: s.end };
-  if (!length) return { status: "orphaned" };
-  // Match the adjacent context and quote together with KMP. This bounds work
-  // to O(text + selector), even for repeated text and long near-matches.
-  const prefix = [...(s.prefix ?? "")];
-  const pattern = [...prefix, ...s.exact, ...(s.suffix ?? "")];
-  const fallback = new Uint32Array(pattern.length);
-  for (let i = 1, matched = 0; i < pattern.length; i++) {
-    while (matched && pattern[i] !== pattern[matched])
-      matched = fallback[matched - 1]!;
-    if (pattern[i] === pattern[matched]) matched++;
-    fallback[i] = matched;
-  }
-  let found: number | undefined;
-  for (let i = 0, matched = 0; i < text.length; i++) {
-    while (matched && text[i] !== pattern[matched])
-      matched = fallback[matched - 1]!;
-    if (text[i] === pattern[matched]) matched++;
-    if (matched !== pattern.length) continue;
-    if (found !== undefined) return { status: "ambiguous" };
-    found = i + 1 - pattern.length + prefix.length;
-    matched = fallback[matched - 1]!;
-  }
-  return found === undefined
-    ? { status: "orphaned" }
-    : { status: "recovered", start: found, end: found + length };
+  if (s.type === "text-range") return resolveRange(target.element, s);
+  const ranges = s.ranges.map((part) => ({
+    element: part.element,
+    ...resolveRange(part.element, { type: "text-range", ...part }),
+  }));
+  const statuses = ranges.map((part) => part.status);
+  return {
+    status: statuses.includes("orphaned")
+      ? "orphaned"
+      : statuses.includes("ambiguous")
+        ? "ambiguous"
+        : statuses.includes("recovered")
+          ? "recovered"
+          : "exact",
+    ranges,
+  };
 }
+const validTextRange = (
+  s: Omit<Extract<Target["selector"], { type: "text-range" }>, "type">,
+) =>
+  s.unit === "unicode-code-point" &&
+  Number.isSafeInteger(s.start) &&
+  Number.isSafeInteger(s.end) &&
+  s.start >= 0 &&
+  s.end > s.start &&
+  typeof s.exact === "string" &&
+  [...s.exact].length === s.end - s.start &&
+  (s.prefix === undefined || typeof s.prefix === "string") &&
+  (s.suffix === undefined || typeof s.suffix === "string");
 export function validateTarget(index: HtmlIndex, target: Target): void {
   if (
     !target ||
@@ -343,18 +378,25 @@ export function validateTarget(index: HtmlIndex, target: Target): void {
     throw new Error("Invalid comment target");
   const s = target.selector;
   if (s.type === "text-range") {
+    if (!validTextRange(s)) throw new Error("Invalid Unicode text selector");
+  } else if (s.type === "text-ranges") {
     if (
-      s.unit !== "unicode-code-point" ||
-      !Number.isSafeInteger(s.start) ||
-      !Number.isSafeInteger(s.end) ||
-      s.start < 0 ||
-      s.end <= s.start ||
-      typeof s.exact !== "string" ||
-      [...s.exact].length !== s.end - s.start ||
-      (s.prefix !== undefined && typeof s.prefix !== "string") ||
-      (s.suffix !== undefined && typeof s.suffix !== "string")
+      !Array.isArray(s.ranges) ||
+      s.ranges.length < 2 ||
+      s.ranges.length > 64 ||
+      s.ranges[0]?.element !== target.element ||
+      s.ranges.some(
+        (part) => !ID.test(part.element) || !validTextRange(part),
+      ) ||
+      new Set(s.ranges.map((part) => part.element)).size !== s.ranges.length ||
+      s.ranges.some(
+        (part, position) =>
+          position > 0 &&
+          (index.elements[s.ranges[position - 1]!.element]?.order ??
+            Infinity) >= (index.elements[part.element]?.order ?? -1),
+      )
     )
-      throw new Error("Invalid Unicode text selector");
+      throw new Error("Invalid multi-element text selector");
   } else if (s.type !== "element") throw new Error("Unsupported selector");
   if (resolveTarget(index, target).status !== "exact")
     throw new Error(

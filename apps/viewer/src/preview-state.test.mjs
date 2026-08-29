@@ -4,6 +4,10 @@ import {
   RefreshGate,
   reviewContext,
   selectionFromEvent,
+  selectionMessageFromEvent,
+  selectionButtonPosition,
+  commentGroups,
+  annotationEventFromFrame,
 } from "../public/review-state.js";
 
 const frame = { capability: "cap-a", revision: "rev-a" };
@@ -44,6 +48,64 @@ it("does not accept iframe load events or untrusted/mismatched acknowledgements"
   expect(
     gate.canAccept({ ...proposal, status: "accepted" }, "base", false),
   ).toBe(false);
+});
+
+it("groups comment threads by stable element without renumbering resolved locations", () => {
+  const a = {
+    id: "a",
+    status: "open",
+    target: { element: "intro", revision: "old" },
+  };
+  const b = {
+    id: "b",
+    status: "resolved",
+    target: { element: "heading", revision: "old" },
+  };
+  const c = {
+    id: "c",
+    status: "open",
+    target: { element: "intro", revision: "new" },
+  };
+  const initial = commentGroups([a, b, c]);
+  expect(initial).toEqual([
+    { id: "intro", number: 1, comments: [a, c], openCount: 2 },
+    { id: "heading", number: 2, comments: [b], openCount: 0 },
+  ]);
+  const next = commentGroups([
+    { ...a, status: "resolved" },
+    b,
+    c,
+    { ...a, id: "d", target: { element: "footer" } },
+  ]);
+  expect(next.map((g) => [g.id, g.number, g.openCount])).toEqual([
+    ["intro", 1, 1],
+    ["heading", 2, 0],
+    ["footer", 3, 1],
+  ]);
+});
+
+it("accepts annotation navigation only from the ready exact preview", () => {
+  const source = {},
+    ready = { status: "ready" };
+  const event = {
+    source,
+    origin: "null",
+    data: { kind: "dstar-annotation-focus", ...frame, group: "intro" },
+  };
+  expect(annotationEventFromFrame(event, source, frame, ready)).toBe(
+    event.data,
+  );
+  for (const invalid of [
+    { ...event, source: {} },
+    { ...event, origin: "https://evil.invalid" },
+    { ...event, data: { ...event.data, revision: "old" } },
+    { ...event, data: { ...event.data, capability: "old" } },
+    { ...event, data: { ...event.data, group: 1 } },
+  ])
+    expect(annotationEventFromFrame(invalid, source, frame, ready)).toBeNull();
+  expect(
+    annotationEventFromFrame(event, source, frame, { status: "loading" }),
+  ).toBeNull();
 });
 it("fails closed after resource failure or timeout until a new preview begins", () => {
   for (const timeout of [false, true]) {
@@ -151,4 +213,63 @@ it("accepts selections only from the ready exact frame, ignoring delayed old-fra
     [event, { ...frame, revision: "other" }, ready],
   ])
     expect(selectionFromEvent(e, source, f, status)).toBeNull();
+});
+
+it("only dismisses selections on authenticated messages from the current frame", () => {
+  const source = {},
+    ready = { status: "ready" };
+  const event = {
+    source,
+    origin: "null",
+    data: { kind: "dstar-selection", ...frame, target: null },
+  };
+  expect(selectionMessageFromEvent(event, source, frame, ready)).toEqual({
+    target: null,
+  });
+  for (const invalid of [
+    { ...event, source: {} },
+    { ...event, data: { ...event.data, revision: "old-rev" } },
+    { ...event, data: { ...event.data, capability: "old-cap" } },
+  ])
+    expect(selectionMessageFromEvent(invalid, source, frame, ready)).toBeNull();
+});
+
+it("positions the comment icon above a selection, or below at the top edge", () => {
+  const frame = { left: 100, top: 80, right: 800, bottom: 600 };
+  const viewport = { width: 1000, height: 700 };
+  expect(
+    selectionButtonPosition(
+      { left: 20, top: 100, right: 120, bottom: 120 },
+      frame,
+      viewport,
+    ),
+  ).toEqual({ left: 151, top: 134 });
+  expect(
+    selectionButtonPosition(
+      { left: 20, top: 2, right: 120, bottom: 22 },
+      frame,
+      viewport,
+    ),
+  ).toEqual({ left: 151, top: 110 });
+});
+
+it("clamps icons to the visible iframe on narrow screens and rejects invisible or malformed rectangles", () => {
+  const frame = { left: -100, top: 80, right: 668, bottom: 600 };
+  const viewport = { width: 390, height: 500 };
+  expect(
+    selectionButtonPosition(
+      { left: 470, top: 380, right: 600, bottom: 430 },
+      frame,
+      viewport,
+    ),
+  ).toEqual({ left: 344, top: 414 });
+  for (const rect of [
+    null,
+    {},
+    { left: 0, top: 0, right: Infinity, bottom: 1 },
+    { left: 1, top: 1, right: 1, bottom: 2 },
+    { left: 800, top: 1, right: 900, bottom: 20 },
+    { left: 120, top: -100, right: 220, bottom: -10 },
+  ])
+    expect(selectionButtonPosition(rect, frame, viewport)).toBeNull();
 });

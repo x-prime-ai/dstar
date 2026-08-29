@@ -179,6 +179,135 @@ it("serves immutable isolated previews and requires session credentials for deci
   ).toBe(409);
 });
 
+it("resolves comment markers against the viewed revision without changing canonical files", async () => {
+  const { root, candidate, engine, proposal } = fixture();
+  const viewer = await start(root);
+  const headers = {
+    Authorization: `Bearer ${new URL(viewer.url).hash.slice(1)}`,
+    Origin: viewer.origin,
+    "Content-Type": "application/json",
+  };
+  await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
+    headers,
+    method: "POST",
+    body: JSON.stringify({
+      revision: proposal.revision,
+      stateId: engine.snapshot().stateId,
+    }),
+  });
+  const comment = engine.comment({
+    author: "human",
+    body: "Keep the globe",
+    target: {
+      revision: proposal.revision,
+      element: "intro",
+      selector: {
+        type: "text-range",
+        start: 6,
+        end: 7,
+        unit: "unicode-code-point",
+        exact: "🌍",
+      },
+    },
+  });
+  const original = readFileSync(join(candidate, "document.html"), "utf8");
+  writeFileSync(
+    join(candidate, "document.html"),
+    original.replace("Hello 🌍", "Updated Hello 🌍"),
+  );
+  const updated = engine.propose({
+    candidate,
+    base: proposal.revision,
+    request: "Update",
+    author: "agent",
+    key: "update",
+  });
+  const diffPath = `/api/diff/${updated.id}?file=document.html`;
+  expect((await wire(viewer, diffPath)).status).toBe(401);
+  expect(
+    (
+      await wire(viewer, diffPath, {
+        headers: { ...headers, Origin: "https://evil.invalid" },
+      })
+    ).status,
+  ).toBe(403);
+  const diff = (await wire(viewer, diffPath, { headers })).json();
+  expect(diff).toMatchObject({
+    proposalId: updated.id,
+    base: proposal.revision,
+    revision: updated.revision,
+    path: "document.html",
+  });
+  expect(diff.before.text).toBe(original);
+  expect(diff.after.text).toBe(
+    original.replace("Hello 🌍", "Updated Hello 🌍"),
+  );
+  expect(diff.elements[0]).toMatchObject({
+    id: "intro",
+    before: { text: "Hello 🌍" },
+    after: { text: "Updated Hello 🌍" },
+  });
+  expect(
+    (
+      await wire(viewer, `/api/diff/${updated.id}?file=.dstar/state.json`, {
+        headers,
+      })
+    ).status,
+  ).toBe(404);
+  const initialDiff = (
+    await wire(viewer, `/api/diff/${proposal.id}?file=document.html`, {
+      headers,
+    })
+  ).json();
+  expect(initialDiff.base).toBeNull();
+  expect(initialDiff.before.exists).toBe(false);
+  const path = `/api/annotations/${updated.id}`;
+  expect((await wire(viewer, path)).status).toBe(401);
+  expect(
+    (
+      await wire(viewer, path, {
+        headers: { ...headers, Origin: "https://evil.invalid" },
+      })
+    ).status,
+  ).toBe(403);
+  const before = (
+    await wire(viewer, `/api/annotations/${proposal.id}`, { headers })
+  ).json();
+  const after = (await wire(viewer, path, { headers })).json();
+  expect(before.revision).toBe(proposal.revision);
+  expect(before.anchors[comment.id]).toEqual({
+    status: "exact",
+    start: 6,
+    end: 7,
+  });
+  expect(after.revision).toBe(updated.revision);
+  expect(after.stateId).toBe(engine.snapshot().stateId);
+  expect(after.anchors[comment.id]).toEqual({
+    status: "recovered",
+    start: 14,
+    end: 15,
+  });
+  expect(after.labels.intro).toBe("Updated Hello 🌍");
+  writeFileSync(
+    join(candidate, "document.html"),
+    original.replace("Hello 🌍", "No globe"),
+  );
+  const removed = engine.propose({
+    candidate,
+    base: proposal.revision,
+    request: "Remove globe",
+    author: "agent",
+    key: "remove",
+  });
+  const missing = (
+    await wire(viewer, `/api/annotations/${removed.id}`, { headers })
+  ).json();
+  expect(missing.anchors[comment.id]).toEqual({ status: "orphaned" });
+  expect(
+    engine.snapshot(proposal.id).files.get("document.html").toString(),
+  ).toBe(original);
+});
+
 it("uses only the configured external authority while preserving opaque-origin frame sandboxing", async () => {
   const { root, engine, proposal } = fixture();
   const token = "b".repeat(64),

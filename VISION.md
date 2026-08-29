@@ -69,6 +69,10 @@ does not need a complete copy on every edit:
 
 This borrows Git-like ideas; it neither executes Git nor requires a repository.
 The Engine generates and verifies deltas, not the language model.
+The bundle stays a portable directory of ordinary files, without a SQLite
+dependency. A small state header and separate proposal/comment-thread JSON
+records keep small review updates from rewriting the whole collaboration history.
+The Engine owns cross-file commit and recovery; agents use its simple interface.
 Real new content and long review history still consume storage; retention and
 compaction must be explicit, never silently discard accepted history.
 

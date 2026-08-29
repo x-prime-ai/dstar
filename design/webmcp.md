@@ -24,6 +24,17 @@ Checked against the [Chrome imperative API documentation](https://developer.chro
 registration is shown in the UI; normal preview, comments, decisions and history
 continue to work. The implementation does not fabricate an API if none exists.
 
+Tool registration is also gated on a successful authenticated Viewer state read.
+Without a valid tab session the page shows **Authorize Viewer** instead of
+advertising connected tools. Paste the complete private access link (including
+its fragment), or open it in this browser. Use **Copy access link** in an already
+authorized Viewer to transfer access deliberately; browser profiles and tabs do
+not share session storage. A 401 drops the stale credential and tool registration,
+pauses polling, and shows the authorization screen. A late response from a
+replaced credential cannot invalidate a newer session. Network failures do not
+erase a working credential. Authorization errors from an in-flight tool use
+`authorization_required` with recovery instructions, never the token itself.
+
 ## Tool contract
 
 All four tools belong to the Viewer page, not the sandboxed document. All input

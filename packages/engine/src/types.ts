@@ -11,25 +11,31 @@ export interface HtmlIndex {
   elements: Record<string, ElementInfo>;
   title: string;
 }
+export type TextRangeSelector = {
+  type: "text-range";
+  start: number;
+  end: number;
+  unit: "unicode-code-point";
+  exact: string;
+  prefix?: string;
+  suffix?: string;
+};
 export type Target = {
   revision: string;
   element: string;
   selector:
     | { type: "element" }
+    | TextRangeSelector
     | {
-        type: "text-range";
-        start: number;
-        end: number;
-        unit: "unicode-code-point";
-        exact: string;
-        prefix?: string;
-        suffix?: string;
+        type: "text-ranges";
+        ranges: (Omit<TextRangeSelector, "type"> & { element: string })[];
       };
 };
 export type Resolution = {
   status: "exact" | "recovered" | "ambiguous" | "orphaned";
   start?: number;
   end?: number;
+  ranges?: (Resolution & { element: string })[];
 };
 export interface Comment {
   id: string;

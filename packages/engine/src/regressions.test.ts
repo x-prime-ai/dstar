@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Repository, readCandidate } from "./repository.js";
-import { resolveTarget, validateHtml } from "./html.js";
+import { resolveTarget, validateHtml, validateTarget } from "./html.js";
 import type { Target } from "./types.js";
 
 vi.mock("node:fs", async (importOriginal) => {
@@ -23,6 +23,43 @@ const document = (body: string) =>
   );
 const index = (body: string) =>
   validateHtml(new Map([["document.html", document(body)]]));
+
+it("validates and resolves one comment across multiple stable elements", () => {
+  const parsed = index(
+    '<h2 data-dstar-id="heading">Create freely</h2><p data-dstar-id="copy">A quiet page</p>',
+  );
+  const target: Target = {
+    revision: `sha256:${"a".repeat(64)}`,
+    element: "heading",
+    selector: {
+      type: "text-ranges",
+      ranges: [
+        {
+          element: "heading",
+          start: 0,
+          end: 13,
+          unit: "unicode-code-point",
+          exact: "Create freely",
+        },
+        {
+          element: "copy",
+          start: 0,
+          end: 7,
+          unit: "unicode-code-point",
+          exact: "A quiet",
+        },
+      ],
+    },
+  };
+  expect(() => validateTarget(parsed, target)).not.toThrow();
+  expect(resolveTarget(parsed, target)).toEqual({
+    status: "exact",
+    ranges: [
+      { element: "heading", status: "exact", start: 0, end: 13 },
+      { element: "copy", status: "exact", start: 0, end: 7 },
+    ],
+  });
+});
 function setup(body = '<p data-dstar-id="intro">Hello</p>') {
   const temp = fs.mkdtempSync(join(tmpdir(), "dstar-regression-"));
   temporary.push(temp);

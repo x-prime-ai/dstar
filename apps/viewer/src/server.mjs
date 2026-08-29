@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { open, mediaType, resolveTarget } from "@dstar/engine";
 import { decisions } from "@dstar/engine/decisions";
 import { agentRoute } from "./agent-api.mjs";
+import { createPreviewCache } from "./preview-cache.mjs";
+import { fileDiff } from "./file-diff.mjs";
 import {
   authorized,
   resolveViewerConfig,
@@ -20,7 +22,7 @@ export async function startViewer(root, port = 0, options = {}) {
     review = decisions(config.root),
     token = config.token;
   engine.snapshot();
-  const capabilities = new Map();
+  const capabilities = createPreviewCache();
   let origin;
   const server = createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -44,7 +46,9 @@ export async function startViewer(root, port = 0, options = {}) {
           "/app.js",
           "/preview-state.js",
           "/review-state.js",
+          "/diff-view.js",
           "/webmcp.js",
+          "/session.js",
           "/style.css",
         ].includes(path)
       ) {
@@ -67,11 +71,9 @@ export async function startViewer(root, port = 0, options = {}) {
       const frame = /^\/frame\/([a-f0-9]{48})\/(.+)$/.exec(path);
       if (req.method === "GET" && frame) {
         res.setHeader("Permissions-Policy", "tools=()");
-        const capability = capabilities.get(frame[1]);
-        if (!capability)
-          return json(404, { error: "Expired preview; refresh" });
-        const snapshot = engine.snapshot(capability.id),
-          file = frame[2];
+        const snapshot = capabilities.get(frame[1]);
+        if (!snapshot) return json(404, { error: "Expired preview; refresh" });
+        const file = frame[2];
         const bytes = snapshot.files.get(file);
         if (!bytes) return json(404, { error: "Unknown canonical file" });
         const nonce = secret();
@@ -132,13 +134,48 @@ export async function startViewer(root, port = 0, options = {}) {
           ),
         });
       }
+      const diff = /^\/api\/diff\/([a-f0-9-]{36})$/.exec(path);
+      if (req.method === "GET" && diff) {
+        const after = engine.snapshot(diff[1]);
+        const proposal = after.state.proposals.find((p) => p.id === diff[1]);
+        const file = url.searchParams.get("file");
+        if (!proposal?.diff.files.some((entry) => entry.path === file))
+          return json(404, {
+            error: "Choose a changed file from this version.",
+          });
+        const before = proposal.parent
+          ? engine.snapshot(proposal.parent)
+          : null;
+        return json(200, fileDiff(before, after, proposal, file));
+      }
+      const annotations = /^\/api\/annotations\/([a-f0-9-]{36})$/.exec(path);
+      if (req.method === "GET" && annotations) {
+        const s = engine.snapshot(annotations[1]);
+        return json(200, {
+          revision: s.revision,
+          stateId: s.stateId,
+          anchors: Object.fromEntries(
+            s.state.comments.map((c) => [
+              c.id,
+              s.index
+                ? resolveTarget(s.index, c.target)
+                : { status: "orphaned" },
+            ]),
+          ),
+          labels: Object.fromEntries(
+            s.state.comments.map((c) => [
+              c.target.element,
+              s.index?.elements[c.target.element]?.text.trim().slice(0, 100) ||
+                c.target.element,
+            ]),
+          ),
+        });
+      }
       const preview = /^\/api\/preview\/([a-f0-9-]{36})$/.exec(path);
       if (req.method === "GET" && preview) {
         const s = engine.snapshot(preview[1]),
           capability = secret();
-        if (capabilities.size >= 100)
-          capabilities.delete(capabilities.keys().next().value);
-        capabilities.set(capability, { id: preview[1] });
+        capabilities.set(capability, s);
         return json(200, {
           url: `/frame/${capability}/document.html`,
           capability,
@@ -197,6 +234,7 @@ export async function startViewer(root, port = 0, options = {}) {
       });
     }
   });
+  server.once("close", () => capabilities.clear());
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);

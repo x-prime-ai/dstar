@@ -207,7 +207,7 @@ function selectionContext(engine, input) {
     object(selection, ["revision", "element", "selector"]);
     object(
       selection.selector,
-      ["type", "start", "end", "unit", "exact", "prefix", "suffix"],
+      ["type", "start", "end", "unit", "exact", "prefix", "suffix", "ranges"],
       ["type"],
     );
     validateTarget(snapshot.index, selection);

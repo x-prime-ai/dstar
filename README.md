@@ -39,6 +39,22 @@ or Alt-click an element to comment, and browse accepted versions. Keep that
 local session URL private. `examples/slides-first` is an alternative starting
 candidate; the same Viewer provides previous/next slide controls.
 
+The local command uses an automatically assigned free port by default. To keep
+the same port between restarts, choose one explicitly:
+
+```sh
+pnpm dstar serve ./my-document.dstar --port 4173
+```
+
+Authorization belongs to the browser tab, not the document or agent. To use a
+different browser (including the in-app browser), open the **complete** URL from
+the running terminal, including its `#token`, or use **Copy access link** in an
+authorized Viewer. The address bar drops the token after opening, so copying
+that shortened URL does not authorize another browser. The **Authorize Viewer**
+screen also accepts the private link or token. After restarting the local server,
+use its newly printed link. WebMCP tools register only after a successful
+authenticated state read; access links must never be shared publicly.
+
 To revise:
 
 ```sh

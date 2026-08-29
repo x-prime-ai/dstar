@@ -9,6 +9,8 @@ workspace server. Do not autoscale it or mount one package into multiple servers
 
 `pnpm dstar serve ./document.dstar` and `startViewer(root, port)` still bind
 loopback with a fresh random credential. The CLI prints its private local URL.
+Use `--port 4173` (or another available port) when the local address should stay
+stable; omission keeps automatic port assignment.
 They do **not** read the service environment variables below. Never redirect
 that local session URL to shared logs or expose the local CLI through a tunnel.
 

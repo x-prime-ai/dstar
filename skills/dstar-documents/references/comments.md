@@ -1,7 +1,7 @@
 # Comments and replies
 
-A target binds the exact viewed revision, a stable element and an optional
-Unicode code-point range. It never stores a CSS path as identity.
+A target binds the exact viewed revision, one or more stable elements and
+optional Unicode code-point ranges. It never stores a CSS path as identity.
 
 ```json
 {
@@ -30,8 +30,9 @@ HTML5 rules. These affect the text index, not the canonical file bytes.
 Use the exact `index.elements[id].text`
 from `inspect`; do not use raw HTML offsets, UTF-16 offsets or normalized
 `innerText`. The Viewer converts browser selections to this same stream.
-Cross-element range comments are not implemented: select within one stable
-element, or comment on the enclosing element.
+Cross-element comments use a `text-ranges` selector. Each selected stable
+element keeps its own Unicode range and quote, so the Viewer can recover and
+highlight the parts independently across revisions.
 
 Write a target JSON file, then call:
 

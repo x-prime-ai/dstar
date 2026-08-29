@@ -103,6 +103,7 @@ export function createTools({ api, getReviewContext, onMutation }) {
         // Only server-classified errors are safe to return. Never serialize fetch
         // errors, request options, session tokens or frame capabilities.
         const safeCodes = [
+          "authorization_required",
           "invalid_input",
           "forbidden",
           "unknown_route",
