@@ -171,11 +171,18 @@ it("preserves exact selection revision for candidate/base and never rebinds it t
       previewStatus: "ready",
     },
     selection: target,
+    action: null,
   });
   expect(
     reviewContext(selected, false, { revision: "candidate-rev" }, ready, target)
       .selection,
   ).toBeNull();
+  expect(
+    reviewContext(selected, true, { revision: "base-rev" }, ready, target, {
+      kind: "suggest",
+      target,
+    }).action,
+  ).toEqual({ kind: "suggest", target });
   expect(
     reviewContext(selected, true, { revision: "candidate-rev" }, ready, target)
       .review.previewStatus,

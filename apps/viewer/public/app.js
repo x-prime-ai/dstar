@@ -29,6 +29,7 @@ let current,
   selected,
   frame,
   target,
+  selectionAction,
   commentTarget,
   commentTriggerTarget,
   activeTab = "comments-panel",
@@ -87,9 +88,10 @@ const el = (tag, text, className) => {
 };
 function resetTarget() {
   target = null;
+  selectionAction = null;
   commentTarget = null;
   commentTriggerTarget = null;
-  $("selection-comment").hidden = true;
+  $("selection-actions").hidden = true;
   $("comment-form").hidden = true;
   $("selection").textContent = "";
   $("add-comment").disabled = true;
@@ -107,7 +109,7 @@ function setPanel(panel, open, focus = false) {
     $(tab).setAttribute("aria-selected", String(id === panel));
     $(tab).tabIndex = id === panel ? 0 : -1;
   }
-  $("selection-comment").hidden = true;
+  $("selection-actions").hidden = true;
   if (focus) {
     if (open)
       $(panel === "comments-panel" ? "tab-comments" : "tab-versions").focus();
@@ -176,7 +178,29 @@ $("selection-comment").onmousedown = preserveCommentSelection;
 $("selection-comment").onclick = () => {
   const selectedTarget = commentTriggerTarget || target;
   commentTriggerTarget = null;
+  selectionAction = null;
   composeComment(selectedTarget);
+};
+$("selection-suggest").onpointerdown = preserveCommentSelection;
+$("selection-suggest").onmousedown = preserveCommentSelection;
+$("selection-suggest").onclick = () => {
+  const selectedTarget = commentTriggerTarget || target;
+  commentTriggerTarget = null;
+  if (!selectedTarget) return;
+  target = selectedTarget;
+  selectionAction = { kind: "suggest", target: selectedTarget };
+  $("selection-actions").hidden = true;
+  note(
+    "Suggestion ready. Tell your browser agent how this selection should change.",
+  );
+};
+$("ask-agent-comment").onclick = () => {
+  if (!commentTarget || postingComment) return;
+  target = commentTarget;
+  selectionAction = { kind: "comment", target: commentTarget };
+  note(
+    "Comment request ready. Tell your browser agent what the comment should say.",
+  );
 };
 $("cancel-comment").onclick = () => {
   $("body").value = "";
@@ -189,19 +213,19 @@ $("body").oninput = () => {
     postingComment || !commentTarget || !$("body").value.trim();
 };
 addEventListener("resize", () => {
-  $("selection-comment").hidden = true;
+  $("selection-actions").hidden = true;
 });
 addEventListener(
   "scroll",
   () => {
-    $("selection-comment").hidden = true;
+    $("selection-actions").hidden = true;
   },
   true,
 );
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     if ($("confirmation").open) return;
-    $("selection-comment").hidden = true;
+    $("selection-actions").hidden = true;
     $("viewer-menu").open = false;
     if (!$("review-sidebar").hidden) setPanel(activeTab, false, true);
   }
@@ -316,7 +340,7 @@ function setView(mode) {
   }
   $("preview-controls").hidden = mode !== "preview";
   $("view-label").hidden = mode !== "preview";
-  $("selection-comment").hidden = true;
+  $("selection-actions").hidden = true;
   $("accept").disabled = !canAccept();
   $("decision-hint").hidden = mode !== "changes";
   if (mode === "changes") {
@@ -780,7 +804,7 @@ async function refresh({ retryPreview = false } = {}) {
 }
 $("refresh").onclick = safely(() => refresh({ retryPreview: true }));
 $("width").onchange = () => {
-  $("selection-comment").hidden = true;
+  $("selection-actions").hidden = true;
   $("preview").style.width = $("width").value;
 };
 $("compare").onclick = safely(async () => {
@@ -858,7 +882,8 @@ addEventListener("message", (event) => {
   );
   if (!selection || viewMode !== "preview") return;
   target = selection.target;
-  $("selection-comment").hidden = true;
+  selectionAction = null;
+  $("selection-actions").hidden = true;
   if (!target) return;
   if (selection.compose) return composeComment();
   const position = selectionButtonPosition(
@@ -868,11 +893,12 @@ addEventListener("message", (event) => {
       width: document.documentElement.clientWidth,
       height: document.documentElement.clientHeight,
     },
+    { width: 82, height: 38 },
   );
   if (position) {
-    $("selection-comment").style.left = `${position.left}px`;
-    $("selection-comment").style.top = `${position.top}px`;
-    $("selection-comment").hidden = false;
+    $("selection-actions").style.left = `${position.left}px`;
+    $("selection-actions").style.top = `${position.top}px`;
+    $("selection-actions").hidden = false;
   }
 });
 $("whole-element").onclick = () => {
@@ -920,7 +946,25 @@ async function connectTools() {
     document,
     api,
     getReviewContext: () =>
-      reviewContext(selected, showingBase, frame, previewState, target),
+      reviewContext(
+        selected,
+        showingBase,
+        frame,
+        previewState,
+        target,
+        selectionAction,
+      ),
+    onDraftComment: ({ target: draftedTarget, body }) => {
+      if ($("body").value.trim()) return false;
+      target = draftedTarget;
+      selectionAction = null;
+      composeComment(draftedTarget);
+      $("body").value = body;
+      $("add-comment").disabled = false;
+      $("body").focus();
+      note("Agent comment draft is ready for review.");
+      return true;
+    },
     onMutation: async (result, route) => {
       await refresh();
       const updated =
@@ -949,7 +993,7 @@ async function connectTools() {
   registration = result;
   $("webmcp-status").textContent =
     result.status === "registered"
-      ? "WebMCP connected · 4 tools · proposals only"
+      ? "WebMCP connected · 5 tools · comments and proposals remain human-reviewed"
       : result.status === "unsupported"
         ? "WebMCP unavailable · manual review works normally"
         : "WebMCP registration failed · manual review works normally";

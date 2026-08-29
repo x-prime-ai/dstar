@@ -13,7 +13,12 @@ const key = {
     "A unique idempotency key. Retry exactly the same arguments and key after an uncertain result; changed work needs a new key.",
 };
 
-export function createTools({ api, getReviewContext, onMutation }) {
+export function createTools({
+  api,
+  getReviewContext,
+  onMutation,
+  onDraftComment,
+}) {
   const definitions = [
     {
       name: "get_review_context",
@@ -31,6 +36,45 @@ export function createTools({ api, getReviewContext, onMutation }) {
       inputSchema: object({ revision }),
       route: "document",
       readOnly: true,
+    },
+    {
+      name: "draft_selection_comment",
+      description:
+        "Draft a comment for the exact selection after the user chose Comment in the Viewer. Opens an editable Viewer draft; it never posts the comment. Use only when get_review_context returns action.kind=comment.",
+      inputSchema: object({
+        body: { type: "string", minLength: 1, maxLength: 20000 },
+      }),
+      readOnly: false,
+      local: async (args) => {
+        const context = getReviewContext();
+        if (
+          !args ||
+          Object.keys(args).length !== 1 ||
+          typeof args.body !== "string" ||
+          !args.body.trim() ||
+          args.body.length > 20000 ||
+          context.action?.kind !== "comment" ||
+          !context.action.target
+        )
+          return {
+            ok: false,
+            code: "invalid_input",
+            error:
+              "Choose Comment for a ready Viewer selection before drafting.",
+          };
+        const viewerUpdated = await onDraftComment({
+          target: context.action.target,
+          body: args.body,
+        });
+        return viewerUpdated === false
+          ? {
+              ok: false,
+              code: "draft_conflict",
+              error:
+                "The Viewer comment draft changed. Keep the existing text or clear it before asking the agent to draft again.",
+            }
+          : { ok: true, drafted: true, viewerUpdated: true };
+      },
     },
     {
       name: "propose_revision",
@@ -76,10 +120,22 @@ export function createTools({ api, getReviewContext, onMutation }) {
       readOnly: false,
     },
   ];
-  return definitions.map(({ route, readOnly, input, ...tool }) => ({
+  return definitions.map(({ route, readOnly, input, local, ...tool }) => ({
     ...tool,
     annotations: { readOnlyHint: readOnly, untrustedContentHint: true },
     execute: async (args, { signal } = {}) => {
+      if (local) {
+        try {
+          return JSON.stringify(await local(args, signal));
+        } catch {
+          return JSON.stringify({
+            ok: false,
+            code: "connection_error",
+            error:
+              "The Viewer could not prepare the draft. Retry after checking the current selection.",
+          });
+        }
+      }
       try {
         const result = await api(
           `agent/${route}`,

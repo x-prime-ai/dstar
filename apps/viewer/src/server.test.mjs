@@ -830,6 +830,22 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   expect(context.selection).toEqual(target);
   expect(context.comments[0].viewedResolution.status).toBe("exact");
   expect(context.resolutionRevision).toBe(p.revision);
+  const suggestContext = await api("agent/context", {
+    ...contextArgs,
+    action: { kind: "suggest", target },
+  });
+  expect(suggestContext.action).toEqual({ kind: "suggest", target });
+  expect(
+    (
+      await api("agent/context", {
+        ...contextArgs,
+        action: {
+          kind: "comment",
+          target: { ...target, element: "different" },
+        },
+      })
+    ).code,
+  ).toBe("invalid_input");
   const replyArgs = {
     commentId: c.id,
     body: "I will propose a revision",

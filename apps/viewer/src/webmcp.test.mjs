@@ -5,29 +5,34 @@ const callbacks = () => ({
   api: vi.fn().mockResolvedValue({ revision: "exact" }),
   getReviewContext: vi.fn().mockReturnValue({ review: null, selection: null }),
   onMutation: vi.fn(),
+  onDraftComment: vi.fn().mockReturnValue(true),
 });
-it("defines only four proposal/read/reply tools with the current WebMCP signature and JSON-string output", async () => {
+it("defines page-context, comment-draft and proposal tools with the current WebMCP signature", async () => {
   const cb = callbacks(),
     tools = createTools(cb);
   expect(tools.map((t) => t.name)).toEqual([
     "get_review_context",
     "read_document",
+    "draft_selection_comment",
     "propose_revision",
     "reply_comment",
   ]);
   const signal = new AbortController().signal;
-  for (const [i, tool] of tools.entries()) {
+  for (const tool of tools) {
     expect(tool.inputSchema.type).toBe("object");
     expect(tool.inputSchema.additionalProperties).toBe(false);
-    expect(tool.annotations).toEqual({
-      readOnlyHint: i < 2,
-      untrustedContentHint: true,
-    });
-    const args = { example: i };
-    const output = await tool.execute(args, { signal });
-    expect(JSON.parse(output).ok).toBe(true);
-    expect(cb.api.mock.calls[i][2]).toBe(signal);
+    expect(tool.annotations.untrustedContentHint).toBe(true);
   }
+  expect(tools.map((t) => t.annotations.readOnlyHint)).toEqual([
+    true,
+    true,
+    false,
+    false,
+    false,
+  ]);
+  for (const tool of tools.filter((t) => t.name !== "draft_selection_comment"))
+    expect(JSON.parse(await tool.execute({}, { signal })).ok).toBe(true);
+  expect(cb.api.mock.calls.every((call) => call[2] === signal)).toBe(true);
   expect(cb.api.mock.calls[0]).toEqual([
     "agent/context",
     { review: null, selection: null },
@@ -35,34 +40,72 @@ it("defines only four proposal/read/reply tools with the current WebMCP signatur
   ]);
   expect(cb.onMutation).toHaveBeenCalledTimes(2);
 });
+it("fills an editable comment draft only for an exact Viewer comment action", async () => {
+  const cb = callbacks(),
+    tool = createTools(cb).find(
+      (entry) => entry.name === "draft_selection_comment",
+    ),
+    target = {
+      revision: "rev",
+      element: "intro",
+      selector: { type: "element" },
+    };
+  expect(JSON.parse(await tool.execute({ body: "Draft this" }))).toMatchObject({
+    ok: false,
+    code: "invalid_input",
+  });
+  cb.getReviewContext.mockReturnValue({
+    review: { revision: "rev" },
+    selection: target,
+    action: { kind: "comment", target },
+  });
+  expect(JSON.parse(await tool.execute({ body: "Draft this" }))).toEqual({
+    ok: true,
+    drafted: true,
+    viewerUpdated: true,
+  });
+  expect(cb.onDraftComment).toHaveBeenCalledWith({
+    target,
+    body: "Draft this",
+  });
+  cb.onDraftComment.mockReturnValue(false);
+  expect(
+    JSON.parse(await tool.execute({ body: "Replace this" })),
+  ).toMatchObject({ ok: false, code: "draft_conflict" });
+  expect(cb.api).not.toHaveBeenCalled();
+});
 it("captures current context when called, not when registered, and preserves successful writes after refresh failure", async () => {
   const cb = callbacks(),
-    tools = createTools(cb);
+    tools = createTools(cb),
+    contextTool = tools.find((tool) => tool.name === "get_review_context"),
+    proposalTool = tools.find((tool) => tool.name === "propose_revision");
   cb.getReviewContext.mockReturnValue({
     review: { revision: "new-view" },
     selection: { revision: "new-view" },
   });
-  await tools[0].execute({});
+  await contextTool.execute({});
   expect(cb.api).toHaveBeenLastCalledWith(
     "agent/context",
     cb.getReviewContext(),
     undefined,
   );
   cb.onMutation.mockRejectedValue(new Error("UI refresh disconnected"));
-  const result = JSON.parse(await tools[2].execute({ key: "same-key" }));
+  const result = JSON.parse(await proposalTool.execute({ key: "same-key" }));
   expect(result).toMatchObject({ ok: true, viewerUpdated: false });
   cb.onMutation.mockResolvedValue(false);
   expect(
-    JSON.parse(await tools[2].execute({ key: "same-key" })).viewerUpdated,
+    JSON.parse(await proposalTool.execute({ key: "same-key" })).viewerUpdated,
   ).toBe(false);
 });
 it("returns safe actionable errors without serializing request credentials or host failures", async () => {
   const cb = callbacks(),
-    tools = createTools(cb);
+    proposalTool = createTools(cb).find(
+      (tool) => tool.name === "propose_revision",
+    );
   cb.api.mockRejectedValue(
     new Error("Bearer secret-token at /private/server/path"),
   );
-  const unknown = await tools[2].execute({});
+  const unknown = await proposalTool.execute({});
   expect(unknown).not.toContain("secret-token");
   expect(unknown).not.toContain("/private");
   expect(JSON.parse(unknown)).toMatchObject({
@@ -73,7 +116,7 @@ it("returns safe actionable errors without serializing request credentials or ho
   cb.api.mockRejectedValue(
     Object.assign(new Error("Accepted head changed"), { code: "stale_base" }),
   );
-  expect(JSON.parse(await tools[2].execute({}))).toEqual({
+  expect(JSON.parse(await proposalTool.execute({}))).toEqual({
     ok: false,
     code: "stale_base",
     error: "Accepted head changed",
@@ -92,7 +135,7 @@ it("progressively enhances document.modelContext and unregisters with AbortSigna
   };
   const result = await registerWebMCP({ document, ...cb });
   expect(result.status).toBe("registered");
-  expect(entries).toHaveLength(4);
+  expect(entries).toHaveLength(5);
   expect(entries.every(([, options]) => !options.signal.aborted)).toBe(true);
   result.dispose();
   expect(entries.every(([, options]) => options.signal.aborted)).toBe(true);

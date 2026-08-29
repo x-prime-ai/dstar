@@ -18,10 +18,13 @@ export function reviewContext(
   frame,
   previewState,
   target,
+  action = null,
 ) {
   const revision =
     selected && (showingBase ? selected.base : selected.revision);
   const status = frame?.revision === revision ? previewState.status : "loading";
+  const selection =
+    status === "ready" && target?.revision === revision ? target : null;
   return {
     review:
       selected && revision
@@ -32,8 +35,14 @@ export function reviewContext(
             previewStatus: status,
           }
         : null,
-    selection:
-      status === "ready" && target?.revision === revision ? target : null,
+    selection,
+    action:
+      selection &&
+      action &&
+      ["comment", "suggest"].includes(action.kind) &&
+      action.target === target
+        ? { kind: action.kind, target: selection }
+        : null,
   };
 }
 
@@ -76,7 +85,7 @@ export function selectionMessageFromEvent(event, source, frame, previewState) {
   };
 }
 
-export function selectionButtonPosition(rect, frame, viewport) {
+export function selectionButtonPosition(rect, frame, viewport, control = 38) {
   if (
     !rect ||
     ![rect.left, rect.top, rect.right, rect.bottom].every(Number.isFinite) ||
@@ -92,27 +101,28 @@ export function selectionButtonPosition(rect, frame, viewport) {
     y = frame.top + rect.top,
     endX = frame.left + rect.right,
     endY = frame.top + rect.bottom;
-  const size = 38,
+  const width = typeof control === "number" ? control : control.width,
+    height = typeof control === "number" ? control : control.height,
     gap = 8;
   if (
     endX <= left ||
     x >= right ||
     endY <= top ||
     y >= bottom ||
-    right - left < size + gap * 2 ||
-    bottom - top < size + gap * 2
+    right - left < width + gap * 2 ||
+    bottom - top < height + gap * 2
   )
     return null;
   return {
     left: Math.max(
       left + gap,
-      Math.min((x + endX - size) / 2, right - size - gap),
+      Math.min((x + endX - width) / 2, right - width - gap),
     ),
     top: Math.max(
       top + gap,
       Math.min(
-        y - size - gap >= top + gap ? y - size - gap : endY + gap,
-        bottom - size - gap,
+        y - height - gap >= top + gap ? y - height - gap : endY + gap,
+        bottom - height - gap,
       ),
     ),
   };

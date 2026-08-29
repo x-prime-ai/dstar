@@ -221,7 +221,9 @@
               required
             ></textarea>
             <div class="composer-actions">
-              <button type="button" id="cancel-comment">Cancel</button
+              <button type="button" id="ask-agent-comment">
+                Ask agent to draft</button
+              ><button type="button" id="cancel-comment">Cancel</button
               ><button class="primary" id="add-comment" disabled>
                 Post comment
               </button>
@@ -294,20 +296,36 @@
         </section>
       </aside>
     </main>
-    <button
-      id="selection-comment"
-      class="selection-comment"
-      aria-label="Add comment to selection"
-      title="Add comment"
+    <div
+      id="selection-actions"
+      class="selection-actions"
+      role="toolbar"
+      aria-label="Actions for selection"
       hidden
     >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5a10 10 0 0 1 20 0Z"
-        />
-        <path d="M12 7v8M8 11h8" />
-      </svg>
-    </button>
+      <button
+        id="selection-comment"
+        aria-label="Add comment to selection"
+        title="Comment"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5a10 10 0 0 1 20 0Z"
+          />
+          <path d="M12 7v8M8 11h8" />
+        </svg>
+      </button>
+      <button
+        id="selection-suggest"
+        aria-label="Ask agent to suggest a change"
+        title="Suggest"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m4 16 10-10 4 4L8 20H4Z" />
+          <path d="m12 8 4 4M5 4h4M7 2v4M17 17h4M19 15v4" />
+        </svg>
+      </button>
+    </div>
     <dialog id="confirmation">
       <form method="dialog">
         <h2 id="confirmation-title">Confirm review decision</h2>

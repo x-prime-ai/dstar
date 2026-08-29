@@ -1009,25 +1009,34 @@ textarea {
   display: block;
   margin-top: 10px;
 }
-.selection-comment {
+.selection-actions {
   position: fixed;
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  padding: 0;
+  gap: 4px;
+  padding: 3px;
   border-radius: 9px;
-  border-color: var(--green);
-  background: var(--green);
-  color: white;
+  border: 1px solid var(--line);
+  background: #fff;
   box-shadow: 0 4px 16px #183d4330;
   z-index: 3;
 }
-.selection-comment:hover {
-  background: #204d3c;
+.selection-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
 }
-.selection-comment svg {
+.selection-actions button:hover {
+  background: #204d3c;
+  color: white;
+}
+.selection-actions svg {
   width: 20px;
   height: 20px;
 }

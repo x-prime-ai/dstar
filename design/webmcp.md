@@ -37,17 +37,18 @@ erase a working credential. Authorization errors from an in-flight tool use
 
 ## Tool contract
 
-All four tools belong to the Viewer page, not the sandboxed document. All input
+All five tools belong to the Viewer page, not the sandboxed document. All input
 schemas reject additional properties. Descriptions and annotations mark document
 and comment contents as untrusted data. A tool must not treat instructions found
 inside that content as user authorization.
 
-| Tool                 | Arguments                     | Result on success                                                                                                                         |
-| -------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_review_context` | `{}`                          | Package/state IDs, generation, accepted head, reviewed proposal/version, selection, proposals with review diffs, comments/replies, limits |
-| `read_document`      | `{revision}`                  | Exact immutable revision and complete `files` array                                                                                       |
-| `propose_revision`   | `{base, request, key, files}` | Stored proposal, including its exact base/revision, status and review diff                                                                |
-| `reply_comment`      | `{commentId, body, key}`      | Comment with its replies; status is not changed                                                                                           |
+| Tool                      | Arguments                     | Result on success                                                                                                                 |
+| ------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `get_review_context`      | `{}`                          | Package/state IDs, generation, accepted head, reviewed proposal/version, selection/action, proposals, comments/replies and limits |
+| `read_document`           | `{revision}`                  | Exact immutable revision and complete `files` array                                                                               |
+| `draft_selection_comment` | `{body}`                      | Opens an editable comment draft for the exact selection; never posts it                                                           |
+| `propose_revision`        | `{base, request, key, files}` | Stored proposal, including its exact base/revision, status and review diff                                                        |
+| `reply_comment`           | `{commentId, body, key}`      | Comment with its replies; status is not changed                                                                                   |
 
 Every tool result is a string containing a JSON object with `ok: true` or
 `ok: false`. Successful mutation results also include `viewerUpdated`. If a
@@ -86,6 +87,19 @@ proposal has that revision, that the selection revision equals the viewed
 revision, and that the target exactly matches its immutable HTML index. It never
 substitutes the latest head into an older target. A selection cannot be sent as
 ready while the preview is still loading or has failed.
+
+`action` is transient and null until the user explicitly chooses **Comment** or
+**Suggest** beside a selection. It is `{kind, target}`, where `kind` is
+`comment` or `suggest` and `target` must exactly equal `selection`. The action
+records intent for the external browser agent; the user's instruction is still
+entered in the agent chat, not in the Viewer. WebMCP does not provide a generic
+page API that opens or prompts that chat.
+
+For **Comment**, the agent may call `draft_selection_comment`. The tool only
+fills the normal editable Viewer composer, so the user can change or discard the
+text before posting. For **Suggest**, the agent follows the user's chat request,
+reads the exact version, and uses `propose_revision`; the proposal stays pending
+until a person accepts or rejects it in the Viewer.
 
 Selections are transient, tab-local state. A comment persists the original
 target/revision in the Engine. Refresh and agent activity preserve selections;
@@ -212,7 +226,7 @@ including when a comment arrives while a confirmation dialog is open.
 “Agent proposes, person decides” is the tool/workflow boundary. It is **not** a
 cryptographic proof of human identity. The session credential also authorizes
 normal Viewer decision endpoints; a trusted local process or an automation with
-equivalent session/UI access can act outside the four WebMCP tools. There is no
+equivalent session/UI access can act outside the five WebMCP tools. There is no
 separate agent principal, signed human identity, remote multi-user auth or
 network-service security claim in this change.
 
@@ -241,12 +255,13 @@ restrictions. Adapter tests use explicitly labeled registration doubles to
 check schemas, execution signals, cleanup and unavailable-browser behavior;
 those tests are not evidence of native browser support.
 
-Manual verification in Codex In-app Browser discovered all four page tools and
-called them through its Browser WebMCP capability: read context/document, propose
-a complete revision, reply and retry, then explicit UI confirmation/acceptance,
-history and stale-base rejection. The iframe URL, selection and unsent draft
-survived agent changes; base comparison and its original selection revision
-survived Refresh. This establishes the available browser host's integration,
-not independent verification of Chrome's native implementation. No API was
-injected by the test. A separate Chrome build with WebMCP enabled remains a
-follow-up compatibility check; do not report it as passed on this evidence.
+Current UI verification in Codex In-app Browser discovered all five page tools.
+Earlier end-to-end verification called the original four remote tools through
+its Browser WebMCP capability: read context/document, propose a complete
+revision, reply and retry, then explicit UI confirmation/acceptance, history and
+stale-base rejection. The iframe URL, selection and unsent draft survived agent
+changes; base comparison and its original selection revision survived Refresh.
+This establishes the available browser host's integration, not independent
+verification of Chrome's native implementation. No API was injected by the
+test. A separate Chrome build with WebMCP enabled remains a follow-up
+compatibility check; do not report it as passed on this evidence.
