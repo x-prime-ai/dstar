@@ -110,8 +110,87 @@ it("persists reply idempotency under the write lock without resolving or accepti
   ).toThrow("Idempotency");
   // Existing human/CLI callers may still omit the optional fourth argument.
   expect(reopened.reply(c.id, "Thanks", "human").replies).toHaveLength(2);
+  expect(() =>
+    reopened.reply(c.id, "Stale draft", "human", undefined, stateId),
+  ).toThrow("state changed");
+  // A keyed exact retry is authoritative even when its original state is old.
+  expect(
+    reopened.reply(c.id, "Proposing", "agent", "reply-key", stateId).replies,
+  ).toHaveLength(2);
   expect(reopened.snapshot().revision).toBeNull();
   expect(reopened.snapshot().state.comments[0]?.status).toBe("open");
+});
+it("persists validated motivating comments without coupling their lifecycle", () => {
+  const f = setup(),
+    first = f.propose(null);
+  f.accept(first);
+  const target: Target = {
+      revision: first.revision,
+      element: "intro",
+      selector: { type: "element" },
+    },
+    a = f.repo.comment({ target, body: "Clarify this", author: "human" }),
+    b = f.repo.comment({ target, body: "Shorten this", author: "human" });
+  f.write("Updated for both comments");
+  const proposal = f.repo.propose({
+    candidate: f.stage,
+    base: first.revision,
+    request: "Address review feedback",
+    author: "agent",
+    key: "linked-proposal",
+    commentIds: [b.id, a.id],
+  });
+  expect(proposal.motivatedBy).toEqual([a.id, b.id].sort());
+  expect(
+    new Repository(f.root).snapshot().state.proposals.at(-1)?.motivatedBy,
+  ).toEqual([a.id, b.id].sort());
+  f.accept(proposal);
+  expect(
+    f.repo.snapshot().state.comments.every((c) => c.status === "open"),
+  ).toBe(true);
+  f.repo.resolveComment(a.id, f.repo.snapshot().stateId);
+  // An exact retry remains idempotent even after the linked comment changes state.
+  expect(
+    f.repo.propose({
+      candidate: f.stage,
+      base: first.revision,
+      request: "Address review feedback",
+      author: "agent",
+      key: "linked-proposal",
+      commentIds: [a.id, b.id],
+    }).id,
+  ).toBe(proposal.id);
+  expect(() =>
+    f.repo.propose({
+      candidate: f.stage,
+      base: first.revision,
+      request: "Address review feedback",
+      author: "agent",
+      key: "linked-proposal",
+      commentIds: [a.id],
+    }),
+  ).toThrow("Idempotency");
+  f.write("Another update");
+  expect(() =>
+    f.repo.propose({
+      candidate: f.stage,
+      base: proposal.revision,
+      request: "Reuse resolved motivation",
+      author: "agent",
+      key: "resolved-link",
+      commentIds: [a.id],
+    }),
+  ).toThrow("no longer open");
+  expect(() =>
+    f.repo.propose({
+      candidate: f.stage,
+      base: proposal.revision,
+      request: "Unknown motivation",
+      author: "agent",
+      key: "unknown-link",
+      commentIds: [randomUUID()],
+    }),
+  ).toThrow("Unknown motivating comment");
 });
 describe("canonical HTML workflow", () => {
   it("creates a pending genesis, accepts the exact candidate, and reopens without Git", () => {

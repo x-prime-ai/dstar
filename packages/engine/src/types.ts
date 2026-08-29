@@ -96,6 +96,8 @@ export interface Proposal {
   parent: string | null;
   revision: string;
   request: string;
+  /** Persistent annotation/comment IDs that motivated this proposal. */
+  motivatedBy?: string[];
   author: Actor;
   createdAt: string;
   status: "pending" | "accepted" | "rejected";

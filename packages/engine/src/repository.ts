@@ -22,6 +22,7 @@ import type {
 } from "./types.js";
 
 const HASH = /^sha256:[a-f0-9]{64}$/;
+const UUID = /^[a-f0-9-]{36}$/;
 const STATE_LIMIT = 64 * 1024 * 1024;
 function actorField(value: Actor, name: string): void {
   if (typeof value === "string") {
@@ -187,6 +188,15 @@ function validateState(value: State): State {
   )
     throw new Error("Unsupported or corrupt DSTAR state");
   const ids = new Set<string>();
+  const commentIds = new Set(
+    value.comments.map((comment) => {
+      if (!comment || !UUID.test(comment.id))
+        throw new Error("Corrupt comment metadata");
+      return comment.id;
+    }),
+  );
+  if (commentIds.size !== value.comments.length)
+    throw new Error("Corrupt comment metadata");
   for (const p of value.proposals) {
     if (
       !p ||
@@ -196,7 +206,17 @@ function validateState(value: State): State {
       (p.base !== null && !HASH.test(p.base)) ||
       !["pending", "accepted", "rejected"].includes(p.status) ||
       !Array.isArray(p.changes) ||
-      p.changes.length > 1024
+      p.changes.length > 1024 ||
+      (p.motivatedBy !== undefined &&
+        (!Array.isArray(p.motivatedBy) ||
+          p.motivatedBy.length > 100 ||
+          new Set(p.motivatedBy).size !== p.motivatedBy.length ||
+          p.motivatedBy.some(
+            (commentId) =>
+              typeof commentId !== "string" ||
+              !UUID.test(commentId) ||
+              !commentIds.has(commentId),
+          )))
     )
       throw new Error("Corrupt proposal metadata");
     actorField(p.author, "proposal author");
@@ -476,6 +496,7 @@ export class Repository {
     request: string;
     author: Actor;
     key: string;
+    commentIds?: string[];
   }): Proposal {
     const candidate = safe(args.candidate);
     if (
@@ -491,9 +512,25 @@ export class Repository {
     textField(args.request, "request");
     actorField(args.author, "author");
     textField(args.key, "key", 200);
+    if (
+      args.commentIds !== undefined &&
+      (!Array.isArray(args.commentIds) ||
+        args.commentIds.length < 1 ||
+        args.commentIds.length > 100 ||
+        new Set(args.commentIds).size !== args.commentIds.length ||
+        args.commentIds.some(
+          (commentId) => typeof commentId !== "string" || !UUID.test(commentId),
+        ))
+    )
+      throw new Error("Invalid motivating comment IDs");
+    const motivatedBy = [...(args.commentIds ?? [])].sort();
     return this.transaction((state) => {
       const command = digest(
-        JSON.stringify([args.base, result, args.request, args.author]),
+        JSON.stringify(
+          motivatedBy.length
+            ? [args.base, result, args.request, args.author, motivatedBy]
+            : [args.base, result, args.request, args.author],
+        ),
       );
       const previous = state.proposals.find((p) => p.key === args.key);
       if (previous) {
@@ -502,6 +539,12 @@ export class Repository {
             "Idempotency key already used for a different proposal",
           );
         return previous;
+      }
+      for (const commentId of motivatedBy) {
+        const comment = state.comments.find((entry) => entry.id === commentId);
+        if (!comment) throw new Error("Unknown motivating comment");
+        if (comment.status !== "open")
+          throw new Error("Motivating comment is no longer open");
       }
       const base = this.materialize(state, state.head);
       if ((base.size ? revision(base) : null) !== args.base)
@@ -528,6 +571,7 @@ export class Repository {
         parent: state.head,
         revision: result,
         request: args.request,
+        ...(motivatedBy.length ? { motivatedBy } : {}),
         author: args.author,
         key: args.key,
         command,
@@ -563,7 +607,13 @@ export class Repository {
       return comment;
     });
   }
-  reply(id: string, body: string, author: Actor, key?: string): Comment {
+  reply(
+    id: string,
+    body: string,
+    author: Actor,
+    key?: string,
+    expectedState?: string,
+  ): Comment {
     textField(body, "reply");
     actorField(author, "author");
     if (key !== undefined) textField(key, "key", 200);
@@ -583,6 +633,11 @@ export class Repository {
           return comment;
         }
       }
+      if (
+        expectedState !== undefined &&
+        digest(JSON.stringify(state)) !== expectedState
+      )
+        throw new Error("Review state changed; refresh before replying");
       const c = state.comments.find((c) => c.id === id);
       if (!c) throw new Error("Unknown comment");
       c.replies.push({
