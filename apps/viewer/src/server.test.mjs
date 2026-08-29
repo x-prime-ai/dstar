@@ -1525,8 +1525,19 @@ it("limits agent routes, authority, input shapes, byte sizes and capabilities", 
   const page = await fetch(viewer.origin);
   expect(page.headers.get("origin-agent-cluster")).toBe("?1");
   expect(page.headers.get("permissions-policy")).toBe("tools=(self)");
-  expect(await page.text()).toContain("tools 'none'");
-  for (const path of ["webmcp.js", "review-state.js"])
+  const pageHtml = await page.text();
+  expect(pageHtml).toContain("tools 'none'");
+  for (const label of [
+    "Review changes",
+    "Suggested changes",
+    "Current version",
+    "Previous versions",
+    "Before",
+    "After",
+  ])
+    expect(pageHtml).toContain(label);
+  expect(pageHtml).not.toContain("Show base");
+  for (const path of ["webmcp.js", "review-state.js", "viewer-model.js"])
     expect((await fetch(`${viewer.origin}/${path}`)).status).toBe(200);
 });
 

@@ -15,8 +15,9 @@ The new HTML-first path consists of:
 - [Engine](packages/engine/src/index.ts): validation, revisions, comments,
   compact history and exact-base proposals.
 - [CLI](scripts/dstar.mjs): the agent-facing entrypoint.
-- [Viewer](apps/viewer/src/server.mjs): sandboxed preview, role-bound identity,
-  selection/comments, before/after review and accepted history.
+- [Viewer](apps/viewer/src/server.mjs): current-document reading, precise
+  comments/suggestions, a simple version timeline, Before/After review,
+  role-bound identity and explicit human decisions.
 
 The Engine creates the candidate revision, review summary and storage delta
 **during `propose`**, not when the Viewer opens. No Git installation, MCP server,
@@ -37,10 +38,13 @@ pnpm dstar serve ./my-document.dstar
 `serve` prints separate private Owner and Reviewer URLs. The Owner may accept,
 reject, resolve and manage sharing. The Reviewer may read, comment, reply,
 suggest, create pending proposals and use agent handoff, but cannot decide or
-resolve. Open the appropriate complete URL, select text or Alt-click an element
-to comment, and browse versions. Keep both role URLs private.
-`examples/slides-first` is an alternative starting
-candidate; the same Viewer provides previous/next slide controls.
+resolve. Open the appropriate complete URL. Use **Review changes** to inspect
+the initial suggestion and create the Current version. Select text, or Alt-click an
+element, to Comment or Suggest. **Versions** groups Suggested changes, Current
+version and Previous versions without requiring revision hashes. Hashes and
+storage facts remain under Technical details. Keep both role URLs
+private. `examples/slides-first` is an alternative starting candidate; the same
+Viewer provides previous/next slide controls.
 
 The local command uses an automatically assigned free port by default. To keep
 the same port between restarts, choose one explicitly:

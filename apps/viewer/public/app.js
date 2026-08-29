@@ -11,15 +11,23 @@ import {
 import { registerWebMCP } from "./webmcp.js";
 import { AUTH_MESSAGE, ViewerSession } from "./session.js";
 import { renderFileDiff } from "./diff-view.js";
+import {
+  actorCopy,
+  changeSummary,
+  technicalVersion,
+  versionCopy,
+  versionGroups,
+} from "./viewer-model.js";
 
 const $ = (id) => document.getElementById(id);
 const previewState = new PreviewState();
 const refreshGate = new RefreshGate();
 let previewTimer;
+const allowed = (capability) =>
+  typeof session.can !== "function" || session.can(capability);
 const canAccept = () =>
   session.authorized &&
-  session.can("decide") &&
-  viewMode === "preview" &&
+  allowed("decide") &&
   previewState.canAccept(selected, current?.state.head, showingBase);
 const session = new ViewerSession({
   fetch,
@@ -86,6 +94,12 @@ const note = (message) => {
     $("status").textContent = "";
   }, 7000);
 };
+function setAgentStatus(state, message = "") {
+  const status = $("agent-status");
+  status.dataset.agentState = state;
+  status.textContent = message;
+  status.hidden = !message;
+}
 const api = (path, body, signal) => session.request(path, body, signal);
 const safely =
   (fn) =>
@@ -102,20 +116,7 @@ const el = (tag, text, className) => {
   if (className) node.className = className;
   return node;
 };
-const actor = (value) =>
-  typeof value === "string"
-    ? { displayName: value, role: "legacy" }
-    : (value ?? { displayName: "Unknown", role: "unknown" });
-const actorLabel = (value) => {
-  const person = actor(value);
-  return `${person.displayName} · ${person.role}`;
-};
 function applySession() {
-  const info = session.session;
-  $("session-identity").hidden = !info;
-  $("session-identity").textContent = info
-    ? `${info.identity.displayName} · ${info.role}`
-    : "";
   $("copy-access-link").hidden = !session.can("share");
   $("copy-access-link").disabled = !session.can("share");
   $("selection-comment").hidden = !session.can("comment");
@@ -187,11 +188,11 @@ for (const [panel, tab] of [
     setPanel(next, true, true);
   };
 }
-setPanel(activeTab, document.documentElement.clientWidth > 760);
+setPanel(activeTab, document.documentElement.clientWidth > 1100);
 function describeTarget(selectedTarget, output) {
   $(output).textContent =
     selectedTarget.selector.type === "element"
-      ? `Element: ${selectedTarget.element}`
+      ? "Whole element selected"
       : `“${(selectedTarget.selector.type === "text-ranges"
           ? selectedTarget.selector.ranges.map((part) => part.exact).join(" ")
           : selectedTarget.selector.exact
@@ -317,6 +318,10 @@ async function copyAgentHandoff(kind) {
   try {
     if (!clipboard?.writeText) throw new Error("Clipboard unavailable");
     await clipboard.writeText(prompt);
+    setAgentStatus(
+      "waiting",
+      "Waiting for the agent. You can keep reading; the draft will return here.",
+    );
     note(
       "Private 15-minute agent handoff copied — paste it into your agent chat.",
     );
@@ -370,7 +375,7 @@ $("delete-suggestion").onclick = () => {
   $("suggestion-body").value = "";
   suggestionDeletion = true;
   $("add-suggestion").disabled = false;
-  note("Deletion suggestion ready — submit it to the review queue.");
+  note("Deletion suggestion ready — submit it to Versions.");
 };
 addEventListener("resize", () => {
   $("selection-actions").hidden = true;
@@ -435,33 +440,55 @@ async function select(id, { keepPreview = false } = {}) {
   const previous = selected?.id;
   selected = current.state.proposals.find((p) => p.id === id);
   if (!keepPreview) showingBase = false;
-  $("view-label").textContent = selected
-    ? showingBase
-      ? "Base version"
-      : selected.status === "pending"
-        ? "Proposed changes"
-        : selected.id === current.state.head
-          ? "Accepted document"
-          : "Previous version"
-    : "No accepted version";
-  $("decision").hidden =
-    selected?.status !== "pending" || !session.can("decide");
+  const copy = versionCopy(selected, current.state, showingBase),
+    reviewing = copy.kind === "suggested",
+    canDecide = allowed("decide");
+  document.body.dataset.viewerMode = reviewing ? "review" : "read";
+  $("document-status").textContent = copy.badge;
+  $("document-status").dataset.status = copy.kind;
+  $("document-status").hidden = false;
+  $("view-label").textContent = copy.preview;
+  $("review-summary").hidden = !reviewing;
+  $("decision-bar").hidden = !reviewing;
+  $("decision-bar").dataset.permission = canDecide ? "decide" : "review";
+  $("decision-title").textContent = canDecide
+    ? "Ready to decide?"
+    : "Review this suggestion";
+  $("decision-bar").querySelector(".decision-actions").hidden = !canDecide;
+  $("review-changes-entry").hidden =
+    reviewing ||
+    !current.state.proposals.some((item) => item.status === "pending");
+  $("exit-review").hidden = !reviewing || !current.state.head;
+  $("before-after").hidden = !reviewing || !selected?.parent;
+  $("show-before").setAttribute("aria-pressed", String(showingBase));
+  $("show-after").setAttribute("aria-pressed", String(!showingBase));
   $("version-detail").hidden = !selected;
   $("view-changes").disabled = !selected;
   $("change-count").textContent = selected?.diff.files.length ?? 0;
   $("change-count").hidden = !selected?.diff.files.length;
-  $("compare").hidden = !selected?.parent;
-  $("compare").textContent = showingBase ? "Show candidate" : "Show base";
   $("accept").disabled = !canAccept();
   $("stale").hidden =
     selected?.status !== "pending" || selected.parent === current.state.head;
   if (selected) {
+    const actor = actorCopy(selected.author);
     $("version-request").textContent = selected.request;
-    const attribution = selected.decision
-      ? `${selected.decision.action} by ${actorLabel(selected.decision.actor)}`
-      : `by ${actorLabel(selected.author)}`;
-    $("version-summary").textContent =
-      `${selected.status} · ${attribution} · ${selected.diff.files.length} changed ${selected.diff.files.length === 1 ? "file" : "files"}`;
+    $("version-kind").textContent = copy.badge.toUpperCase();
+    $("version-author").textContent =
+      `By ${actor.name}${actor.role ? ` · ${actor.role}` : ""}`;
+    $("version-summary").textContent = changeSummary(selected);
+    $("version-revision").textContent = technicalVersion(selected);
+    $("inspect-changes").textContent = reviewing
+      ? "Review changes →"
+      : "View changes →";
+    $("review-heading").textContent = selected.request;
+    $("review-author").textContent = actor.name;
+    $("review-change-summary").textContent = changeSummary(selected);
+    $("review-next-step").textContent = copy.nextStep;
+    $("decision-hint").textContent = !canDecide
+      ? "You can comment and suggest changes. Only the Owner can accept or reject."
+      : viewMode === "changes"
+        ? "The exact After preview is ready; you can decide here or return to Preview."
+        : "Review the After version and its changes before deciding.";
     const bytes = selected.changes.reduce(
         (sum, c) => sum + (c.storage?.size ?? 0),
         0,
@@ -506,7 +533,12 @@ function setView(mode) {
   $("view-label").hidden = mode !== "preview";
   $("selection-actions").hidden = true;
   $("accept").disabled = !canAccept();
-  $("decision-hint").hidden = mode !== "changes";
+  if (selected?.status === "pending")
+    $("decision-hint").textContent = !allowed("decide")
+      ? "You can comment and suggest changes. Only the Owner can accept or reject."
+      : mode === "changes"
+        ? "The exact After preview is ready; you can decide here or return to Preview."
+        : "Review the After version and its changes before deciding.";
   if (mode === "changes") {
     diffOverview();
     if (!diffFile) loadDiffFile(selected.diff.files[0]?.path);
@@ -538,7 +570,10 @@ function diffOverview() {
   if (!selected) return;
   $("diff-title").textContent = selected.request;
   $("diff-versions").textContent =
-    `${selected.base ? `Base ${selected.base.slice(7, 15)}` : "Empty document"} → ${selected.status === "pending" ? "Proposed" : "Version"} ${selected.revision.slice(7, 15)}`;
+    selected.status === "pending"
+      ? "Before → After"
+      : "Changes introduced in this version";
+  $("diff-revisions").textContent = technicalVersion(selected);
   $("diff-stats").replaceChildren();
   for (const [kind, label] of [
     ["added", "added"],
@@ -767,15 +802,15 @@ function focusComment(id, announce = true) {
   if (announce) note("Comment selected for agent context.");
 }
 function commentThread(c) {
-  const commentAuthor = actor(c.author);
-  const article = el("article", undefined, "comment");
+  const article = el("article", undefined, "comment"),
+    commentActor = actorCopy(c.author);
   article.dataset.comment = c.id;
   article.tabIndex = 0;
   article.classList.toggle("active", c.id === activeCommentId);
   article.setAttribute("aria-current", String(c.id === activeCommentId));
   article.setAttribute(
     "aria-label",
-    `Comment by ${actorLabel(c.author)}: ${c.body.slice(0, 160)}`,
+    `Comment by ${commentActor.name}: ${c.body.slice(0, 160)}`,
   );
   article.onclick = (event) => {
     if (!event.target.closest("button")) focusComment(c.id);
@@ -787,18 +822,12 @@ function commentThread(c) {
   };
   const author = el("div", undefined, "comment-author");
   author.append(
-    el("span", commentAuthor.displayName.slice(0, 1).toUpperCase(), "avatar"),
-    el("strong", commentAuthor.displayName),
-    el("span", commentAuthor.role, "badge"),
+    el("span", commentActor.name.slice(0, 1).toUpperCase(), "avatar"),
+    el("strong", commentActor.name),
   );
-  if (c.status !== "open")
-    author.append(
-      el(
-        "span",
-        c.resolvedBy ? `Resolved by ${actorLabel(c.resolvedBy)}` : "Resolved",
-        "badge",
-      ),
-    );
+  if (commentActor.role)
+    author.append(el("span", commentActor.role, "role-badge"));
+  if (c.status !== "open") author.append(el("span", "Resolved", "badge"));
   article.append(author);
   if (c.target.selector.type !== "element")
     article.append(
@@ -811,8 +840,11 @@ function commentThread(c) {
     );
   article.append(el("p", c.body));
   for (const r of c.replies) {
-    const reply = el("div", undefined, "reply");
-    reply.append(el("small", actorLabel(r.author)), el("p", r.body));
+    const reply = el("div", undefined, "reply"),
+      replyActor = actorCopy(r.author),
+      replyBy = el("small", replyActor.name);
+    if (replyActor.role) replyBy.append(` · ${replyActor.role}`);
+    reply.append(replyBy, el("p", r.body));
     article.append(reply);
   }
   const actions = el("div", undefined, "comment-actions");
@@ -962,6 +994,43 @@ function comments() {
       d.open = expanded.has(d.id) || !!d.querySelector(".comment-group.active");
     });
 }
+function renderIdentity(publicSession) {
+  const identity = publicSession?.identity;
+  if (!identity) {
+    $("viewer-identity").hidden = true;
+    return;
+  }
+  const actor = actorCopy(identity);
+  $("viewer-identity").replaceChildren(el("span", actor.name));
+  if (actor.role)
+    $("viewer-identity").append(el("span", actor.role, "role-badge"));
+  $("viewer-identity").hidden = false;
+}
+function versionButton(proposal, kind) {
+  const button = el("button"),
+    actor = actorCopy(proposal.author);
+  button.dataset.proposal = proposal.id;
+  button.dataset.versionKind = kind;
+  button.append(
+    el("strong", proposal.request),
+    el(
+      "small",
+      kind === "suggested"
+        ? `Suggested by ${actor.name} · ${changeSummary(proposal)}`
+        : kind === "current"
+          ? "The version everyone currently sees"
+          : kind === "previous"
+            ? `Previous · ${changeSummary(proposal)}`
+            : `Declined · ${changeSummary(proposal)}`,
+    ),
+  );
+  button.onclick = safely(async () => {
+    await select(proposal.id);
+    if (document.documentElement.clientWidth <= 760)
+      setPanel("navigation", false);
+  });
+  return button;
+}
 async function refresh({ retryPreview = false } = {}) {
   const serial = refreshGate.begin();
   const next = await api("state");
@@ -977,6 +1046,7 @@ async function refresh({ retryPreview = false } = {}) {
   current = next;
   applySession();
   $("title").textContent = current.title;
+  renderIdentity(current.session);
   $("revision").textContent = current.revision
     ? `HEAD ${current.revision.slice(7, 23)}`
     : "No accepted revision yet";
@@ -985,47 +1055,36 @@ async function refresh({ retryPreview = false } = {}) {
   ).length;
   $("proposal-count").textContent = pending;
   $("proposal-count").hidden = !pending;
+  $("review-entry-count").textContent = pending;
+  $("review-changes-entry").hidden = !pending;
   $("tab-versions").title =
-    `${pending} ${pending === 1 ? "proposal" : "proposals"} to review`;
-  for (const [container, status] of [
-    ["proposals", "pending"],
-    ["history", "accepted"],
-    ["rejected", "rejected"],
-  ]) {
-    $(container).replaceChildren();
-    for (const p of [...current.state.proposals]
-      .reverse()
-      .filter((p) => p.status === status)) {
-      const button = el("button");
-      button.append(
-        el("strong", p.request),
-        el(
-          "small",
-          `${p.id === current.state.head ? "Current · " : ""}${p.revision.slice(7, 15)}`,
-        ),
-      );
-      button.dataset.proposal = p.id;
-      button.onclick = safely(async () => {
-        await select(p.id);
-        if (document.documentElement.clientWidth <= 760)
-          setPanel("navigation", false);
-      });
-      $(container).append(button);
-    }
-    if (!$(container).children.length)
-      $(container).append(
-        el(
-          "p",
-          status === "pending" ? "All caught up" : "No versions yet",
-          "hint",
-        ),
-      );
-  }
+    `${pending} suggested ${pending === 1 ? "change" : "changes"} to review`;
+  const groups = versionGroups(current.state);
+  $("proposals").replaceChildren(
+    ...groups.suggested.map((item) => versionButton(item, "suggested")),
+  );
+  if (!groups.suggested.length)
+    $("proposals").append(
+      el("p", "No suggested changes. You’re all caught up.", "hint"),
+    );
+  $("current-version").replaceChildren();
+  if (groups.current)
+    $("current-version").append(versionButton(groups.current, "current"));
+  else $("current-version").append(el("p", "No current version yet.", "hint"));
+  $("history").replaceChildren(
+    ...groups.previous.map((item) => versionButton(item, "previous")),
+  );
+  if (!groups.previous.length)
+    $("history").append(el("p", "No previous versions yet.", "hint"));
+  $("rejected").replaceChildren(
+    ...groups.declined.map((item) => versionButton(item, "declined")),
+  );
+  if (!groups.declined.length)
+    $("rejected").append(el("p", "No declined suggestions.", "hint"));
   comments();
-  const id =
-    previousId ??
-    current.state.head ??
-    current.state.proposals.find((p) => p.status === "pending")?.id;
+  const id = current.state.proposals.some((item) => item.id === previousId)
+    ? previousId
+    : (current.state.head ?? groups.suggested[0]?.id);
   await select(id, { keepPreview: !!previousId && previousId === id });
   if (previewState.status === "ready") await syncAnnotations();
   if (retryPreview && previewState.status === "failed")
@@ -1036,26 +1095,42 @@ $("width").onchange = () => {
   $("selection-actions").hidden = true;
   $("preview").style.width = $("width").value;
 };
-$("compare").onclick = safely(async () => {
-  showingBase = !showingBase;
-  $("compare").textContent = showingBase ? "Show candidate" : "Show base";
-  $("view-label").textContent = showingBase
-    ? "Base version"
-    : selected.status === "pending"
-      ? "Proposed changes"
-      : "Accepted document";
+async function showComparison(before) {
+  if (!selected || selected.status !== "pending") return;
+  showingBase = before && !!selected.parent;
+  const copy = versionCopy(selected, current.state, showingBase);
+  $("view-label").textContent = copy.preview;
+  $("show-before").setAttribute("aria-pressed", String(showingBase));
+  $("show-after").setAttribute("aria-pressed", String(!showingBase));
+  $("accept").disabled = !canAccept();
   await preview(showingBase ? selected.parent : selected.id);
+}
+$("show-before").onclick = safely(() => showComparison(true));
+$("show-after").onclick = safely(() => showComparison(false));
+$("review-changes-entry").onclick = safely(async () => {
+  const next = versionGroups(current.state).suggested[0];
+  if (!next) return;
+  setView("preview");
+  await select(next.id);
+  setPanel(activeTab, false);
+  $("review-heading").focus({ preventScroll: true });
+});
+$("exit-review").onclick = safely(async () => {
+  if (!current?.state.head) return;
+  setView("preview");
+  await select(current.state.head);
 });
 for (const action of ["accept", "reject"])
   $(action).onclick = safely(async () => {
+    if (!allowed("decide")) return;
     if (action === "accept" && !canAccept()) return;
     const proposal = selected,
       stateId = current.stateId,
       serial = previewSerial;
     if (
       !(await ask(
-        `${action === "accept" ? "Accept" : "Reject"} this version?`,
-        `Candidate ${proposal.revision}. This decision applies only to these exact files.`,
+        `${action === "accept" ? "Accept" : "Reject"} this suggestion?`,
+        "This decision applies only to the exact change you reviewed. It will not include newer or unrelated work.",
       ))
     )
       return;
@@ -1065,7 +1140,7 @@ for (const action of ["accept", "reject"])
       revision: proposal.revision,
       stateId,
     });
-    note(action === "accept" ? "Version accepted" : "Proposal rejected");
+    note(action === "accept" ? "Change accepted" : "Suggestion rejected");
     await refresh();
   });
 for (const [button, direction] of [
@@ -1192,7 +1267,7 @@ $("suggestion-form").onsubmit = safely(async (event) => {
     }
     await refresh();
     await select(result.proposal.id);
-    note("Suggestion added to the review queue");
+    note("Suggestion added to Versions");
   } finally {
     postingSuggestion = false;
     $("add-suggestion").textContent = "Submit suggestion";
@@ -1208,6 +1283,10 @@ function applyCommentDraft({ target: draftedTarget, body, expectedDraft }) {
   $("body").value = body;
   $("add-comment").disabled = false;
   $("body").focus();
+  setAgentStatus(
+    "returned",
+    "Agent draft returned. Review and edit it before posting.",
+  );
   note("Agent comment draft is ready for review.");
   return true;
 }
@@ -1225,6 +1304,10 @@ function applySuggestionDraft({
   $("add-suggestion").disabled =
     draftedTarget.selector.type !== "text-range" || !suggestionReady();
   $("suggestion-body").focus();
+  setAgentStatus(
+    "returned",
+    "Agent draft returned. Review and edit it before submitting.",
+  );
   note("Agent suggestion draft is ready for review.");
   return true;
 }
@@ -1237,6 +1320,10 @@ async function sendIncomingHandoffDraft(kind, content) {
 async function loadIncomingHandoff() {
   if (!incomingHandoffId || incomingHandoff) return;
   incomingHandoff = await api(`handoffs/${incomingHandoffId}`);
+  setAgentStatus(
+    "waiting",
+    "Agent handoff is open. Return a draft before this access expires.",
+  );
   note("Agent handoff loaded · read and draft access expires in 15 minutes.");
 }
 async function syncOutgoingHandoff() {
@@ -1246,6 +1333,10 @@ async function syncOutgoingHandoff() {
     record = await api(`handoffs/${outgoingHandoff.id}`);
   } catch {
     outgoingHandoff = null;
+    setAgentStatus(
+      "expired",
+      "The agent handoff expired. Ask the agent again to start a new one.",
+    );
     note("Agent handoff expired. Use Ask agent again if needed.");
     return;
   }
@@ -1334,7 +1425,7 @@ async function connectTools() {
         !updated
           ? "Agent change saved; waiting for Viewer sync"
           : route === "proposals"
-            ? `Proposal available in review queue: ${result.proposal.request}`
+            ? `Suggested change available in Versions: ${result.proposal.request}`
             : "Agent reply added",
       );
       return !!updated;
@@ -1348,7 +1439,7 @@ async function connectTools() {
   registration = result;
   $("webmcp-status").textContent =
     result.status === "registered"
-      ? "WebMCP connected · 6 tools · comments and proposals remain human-reviewed"
+      ? "WebMCP connected · 6 tools · comments and suggested changes remain human-reviewed"
       : result.status === "unsupported"
         ? "WebMCP unavailable · manual review works normally"
         : "WebMCP registration failed · manual review works normally";

@@ -11,9 +11,13 @@
       <a class="brand" href="/" aria-label="DSTAR home">DSTAR</a>
       <div class="document">
         <strong id="title">Opening document…</strong>
-        <span id="session-identity" class="session-identity" hidden></span>
+        <span id="document-status" class="document-status" hidden></span>
       </div>
       <nav class="header-actions" aria-label="Viewer panels">
+        <button id="review-changes-entry" class="primary review-entry" hidden>
+          Review changes <span id="review-entry-count" class="count"></span>
+        </button>
+        <div id="viewer-identity" class="viewer-identity" hidden></div>
         <button
           id="toggle-review"
           aria-controls="review-sidebar"
@@ -85,6 +89,24 @@
     </section>
     <main id="review-app" hidden>
       <section class="workspace">
+        <section
+          id="review-summary"
+          class="review-summary"
+          aria-labelledby="review-heading"
+          hidden
+        >
+          <div>
+            <p class="eyebrow">SUGGESTED CHANGE</p>
+            <h1 id="review-heading" tabindex="-1"></h1>
+            <p class="review-meta">
+              Suggested by <strong id="review-author"></strong>
+              <span aria-hidden="true">·</span>
+              <span id="review-change-summary"></span>
+            </p>
+            <p id="review-next-step" class="review-next-step"></p>
+          </div>
+          <button id="exit-review">Back to current version</button>
+        </section>
         <div class="toolbar">
           <div class="view-switch" role="tablist" aria-label="Document view">
             <button
@@ -106,7 +128,7 @@
               Changes <span id="change-count" class="count" hidden></span>
             </button>
           </div>
-          <span id="view-label">Accepted document</span>
+          <span id="view-label">Current version</span>
           <div id="preview-controls">
             <label class="width-control"
               ><span class="sr-only">Preview width</span>
@@ -128,8 +150,18 @@
               aria-label="Next slide"
               hidden
             >
-              →</button
-            ><button id="compare" hidden>Show base</button>
+              →
+            </button>
+            <div
+              id="before-after"
+              class="before-after"
+              role="group"
+              aria-label="Compare suggested change"
+              hidden
+            >
+              <button id="show-before" aria-pressed="false">Before</button
+              ><button id="show-after" aria-pressed="true">After</button>
+            </div>
           </div>
         </div>
         <div
@@ -145,7 +177,7 @@
             allow="tools 'none'"
             referrerpolicy="no-referrer"
           ></iframe>
-          <p id="empty">Select a proposal to review its first version.</p>
+          <p id="empty">Select a suggested change to preview the document.</p>
         </div>
         <section
           id="diff-panel"
@@ -155,7 +187,7 @@
           hidden
         >
           <div class="changes-heading">
-            <p class="eyebrow">VERSION CHANGES</p>
+            <p class="eyebrow">WHAT CHANGED</p>
             <h2 id="diff-title"></h2>
             <p id="diff-versions" class="diff-versions"></p>
             <div id="diff-stats" class="diff-stats"></div>
@@ -169,8 +201,28 @@
           <div id="diff" class="diff-content" aria-live="polite"></div>
           <details class="diff-technical">
             <summary>Technical details</summary>
+            <p id="diff-revisions"></p>
             <p id="storage"></p>
           </details>
+        </section>
+        <section
+          id="decision-bar"
+          class="decision-bar"
+          aria-labelledby="decision-title"
+          hidden
+        >
+          <div>
+            <strong id="decision-title">Ready to decide?</strong>
+            <p id="decision-hint" class="hint"></p>
+            <p id="stale" hidden>
+              This suggestion was made for an earlier version. Ask for an
+              updated suggestion before deciding.
+            </p>
+          </div>
+          <div class="decision-actions">
+            <button id="reject">Reject suggestion</button
+            ><button id="accept" class="primary">Accept change</button>
+          </div>
         </section>
       </section>
       <aside
@@ -216,6 +268,13 @@
           <p id="comments-summary" class="panel-caption">
             Comments are grouped by location.
           </p>
+          <div
+            id="agent-status"
+            class="agent-status"
+            data-agent-state="idle"
+            role="status"
+            hidden
+          ></div>
           <form id="comment-form" hidden>
             <label for="body">New comment</label>
             <blockquote id="selection"></blockquote>
@@ -265,14 +324,14 @@
               <path
                 d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5a10 10 0 0 1 20 0Z"
               /></svg
-            ><strong>No comments yet</strong>
-            <p>Select text, then choose Comment or Suggest.</p>
+            ><strong>Start a conversation</strong>
+            <p>Select text in the document, then choose Comment or Suggest.</p>
           </div>
           <details class="comment-help">
             <summary>How to comment</summary>
             <p>
               Select text within one element, then choose Comment or Suggest.
-              Suggestions become reviewable proposals. For an image or a whole
+              Suggestions appear in Versions for review. For an image or a whole
               element, use Alt-click. Keyboard: select text, then press
               Ctrl+Alt+M (⌘⌥M on Mac) to comment.
             </p>
@@ -288,36 +347,33 @@
           hidden
         >
           <section id="version-detail" class="version-detail" hidden>
-            <p class="eyebrow">SELECTED VERSION</p>
+            <p id="version-kind" class="eyebrow">CURRENT VERSION</p>
             <strong id="version-request"></strong>
+            <p id="version-author" class="version-author"></p>
             <p id="version-summary" class="hint"></p>
-            <button id="inspect-changes">
-              View changes <span aria-hidden="true">↗</span>
+            <button id="inspect-changes" class="primary">
+              Review changes <span aria-hidden="true">→</span>
             </button>
+            <div id="version-addresses"></div>
+            <details class="version-technical">
+              <summary>Technical details</summary>
+              <p id="version-revision"></p>
+            </details>
           </section>
-          <section id="decision" hidden>
-            <div>
-              <p id="stale" hidden>
-                Stale base: ask for a new proposal against the current head.
-                This candidate cannot be accepted.
-              </p>
-            </div>
-            <p id="decision-hint" class="hint" hidden>
-              Return to Preview to accept this version.
-            </p>
-            <div class="decision-actions">
-              <button id="reject">Reject</button
-              ><button id="accept" class="primary">Accept version</button>
-            </div>
+          <section class="version-list-group suggested-group">
+            <h3>Suggested changes</h3>
+            <div id="proposals"></div>
           </section>
-          <h3>To review</h3>
-          <div id="proposals"></div>
-          <details class="version-group">
-            <summary>Accepted history</summary>
+          <section class="version-list-group current-group">
+            <h3>Current version</h3>
+            <div id="current-version"></div>
+          </section>
+          <details class="version-group" open>
+            <summary>Previous versions</summary>
             <div id="history"></div>
           </details>
           <details class="version-group">
-            <summary>Rejected proposals</summary>
+            <summary>Declined suggestions</summary>
             <div id="rejected"></div>
           </details>
         </section>
@@ -341,16 +397,18 @@
           />
           <path d="M12 7v8M8 11h8" />
         </svg>
+        <span>Comment</span>
       </button>
       <button
         id="selection-suggest"
-        aria-label="Ask agent to suggest a change"
+        aria-label="Suggest a change to selection"
         title="Suggest"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="m4 16 10-10 4 4L8 20H4Z" />
           <path d="m12 8 4 4M5 4h4M7 2v4M17 17h4M19 15v4" />
         </svg>
+        <span>Suggest</span>
       </button>
     </div>
     <dialog id="confirmation">

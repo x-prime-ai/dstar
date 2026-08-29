@@ -69,12 +69,13 @@ Subsequent changes to the agent's staging directory do not change the proposal.
 
 ## Decisions
 
-The Viewer labels the exact candidate, permits base/candidate switching and
-opens a confirmation dialog. Acceptance supplies proposal ID, candidate hash
-and current state hash. Under a write lock the Engine verifies all three,
-checks the exact parent is still head and materializes/verifies the stored
-candidate. It journals checkout paths, installs files, and atomically switches
-the authoritative state last.
+The Viewer presents this as a Suggested change with Before / After and Changes,
+then opens an explicit confirmation dialog. Revision and base hashes remain in
+expandable technical details instead of primary navigation. Acceptance still
+supplies proposal ID, candidate hash and current state hash. Under a write lock
+the Engine verifies all three, checks the exact parent is still head and
+materializes/verifies the stored candidate. It journals checkout paths,
+installs files, and atomically switches the authoritative state last.
 
 Reject records a decision without changing canonical files. Owner resolution
 changes only comment state. The deciding/resolving actor is persisted. The

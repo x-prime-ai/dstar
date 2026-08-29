@@ -7,6 +7,8 @@ Start here:
 
 - [Vision](../VISION.md): product and authority boundaries.
 - [Architecture](architecture.md): skill → CLI/Engine → Viewer.
+- [Viewer information architecture](viewer-ux.md): implemented reading,
+  comments, versions and review-change UX.
 - [Implemented format and limits](html-mvp.md): concrete storage, text anchors,
   safety profile, recovery and current limitations.
 - [Implementation status](implementation-plan.md): delivered scope and next work.

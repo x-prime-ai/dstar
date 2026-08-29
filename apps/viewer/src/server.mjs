@@ -136,6 +136,7 @@ export async function startViewer(root, port = 0, options = {}) {
           "/app.js",
           "/preview-state.js",
           "/review-state.js",
+          "/viewer-model.js",
           "/diff-view.js",
           "/webmcp.js",
           "/session.js",
