@@ -15,8 +15,8 @@ The new HTML-first path consists of:
 - [Engine](packages/engine/src/index.ts): validation, revisions, comments,
   compact history and exact-base proposals.
 - [CLI](scripts/dstar.mjs): the agent-facing entrypoint.
-- [Viewer](apps/viewer/src/server.mjs): sandboxed preview, selection/comments,
-  before/after review, human acceptance/rejection and accepted history.
+- [Viewer](apps/viewer/src/server.mjs): sandboxed preview, role-bound identity,
+  selection/comments, before/after review and accepted history.
 
 The Engine creates the candidate revision, review summary and storage delta
 **during `propose`**, not when the Viewer opens. No Git installation, MCP server,
@@ -34,9 +34,12 @@ pnpm dstar propose ./my-document.dstar --candidate examples/html-first --base no
 pnpm dstar serve ./my-document.dstar
 ```
 
-Open the local URL printed by `serve`. Accept the initial candidate, select text
-or Alt-click an element to comment, and browse accepted versions. Keep that
-local session URL private. `examples/slides-first` is an alternative starting
+`serve` prints separate private Owner and Reviewer URLs. The Owner may accept,
+reject, resolve and manage sharing. The Reviewer may read, comment, reply,
+suggest, create pending proposals and use agent handoff, but cannot decide or
+resolve. Open the appropriate complete URL, select text or Alt-click an element
+to comment, and browse versions. Keep both role URLs private.
+`examples/slides-first` is an alternative starting
 candidate; the same Viewer provides previous/next slide controls.
 
 The local command uses an automatically assigned free port by default. To keep
@@ -46,13 +49,15 @@ the same port between restarts, choose one explicitly:
 pnpm dstar serve ./my-document.dstar --port 4173
 ```
 
-Authorization belongs to the browser tab, not the document or agent. To use a
+Authorization and its fixed Owner/Reviewer identity belong to the browser tab,
+not the document or agent. To use a
 different browser (including the in-app browser), open the **complete** URL from
 the running terminal, including its `#token`, or use **Copy access link** in an
 authorized Viewer. The address bar drops the token after opening, so copying
 that shortened URL does not authorize another browser. The **Authorize Viewer**
 screen also accepts the private link or token. After restarting the local server,
-use its newly printed link. WebMCP tools register only after a successful
+use its newly printed role link. Only an Owner session can copy/manage its
+access link. WebMCP tools register only after a successful
 authenticated state read; access links must never be shared publicly.
 
 To revise:
@@ -74,7 +79,8 @@ When the browser supports WebMCP, the top-level Viewer also registers six
 document/review tools for browser agents. They can read exact versions, propose
 complete HTML/CSS/assets, prepare editable comment and suggestion drafts, and
 reply to comments; acceptance, posting and suggestion submission remain explicit
-Viewer actions. **Ask agent** copies a token-free handoff prompt for the
+Viewer actions. **Ask agent** copies a private, short-lived handoff prompt that
+contains no Owner/Reviewer credential for the
 already-open Viewer tab. See
 [WebMCP interfaces and limits](design/webmcp.md). Browsers
 without WebMCP retain normal Viewer functionality.
@@ -106,9 +112,10 @@ History still grows with genuine new content; this is not a constant-size store.
 
 This is a local MVP with development format `dstar-html-0.2-dev`, not a stable
 interoperability specification. It supports static HTML/CSS, local raster images
-and fonts, linear history, element/single-element text comments, replies and
-human decisions. It does not yet offer arbitrary scripts/SVG, multi-user
-authentication, auto-merge, garbage collection, assignment, advanced slide
+and fonts, linear history, element/single-element text comments, replies,
+fixed Owner/Reviewer identities and Owner decisions. It does not yet offer
+arbitrary scripts/SVG, an identity provider or arbitrary users, auto-merge,
+garbage collection, assignment, advanced slide
 scaling, or migration from the legacy JSON format.
 
 [Vision](VISION.md), [current architecture](design/architecture.md) and

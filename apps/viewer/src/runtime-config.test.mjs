@@ -39,6 +39,8 @@ it("keeps programmatic local defaults independent of ambient service configurati
   expect(config.port).toBe(0);
   expect(config.token).not.toBe(token);
   expect(config.token).toMatch(/^[a-f0-9]{48}$/);
+  expect(config.reviewerToken).toMatch(/^[a-f0-9]{48}$/);
+  expect(config.reviewerToken).not.toBe(config.token);
   expect(viewerOrigin(config, 12345)).toBe("http://127.0.0.1:12345");
   expect(resolveViewerConfig("doc").token).not.toBe(config.token);
   expect(
@@ -116,7 +118,10 @@ it("loads exactly one explicit credential from env or an external regular file",
     options: {
       host: "0.0.0.0",
       externalOrigin: "https://review.example.com:8443",
-      token,
+      ownerToken: token,
+      reviewerToken: undefined,
+      ownerDisplayName: "Owner",
+      reviewerDisplayName: undefined,
     },
   });
   expect(
@@ -124,8 +129,59 @@ it("loads exactly one explicit credential from env or an external regular file",
   ).toBe("https://review.example.com:8443");
   expect(
     viewerConfigFromEnv({ DSTAR_PACKAGE_ROOT: root, DSTAR_VIEWER_TOKEN: token })
-      .options.token,
+      .options.ownerToken,
   ).toBe(token);
+});
+
+it("configures distinct named roles, validates identity boundaries and preserves explicit reviewer access", () => {
+  const { root } = fixture(),
+    reviewerToken = "b".repeat(64),
+    config = resolveViewerConfig(root, 0, {
+      ownerToken: token,
+      reviewerToken,
+      ownerDisplayName: "Renée Owner",
+      reviewerDisplayName: "李 Reviewer",
+    });
+  expect(config.credentials.owner.identity).toEqual({
+    id: "owner",
+    displayName: "Renée Owner",
+    role: "owner",
+  });
+  expect(config.credentials.reviewer.identity).toEqual({
+    id: "reviewer",
+    displayName: "李 Reviewer",
+    role: "reviewer",
+  });
+  expect(config.reviewerToken).toBe(reviewerToken);
+  for (const options of [
+    { ownerToken: token, reviewerToken: token },
+    { token, ownerToken: "c".repeat(64) },
+    { ownerToken: token, reviewerDisplayName: "No credential" },
+    { ownerToken: token, ownerDisplayName: " leading" },
+    { ownerToken: token, ownerDisplayName: "x".repeat(81) },
+    { ownerToken: token, ownerDisplayName: "Owner<script>" },
+  ])
+    expect(() => resolveViewerConfig(root, 0, options)).toThrow();
+});
+
+it("loads owner and reviewer service credentials without storing them in the package", () => {
+  const { root } = fixture(),
+    reviewerToken = "d".repeat(64),
+    configured = viewerConfigFromEnv({
+      DSTAR_PACKAGE_ROOT: root,
+      DSTAR_OWNER_TOKEN: token,
+      DSTAR_REVIEWER_TOKEN: reviewerToken,
+      DSTAR_OWNER_DISPLAY_NAME: "Olivia Owner",
+      DSTAR_REVIEWER_DISPLAY_NAME: "Ravi Reviewer",
+    });
+  expect(configured.options).toEqual({
+    host: "127.0.0.1",
+    externalOrigin: undefined,
+    ownerToken: token,
+    reviewerToken,
+    ownerDisplayName: "Olivia Owner",
+    reviewerDisplayName: "Ravi Reviewer",
+  });
 });
 
 it.each([

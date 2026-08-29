@@ -1,0 +1,113 @@
+import { authorized } from "./runtime-config.mjs";
+
+export const CAPABILITIES = Object.freeze({
+  READ: "read",
+  COMMENT: "comment",
+  SUGGEST: "suggest",
+  PROPOSE: "propose",
+  HANDOFF: "handoff",
+  REPLY: "reply",
+  DECIDE: "decide",
+  RESOLVE: "resolve",
+  SHARE: "share",
+});
+
+const roleCapabilities = Object.freeze({
+  owner: Object.freeze(Object.values(CAPABILITIES)),
+  reviewer: Object.freeze([
+    CAPABILITIES.READ,
+    CAPABILITIES.COMMENT,
+    CAPABILITIES.SUGGEST,
+    CAPABILITIES.PROPOSE,
+    CAPABILITIES.HANDOFF,
+    CAPABILITIES.REPLY,
+  ]),
+  agent: Object.freeze([
+    CAPABILITIES.READ,
+    CAPABILITIES.PROPOSE,
+    CAPABILITIES.REPLY,
+  ]),
+});
+
+const routeRules = Object.freeze([
+  ["GET", /^\/api\//, CAPABILITIES.READ],
+  ["POST", /^\/api\/comments$/, CAPABILITIES.COMMENT],
+  ["POST", /^\/api\/suggestions$/, CAPABILITIES.SUGGEST],
+  ["POST", /^\/api\/handoffs$/, CAPABILITIES.HANDOFF],
+  ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/draft$/, CAPABILITIES.HANDOFF],
+  ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/revoke$/, CAPABILITIES.HANDOFF],
+  ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/reply-draft$/, CAPABILITIES.REPLY],
+  ["POST", /^\/api\/comments\/[a-f0-9-]{36}\/reply$/, CAPABILITIES.REPLY],
+  ["POST", /^\/api\/comments\/[a-f0-9-]{36}\/resolve$/, CAPABILITIES.RESOLVE],
+  [
+    "POST",
+    /^\/api\/proposals\/[a-f0-9-]{36}\/(accept|reject)$/,
+    CAPABILITIES.DECIDE,
+  ],
+  ["POST", /^\/api\/agent\/(context|document)$/, CAPABILITIES.READ],
+  ["POST", /^\/api\/agent\/proposals$/, CAPABILITIES.PROPOSE],
+  ["POST", /^\/api\/agent\/reply$/, CAPABILITIES.REPLY],
+]);
+
+export function capabilitiesForRole(role) {
+  return roleCapabilities[role] ?? Object.freeze([]);
+}
+
+export function hasCapability(principal, capability) {
+  return Boolean(principal?.capabilities?.includes(capability));
+}
+
+export function requireCapability(principal, capability) {
+  if (!hasCapability(principal, capability)) {
+    const error = new Error(
+      `This ${principal?.role ?? "session"} cannot ${capability}`,
+    );
+    error.code = "forbidden";
+    error.status = 403;
+    throw error;
+  }
+}
+
+export function routeCapability(method, path) {
+  return routeRules.find(
+    ([expectedMethod, pattern]) =>
+      expectedMethod === method && pattern.test(path),
+  )?.[2];
+}
+
+export function sessionPrincipal(req, config) {
+  for (const role of ["owner", "reviewer"]) {
+    const credential = config.credentials[role];
+    if (credential && authorized(req, credential.token)) {
+      return Object.freeze({
+        kind: "session",
+        role,
+        identity: credential.identity,
+        capabilities: capabilitiesForRole(role),
+      });
+    }
+  }
+  return null;
+}
+
+export function handoffPrincipal(creator, allowed) {
+  const capabilities = Object.freeze(
+    [...new Set(allowed)].filter((capability) =>
+      hasCapability(creator, capability),
+    ),
+  );
+  return Object.freeze({
+    kind: "handoff",
+    role: creator.role,
+    identity: creator.identity,
+    capabilities,
+  });
+}
+
+export function publicPrincipal(principal) {
+  return {
+    role: principal.role,
+    identity: principal.identity,
+    capabilities: [...principal.capabilities],
+  };
+}

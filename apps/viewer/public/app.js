@@ -18,6 +18,7 @@ const refreshGate = new RefreshGate();
 let previewTimer;
 const canAccept = () =>
   session.authorized &&
+  session.can("decide") &&
   viewMode === "preview" &&
   previewState.canAccept(selected, current?.state.head, showingBase);
 const session = new ViewerSession({
@@ -101,6 +102,25 @@ const el = (tag, text, className) => {
   if (className) node.className = className;
   return node;
 };
+const actor = (value) =>
+  typeof value === "string"
+    ? { displayName: value, role: "legacy" }
+    : (value ?? { displayName: "Unknown", role: "unknown" });
+const actorLabel = (value) => {
+  const person = actor(value);
+  return `${person.displayName} · ${person.role}`;
+};
+function applySession() {
+  const info = session.session;
+  $("session-identity").hidden = !info;
+  $("session-identity").textContent = info
+    ? `${info.identity.displayName} · ${info.role}`
+    : "";
+  $("copy-access-link").hidden = !session.can("share");
+  $("copy-access-link").disabled = !session.can("share");
+  $("selection-comment").hidden = !session.can("comment");
+  $("selection-suggest").hidden = !session.can("suggest");
+}
 function resetTarget() {
   target = null;
   selectionAction = null;
@@ -178,7 +198,11 @@ function describeTarget(selectedTarget, output) {
         ).slice(0, 240)}”`;
 }
 function composeComment(selectedTarget = target) {
-  if (!selectedTarget || !session.authorized || previewState.status !== "ready")
+  if (
+    !selectedTarget ||
+    !session.can("comment") ||
+    previewState.status !== "ready"
+  )
     return;
   setView("preview");
   setPanel("comments-panel", true);
@@ -202,7 +226,11 @@ function composeComment(selectedTarget = target) {
   $("body").focus();
 }
 function composeSuggestion(selectedTarget = target) {
-  if (!selectedTarget || !session.authorized || previewState.status !== "ready")
+  if (
+    !selectedTarget ||
+    !session.can("suggest") ||
+    previewState.status !== "ready"
+  )
     return;
   setView("preview");
   setPanel("comments-panel", true);
@@ -259,6 +287,8 @@ const newHandoffToken = () => {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 async function copyAgentHandoff(kind) {
+  if (!session.can("handoff"))
+    throw new Error("This role cannot create an agent handoff");
   const context = reviewContext(
     selected,
     showingBase,
@@ -414,7 +444,8 @@ async function select(id, { keepPreview = false } = {}) {
           ? "Accepted document"
           : "Previous version"
     : "No accepted version";
-  $("decision").hidden = selected?.status !== "pending";
+  $("decision").hidden =
+    selected?.status !== "pending" || !session.can("decide");
   $("version-detail").hidden = !selected;
   $("view-changes").disabled = !selected;
   $("change-count").textContent = selected?.diff.files.length ?? 0;
@@ -426,8 +457,11 @@ async function select(id, { keepPreview = false } = {}) {
     selected?.status !== "pending" || selected.parent === current.state.head;
   if (selected) {
     $("version-request").textContent = selected.request;
+    const attribution = selected.decision
+      ? `${selected.decision.action} by ${actorLabel(selected.decision.actor)}`
+      : `by ${actorLabel(selected.author)}`;
     $("version-summary").textContent =
-      `${selected.status} · ${selected.diff.files.length} changed ${selected.diff.files.length === 1 ? "file" : "files"}`;
+      `${selected.status} · ${attribution} · ${selected.diff.files.length} changed ${selected.diff.files.length === 1 ? "file" : "files"}`;
     const bytes = selected.changes.reduce(
         (sum, c) => sum + (c.storage?.size ?? 0),
         0,
@@ -733,6 +767,7 @@ function focusComment(id, announce = true) {
   if (announce) note("Comment selected for agent context.");
 }
 function commentThread(c) {
+  const commentAuthor = actor(c.author);
   const article = el("article", undefined, "comment");
   article.dataset.comment = c.id;
   article.tabIndex = 0;
@@ -740,7 +775,7 @@ function commentThread(c) {
   article.setAttribute("aria-current", String(c.id === activeCommentId));
   article.setAttribute(
     "aria-label",
-    `Comment by ${c.author}: ${c.body.slice(0, 160)}`,
+    `Comment by ${actorLabel(c.author)}: ${c.body.slice(0, 160)}`,
   );
   article.onclick = (event) => {
     if (!event.target.closest("button")) focusComment(c.id);
@@ -752,10 +787,18 @@ function commentThread(c) {
   };
   const author = el("div", undefined, "comment-author");
   author.append(
-    el("span", c.author.slice(0, 1).toUpperCase(), "avatar"),
-    el("strong", c.author),
+    el("span", commentAuthor.displayName.slice(0, 1).toUpperCase(), "avatar"),
+    el("strong", commentAuthor.displayName),
+    el("span", commentAuthor.role, "badge"),
   );
-  if (c.status !== "open") author.append(el("span", "Resolved", "badge"));
+  if (c.status !== "open")
+    author.append(
+      el(
+        "span",
+        c.resolvedBy ? `Resolved by ${actorLabel(c.resolvedBy)}` : "Resolved",
+        "badge",
+      ),
+    );
   article.append(author);
   if (c.target.selector.type !== "element")
     article.append(
@@ -769,7 +812,7 @@ function commentThread(c) {
   article.append(el("p", c.body));
   for (const r of c.replies) {
     const reply = el("div", undefined, "reply");
-    reply.append(el("small", r.author), el("p", r.body));
+    reply.append(el("small", actorLabel(r.author)), el("p", r.body));
     article.append(reply);
   }
   const actions = el("div", undefined, "comment-actions");
@@ -782,16 +825,18 @@ function commentThread(c) {
   selectComment.setAttribute("aria-pressed", String(c.id === activeCommentId));
   selectComment.onclick = () => focusComment(c.id);
   actions.append(selectComment);
-  const reply = el("button", "Reply");
-  reply.onclick = safely(async () => {
-    const body = await ask("Reply to comment", c.body, true);
-    if (body?.trim()) {
-      await api(`comments/${c.id}/reply`, { body });
-      await refresh();
-    }
-  });
-  actions.append(reply);
-  if (c.status === "open") {
+  if (session.can("reply")) {
+    const reply = el("button", "Reply");
+    reply.onclick = safely(async () => {
+      const body = await ask("Reply to comment", c.body, true);
+      if (body?.trim()) {
+        await api(`comments/${c.id}/reply`, { body });
+        await refresh();
+      }
+    });
+    actions.append(reply);
+  }
+  if (c.status === "open" && session.can("resolve")) {
     const resolve = el("button", "Resolve");
     resolve.onclick = safely(async () => {
       await api(`comments/${c.id}/resolve`, { stateId: current.stateId });
@@ -930,6 +975,7 @@ async function refresh({ retryPreview = false } = {}) {
   }
   const previousId = selected?.id;
   current = next;
+  applySession();
   $("title").textContent = current.title;
   $("revision").textContent = current.revision
     ? `HEAD ${current.revision.slice(7, 23)}`
@@ -1345,6 +1391,7 @@ function authorizationChanged(authorized) {
   $("refresh").disabled = !authorized;
   $("toggle-review").disabled = !authorized;
   $("sync-status").textContent = authorized ? "Live" : "Authorization required";
+  applySession();
   if (authorized) {
     $("authorization-error").textContent = "";
     if (incomingHandoffId)

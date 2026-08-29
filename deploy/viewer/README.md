@@ -2,13 +2,14 @@
 
 Deployment preparation only; no hosted service or production security claim.
 This runs the new Engine/Viewer on Node 22, with **one fixed document package
-and one shared review credential per instance**. It does not run the legacy
+and separate Owner/Reviewer credentials per instance**. It does not run the legacy
 workspace server. Do not autoscale it or mount one package into multiple servers.
 
 ## Local compatibility and service startup
 
 `pnpm dstar serve ./document.dstar` and `startViewer(root, port)` still bind
-loopback with a fresh random credential. The CLI prints its private local URL.
+loopback with fresh independent Owner and Reviewer credentials. The CLI prints
+both private role URLs.
 Use `--port 4173` (or another available port) when the local address should stay
 stable; omission keeps automatic port assignment.
 They do **not** read the service environment variables below. Never redirect
@@ -32,14 +33,21 @@ does not initialize or repair a package silently.
 Copy [runtime.env.example](runtime.env.example) outside version control and
 set these values explicitly. Empty values are errors, not defaults.
 
-| Environment               | Contract                                                                                                                                                                                                                                           |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DSTAR_PACKAGE_ROOT`      | Required absolute path to one persistent package. Never selected by a URL, header or request body.                                                                                                                                                 |
-| `DSTAR_BIND_HOST`         | Literal IPv4/IPv6 address; default `127.0.0.1`. Non-loopback binding requires an external origin and explicit credential.                                                                                                                          |
-| `DSTAR_PORT`              | Decimal integer `0`–`65535`; default `0` means an ephemeral port. Use a fixed port for the proxy.                                                                                                                                                  |
-| `DSTAR_EXTERNAL_ORIGIN`   | Optional on loopback; otherwise required. One exact canonical HTTPS origin, e.g. `https://review.example.com` or `https://review.example.com:8443`. No path, trailing slash, userinfo, wildcard, query or fragment. Default ports must be omitted. |
-| `DSTAR_VIEWER_TOKEN_FILE` | Absolute path to a small regular file **outside** the package; no final symlink. One trailing LF/CRLF is allowed. Preferred over environment plaintext.                                                                                            |
-| `DSTAR_VIEWER_TOKEN`      | Alternative server-injected plaintext credential; never set both sources. No built-in credential or fallback in the service entrypoint.                                                                                                            |
+| Environment                   | Contract                                                                                                                                                                                                                                           |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DSTAR_PACKAGE_ROOT`          | Required absolute path to one persistent package. Never selected by a URL, header or request body.                                                                                                                                                 |
+| `DSTAR_BIND_HOST`             | Literal IPv4/IPv6 address; default `127.0.0.1`. Non-loopback binding requires an external origin and explicit credential.                                                                                                                          |
+| `DSTAR_PORT`                  | Decimal integer `0`–`65535`; default `0` means an ephemeral port. Use a fixed port for the proxy.                                                                                                                                                  |
+| `DSTAR_EXTERNAL_ORIGIN`       | Optional on loopback; otherwise required. One exact canonical HTTPS origin, e.g. `https://review.example.com` or `https://review.example.com:8443`. No path, trailing slash, userinfo, wildcard, query or fragment. Default ports must be omitted. |
+| `DSTAR_OWNER_TOKEN_FILE`      | Preferred Owner credential source: absolute small regular file **outside** the package, no final symlink. One trailing LF/CRLF is allowed.                                                                                                         |
+| `DSTAR_OWNER_TOKEN`           | Alternative server-injected Owner credential; never set both Owner sources. The service entrypoint requires an Owner credential.                                                                                                                   |
+| `DSTAR_REVIEWER_TOKEN_FILE`   | Optional Reviewer credential file with the same constraints. Configure it to enable a restart-stable Reviewer link.                                                                                                                                |
+| `DSTAR_REVIEWER_TOKEN`        | Alternative server-injected Reviewer credential; never set both Reviewer sources. It must differ from the Owner credential.                                                                                                                        |
+| `DSTAR_OWNER_DISPLAY_NAME`    | Optional trusted Owner display name; default `Owner`.                                                                                                                                                                                              |
+| `DSTAR_REVIEWER_DISPLAY_NAME` | Optional trusted Reviewer display name; default `Reviewer` when Reviewer access is configured.                                                                                                                                                     |
+
+Legacy `DSTAR_VIEWER_TOKEN(_FILE)` remains an Owner-only alias so existing
+services can restart unchanged. Do not combine legacy and named Owner sources.
 
 Credentials must be 48–256 ASCII base64url characters (`A-Z a-z 0-9 _ -`).
 Generate random bytes, not a password or a repeated string; syntax validation
@@ -55,15 +63,22 @@ document assets, command arguments or the package backup. File credentials
 are read once at startup; rotate by replacing the file and restarting. A
 symlink-based secret manager must deliver a regular file to this entrypoint.
 
-To enter the existing Viewer, privately open `https://review.example.com/#TOKEN`
-using your provisioned credential. The current UI moves the fragment into
+To enter the existing Viewer, privately open
+`https://review.example.com/#OWNER_TOKEN` or
+`https://review.example.com/#REVIEWER_TOKEN` using the credential for that
+person's role. The current UI moves the fragment into
 session storage and removes it from the address bar. Share neither this URL
 nor preview URLs (which contain read capabilities). Browser extensions and a
-trusted local process remain outside this boundary. A credential grants the
-existing Viewer API, including decisions; there are no individual identities.
+trusted local process remain outside this boundary. Owner may decide, resolve
+and manage sharing; Reviewer may comment, reply, suggest, propose and use agent
+handoff but cannot decide or resolve. The configured display name and fixed role
+are persisted as write attribution; request bodies cannot override authors.
 Programmatic callers may use `startViewer(root, port, {host, externalOrigin,
-token})` or `{host, externalOrigin, tokenFile}`; it still returns
-`{server, origin, url}`. Treat `url` as secret and never log it in a service.
+ownerToken, reviewerToken, ownerDisplayName, reviewerDisplayName})`, with file
+variants for each token. Legacy `token/tokenFile` remains an Owner alias. The
+return value is `{server, origin, url, ownerUrl, reviewerUrl?}`, where `url` is
+the compatibility alias for `ownerUrl`. Treat all returned role URLs as secrets
+and never log them in a service.
 
 ## TLS proxy and instance boundaries
 
@@ -99,7 +114,7 @@ Compose gives `/tmp` 64 MiB so an allowed candidate can be staged; budget
 additional memory and proxy temporary disk for concurrent requests. These
 limits are not a load-test or production capacity guarantee.
 
-Use a **different origin, credential, package root and volume for every
+Use a **different origin, credential pair, package root and volume for every
 instance**. Do not host instances at different paths of one browser origin or
 reuse credentials. There is no global credential store, package picker,
 cross-instance lookup or tenant access-control system. Tests cover separately
@@ -117,16 +132,16 @@ document packages and private files cannot accidentally enter the build.
 Pin an approved Node image digest and scan/update dependencies as part of your
 own release process; the example tag is not an immutable production pin.
 
-[compose.yaml](compose.yaml) mounts `/data` as a named volume and the credential
-as a separate read-only secret. Host bind mounts must be prepared with matching
+[compose.yaml](compose.yaml) mounts `/data` as a named volume and the credentials
+as separate read-only secrets. Host bind mounts must be prepared with matching
 ownership; the service never recursively chowns an existing package. Ensure
-the secret is readable by UID 1000; Compose file-backed secrets use host file
+each secret is readable by UID 1000; Compose file-backed secrets use host file
 permissions. Keep the same Compose project name to retain the same volume.
 
 For a future local container run (these commands do not publish a website):
 
 ```sh
-# Supply DSTAR_EXTERNAL_ORIGIN and a host DSTAR_VIEWER_TOKEN_FILE to Compose.
+# Supply DSTAR_EXTERNAL_ORIGIN and both host role token files to Compose.
 docker compose --env-file /absolute/private/runtime.env -p dstar-review -f deploy/viewer/compose.yaml build
 # First use only: initialize an EMPTY volume from a prepared candidate.
 docker compose --env-file /absolute/private/runtime.env -p dstar-review -f deploy/viewer/compose.yaml run --rm --no-deps -v "$PWD/examples/html-first:/candidate:ro" viewer node --input-type=module -e 'import {open} from "@dstar/engine"; open(process.env.DSTAR_PACKAGE_ROOT).propose({candidate:"/candidate",base:null,request:"Initial document",author:"agent",key:"initial"});'
@@ -151,8 +166,8 @@ journal; reopen the Engine to recover. See the [write/recovery contract](../../d
 
 Stop Viewer **and all CLI writers** before copying the entire package,
 including hidden `.dstar` state and objects. A live recursive copy is not a
-consistent backup. Back up the secret separately under appropriate access
-controls, or provision a new one on restore. Restore into an empty location,
+consistent backup. Back up the role secrets separately under appropriate access
+controls, or provision new ones on restore. Restore into an empty location,
 preserve permissions, and verify with `pnpm dstar inspect /restored/package`
 before serving it; re-read accepted and pending previews in the restored
 instance. Do not merge backup directories or overwrite a running package.
@@ -170,8 +185,9 @@ configuration and package integrity locally on the trusted host.
 Run `pnpm --filter @dstar/engine build`, `pnpm --filter @dstar/engine test`
 and `pnpm --filter @dstar/viewer test` (the Viewer tests bind temporary ports).
 The suite covers local compatibility, invalid configuration, authority/header
-and path boundaries, separate instance credentials/capabilities, token rotation,
-accepted/pending state and comments across restarts, and actual Node subprocess
+and path boundaries, role separation, identity spoofing, separate instance
+credentials/capabilities, token rotation, accepted/pending state and attributed
+comments across restarts, and actual Node subprocess
 startup/SIGTERM without credential logging.
 
 For this change, Node 22 tests, the isolated Engine/Viewer build and production

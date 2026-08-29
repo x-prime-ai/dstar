@@ -163,7 +163,11 @@ it("serves immutable isolated previews and requires session credentials for deci
     }),
   });
   expect(comment.status).toBe(201);
-  expect(engine.snapshot().state.comments[0].author).toBe("human");
+  expect(engine.snapshot().state.comments[0].author).toEqual({
+    id: "owner",
+    displayName: "Owner",
+    role: "owner",
+  });
   expect(
     (
       await request(endpoint, {
@@ -242,7 +246,10 @@ it("turns a manual text suggestion into a pending human proposal", async () => {
     response = await request("/api/suggestions", args),
     result = await response.json();
   expect(response.status).toBe(201);
-  expect(result.proposal).toMatchObject({ author: "human", status: "pending" });
+  expect(result.proposal).toMatchObject({
+    author: { id: "owner", displayName: "Owner", role: "owner" },
+    status: "pending",
+  });
   expect(
     engine.snapshot(result.proposal.id).files.get("document.html").toString(),
   ).toContain("Current heading · Hello world");
@@ -476,11 +483,13 @@ it("resolves comment markers against the viewed revision without changing canoni
 it("uses only the configured external authority while preserving opaque-origin frame sandboxing", async () => {
   const { root, engine, proposal } = fixture();
   const token = "b".repeat(64),
+    reviewerToken = "v".repeat(64),
     externalOrigin = "https://review.example.com:8443";
   const viewer = await start(root, 0, {
     host: "0.0.0.0",
     externalOrigin,
     token,
+    reviewerToken,
   });
   expect(viewer.server.address().address).toBe("0.0.0.0");
   const headers = { Authorization: `Bearer ${token}` };
@@ -497,6 +506,29 @@ it("uses only the configured external authority while preserving opaque-origin f
     ).status,
   ).toBe(403);
   const state = (await wire(viewer, "/api/state", { headers })).json();
+  const reviewerHeaders = { Authorization: `Bearer ${reviewerToken}` },
+    reviewerState = (
+      await wire(viewer, "/api/state", {
+        headers: { ...reviewerHeaders, Origin: externalOrigin },
+      })
+    ).json();
+  expect(reviewerState.session.role).toBe("reviewer");
+  expect(
+    (
+      await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
+        method: "POST",
+        headers: {
+          ...reviewerHeaders,
+          Origin: externalOrigin,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          revision: proposal.revision,
+          stateId: reviewerState.stateId,
+        }),
+      })
+    ).status,
+  ).toBe(403);
   const preview = (
     await wire(viewer, `/api/preview/${proposal.id}`, { headers })
   ).json();
@@ -518,6 +550,7 @@ it("uses only the configured external authority while preserving opaque-origin f
   );
   expect(frame.text).toContain(`"origin":"${externalOrigin}"`);
   expect(frame.text).not.toContain(token);
+  expect(frame.text).not.toContain(reviewerToken);
   const result = await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
     method: "POST",
     headers: {
@@ -760,6 +793,291 @@ it("retains accepted versions, comments and pending work across restart; refresh
       })
     ).json().stateId,
   ).toBe(before.stateId);
+});
+
+it("separates owner and reviewer authority, binds trusted identities and scopes reviewer handoffs", async () => {
+  const { root, candidate, engine, proposal } = fixture(),
+    ownerToken = "o".repeat(64),
+    reviewerToken = "r".repeat(64),
+    options = {
+      ownerToken,
+      reviewerToken,
+      ownerDisplayName: "Olivia Owner",
+      reviewerDisplayName: "Ravi Reviewer",
+    },
+    viewer = await start(root, 0, options),
+    owner = {
+      Authorization: `Bearer ${ownerToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    reviewer = {
+      Authorization: `Bearer ${reviewerToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    };
+  expect(viewer.url).toBe(viewer.ownerUrl);
+  expect(new URL(viewer.ownerUrl).hash.slice(1)).toBe(ownerToken);
+  expect(new URL(viewer.reviewerUrl).hash.slice(1)).toBe(reviewerToken);
+
+  const ownerState = (
+      await wire(viewer, "/api/state", { headers: owner })
+    ).json(),
+    reviewerState = (
+      await wire(viewer, "/api/state", { headers: reviewer })
+    ).json();
+  expect(ownerState.session).toMatchObject({
+    role: "owner",
+    identity: { displayName: "Olivia Owner", role: "owner" },
+  });
+  expect(ownerState.session.capabilities).toEqual(
+    expect.arrayContaining(["decide", "resolve", "share", "handoff"]),
+  );
+  expect(reviewerState.session).toMatchObject({
+    role: "reviewer",
+    identity: { displayName: "Ravi Reviewer", role: "reviewer" },
+  });
+  expect(reviewerState.session.capabilities).toEqual(
+    expect.arrayContaining([
+      "read",
+      "comment",
+      "suggest",
+      "propose",
+      "handoff",
+    ]),
+  );
+  expect(reviewerState.session.capabilities).not.toEqual(
+    expect.arrayContaining(["decide", "resolve", "share"]),
+  );
+  expect(JSON.stringify(reviewerState)).not.toContain(ownerToken);
+  expect(
+    (
+      await wire(viewer, "/api/state", {
+        headers: { Authorization: `Bearer ${"x".repeat(64)}` },
+      })
+    ).status,
+  ).toBe(401);
+
+  expect(
+    (
+      await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
+        method: "POST",
+        headers: reviewer,
+        body: JSON.stringify({
+          revision: proposal.revision,
+          stateId: reviewerState.stateId,
+        }),
+      })
+    ).status,
+  ).toBe(403);
+  expect(engine.snapshot().revision).toBeNull();
+  expect(
+    (
+      await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
+        method: "POST",
+        headers: owner,
+        body: JSON.stringify({
+          revision: proposal.revision,
+          stateId: ownerState.stateId,
+        }),
+      })
+    ).status,
+  ).toBe(200);
+  expect(engine.snapshot().state.proposals[0].decision.actor).toEqual({
+    id: "owner",
+    displayName: "Olivia Owner",
+    role: "owner",
+  });
+
+  const suggested = (
+    await wire(viewer, "/api/suggestions", {
+      method: "POST",
+      headers: reviewer,
+      body: JSON.stringify({
+        target: {
+          revision: proposal.revision,
+          element: "intro",
+          selector: {
+            type: "text-range",
+            start: 0,
+            end: 5,
+            unit: "unicode-code-point",
+            exact: "Hello",
+          },
+        },
+        replacement: "Greetings",
+        key: "reviewer-suggestion",
+      }),
+    })
+  ).json();
+  expect(suggested.proposal).toMatchObject({
+    status: "pending",
+    author: {
+      id: "reviewer",
+      displayName: "Ravi Reviewer",
+      role: "reviewer",
+    },
+  });
+
+  const target = {
+    revision: proposal.revision,
+    element: "intro",
+    selector: { type: "element" },
+  };
+  expect(
+    (
+      await wire(viewer, "/api/comments", {
+        method: "POST",
+        headers: reviewer,
+        body: JSON.stringify({
+          target,
+          body: "Spoofed",
+          author: { id: "owner", displayName: "Olivia Owner", role: "owner" },
+        }),
+      })
+    ).status,
+  ).toBe(409);
+  const posted = (
+    await wire(viewer, "/api/comments", {
+      method: "POST",
+      headers: reviewer,
+      body: JSON.stringify({ target, body: "Reviewer comment" }),
+    })
+  ).json();
+  expect(posted.author).toEqual({
+    id: "reviewer",
+    displayName: "Ravi Reviewer",
+    role: "reviewer",
+  });
+  expect(
+    (
+      await wire(viewer, `/api/comments/${posted.id}/resolve`, {
+        method: "POST",
+        headers: reviewer,
+        body: JSON.stringify({ stateId: engine.snapshot().stateId }),
+      })
+    ).status,
+  ).toBe(403);
+  const replied = (
+    await wire(viewer, `/api/comments/${posted.id}/reply`, {
+      method: "POST",
+      headers: reviewer,
+      body: JSON.stringify({ body: "Reviewer reply" }),
+    })
+  ).json();
+  expect(replied.replies[0].author).toEqual({
+    id: "reviewer",
+    displayName: "Ravi Reviewer",
+    role: "reviewer",
+  });
+
+  writeFileSync(
+    join(candidate, "document.html"),
+    '<!doctype html><html><head><title>Preview</title></head><body><p data-dstar-id="intro">Next text</p></body></html>',
+  );
+  const pending = engine.propose({
+      candidate,
+      base: proposal.revision,
+      request: "Next",
+      author: "agent",
+      key: "role-next",
+    }),
+    handoffId = "11111111-1111-4111-8111-111111111111",
+    accessToken = "h".repeat(64),
+    context = {
+      review: {
+        proposalId: pending.id,
+        showingBase: false,
+        revision: pending.revision,
+        previewStatus: "ready",
+      },
+      selection: {
+        revision: pending.revision,
+        element: "intro",
+        selector: { type: "element" },
+      },
+      action: {
+        kind: "comment",
+        target: {
+          revision: pending.revision,
+          element: "intro",
+          selector: { type: "element" },
+        },
+        draft: "",
+      },
+      focusedCommentId: null,
+    };
+  const handoff = await wire(viewer, "/api/handoffs", {
+    method: "POST",
+    headers: reviewer,
+    body: JSON.stringify({ id: handoffId, accessToken, context }),
+  });
+  expect(handoff.status).toBe(201);
+  expect(handoff.text).not.toContain(accessToken);
+  expect(handoff.json().session).toMatchObject({
+    role: "reviewer",
+    capabilities: ["read", "handoff"],
+  });
+  const scopedHeaders = {
+      Authorization: `Bearer ${accessToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    toolContext = await wire(viewer, "/api/agent/context", {
+      method: "POST",
+      headers: scopedHeaders,
+      body: JSON.stringify(context),
+    });
+  expect(toolContext.status).toBe(200);
+  expect(toolContext.json().session).toMatchObject({
+    role: "reviewer",
+    capabilities: ["read", "handoff"],
+  });
+  expect(
+    (
+      await wire(viewer, `/api/proposals/${pending.id}/reject`, {
+        method: "POST",
+        headers: scopedHeaders,
+        body: JSON.stringify({
+          revision: pending.revision,
+          stateId: engine.snapshot().stateId,
+        }),
+      })
+    ).status,
+  ).toBe(403);
+
+  const resolved = (
+    await wire(viewer, `/api/comments/${posted.id}/resolve`, {
+      method: "POST",
+      headers: owner,
+      body: JSON.stringify({ stateId: engine.snapshot().stateId }),
+    })
+  ).json();
+  expect(resolved).toMatchObject({
+    status: "resolved",
+    resolvedBy: {
+      id: "owner",
+      displayName: "Olivia Owner",
+      role: "owner",
+    },
+  });
+  expect(resolved.resolvedAt).toMatch(/^\d{4}-/);
+
+  await close(viewer.server);
+  const reopened = await start(
+      root,
+      viewer.server.address()?.port ?? 0,
+      options,
+    ),
+    persisted = (
+      await wire(reopened, "/api/state", {
+        headers: { Authorization: `Bearer ${reviewerToken}` },
+      })
+    ).json();
+  expect(persisted.state.comments[0]).toMatchObject({
+    author: { role: "reviewer", displayName: "Ravi Reviewer" },
+    resolvedBy: { role: "owner", displayName: "Olivia Owner" },
+  });
 });
 
 it("validates configuration before opening any document and fails closed on missing or corrupt packages", async () => {
@@ -1038,7 +1356,11 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   const reply = await api("agent/reply", replyArgs);
   expect(reply.comment.status).toBe("open");
   expect(reply.comment.replies).toHaveLength(1);
-  expect(reply.comment.replies[0].author).toBe("agent");
+  expect(reply.comment.replies[0].author).toEqual({
+    id: "agent",
+    displayName: "Agent",
+    role: "agent",
+  });
   expect(reply.comment.replies[0]).not.toHaveProperty("key");
   const stateId = engine.snapshot().stateId;
   expect((await api("agent/reply", replyArgs)).comment.replies).toHaveLength(1);

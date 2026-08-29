@@ -8,7 +8,7 @@ Status: implemented local MVP; development format, not a stable public SDK.
 Agent + DSTAR skill ──CLI──> Engine <──private local adapter── Viewer
                               │                             │
                     proposal/delta/history          preview/select/comment
-                              │                     human accept/reject
+                              │                     Owner accept/reject
                               ▼
                        portable directory
 ```
@@ -18,7 +18,9 @@ stores candidate revision, compact byte deltas and review summaries immediately.
 A Viewer is not needed to prepare a proposal or reconstruct historical HTML.
 
 The Viewer does not calculate or own versions. Its local server reads immutable
-materializations and submits comment or human decision commands to the Engine.
+materializations and submits attributed collaboration or Owner decision commands
+to the Engine. Its centralized role gate gives Reviewer comment/suggest/propose/
+handoff capabilities without decision or resolution authority.
 There is no new MCP service, workflow backend, projection renderer or public SDK.
 
 ## Code
@@ -26,7 +28,7 @@ There is no new MCP service, workflow backend, projection renderer or public SDK
 - `packages/engine`: file inventory, HTML/CSS validation, hashes, byte deltas,
   materialization, comments, proposals and locked/journaled writes.
 - `packages/engine/src/cli.ts`: validate, inspect, export, propose, comment, reply.
-- `packages/engine/src/decisions.ts`: internal adapter for human decisions;
+- `packages/engine/src/decisions.ts`: internal adapter for Owner decisions;
   deliberately absent from the agent command set.
 - `apps/viewer`: loopback HTTP adapter and static browser UI.
 - `scripts/dstar.mjs`: repository launcher, including `serve`.
@@ -52,7 +54,7 @@ layout, compatibility, limits and crash recovery.
 The Viewer verifies a snapshot when issuing a preview capability and serves its
 HTML/CSS/assets from a bounded in-memory cache. It does not cache mutable review
 state or use preview bytes as authority for decisions; those requests still run
-the Engine's current-state and history checks.
+the Engine's current-state, role/capability and history checks.
 
 ## Authoring and proposal
 
@@ -74,8 +76,9 @@ checks the exact parent is still head and materializes/verifies the stored
 candidate. It journals checkout paths, installs files, and atomically switches
 the authoritative state last.
 
-Reject records a decision without changing canonical files. Human resolution
-changes only comment state. The filesystem is trusted; these are workflow/API
+Reject records a decision without changing canonical files. Owner resolution
+changes only comment state. The deciding/resolving actor is persisted. The
+filesystem is trusted; these are workflow/API
 boundaries, not protection against a local process that can rewrite metadata.
 
 ## Comments and layout
@@ -87,7 +90,7 @@ Slides use optional body/section hints plus authored CSS; the Viewer only
 supplies navigation.
 
 The HTML is sandboxed away from review controls. Preview URLs grant immutable
-read-only content, while a different local session secret gates review APIs.
-The frame never receives that secret.
+read-only content, while independent Owner and Reviewer session secrets gate
+role-specific review APIs. The frame never receives those secrets.
 
 See [the concrete MVP contract](html-mvp.md) for exact encodings and limits.

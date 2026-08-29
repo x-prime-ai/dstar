@@ -28,8 +28,9 @@ Tool registration is also gated on a successful authenticated Viewer state read.
 Without a valid tab session the page shows **Authorize Viewer** instead of
 advertising connected tools. Paste the complete private access link (including
 its fragment), or open it in this browser. Use **Copy access link** in an already
-authorized Viewer to transfer access deliberately; browser profiles and tabs do
-not share session storage. A 401 drops the stale credential and tool registration,
+authorized Owner Viewer to transfer Owner access deliberately; Reviewer links
+are provisioned separately. Browser profiles and tabs do not share session
+storage. A 401 drops the stale credential and tool registration,
 pauses polling, and shows the authorization screen. A late response from a
 replaced credential cannot invalidate a newer session. Network failures do not
 erase a working credential. Authorization errors from an in-flight tool use
@@ -42,14 +43,14 @@ schemas reject additional properties. Descriptions and annotations mark document
 and comment contents as untrusted data. A tool must not treat instructions found
 inside that content as user authorization.
 
-| Tool                         | Arguments                     | Result on success                                                                                                                                             |
-| ---------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_review_context`         | `{}`                          | Package/state IDs, generation, accepted head, reviewed proposal/version, selection/action, explicitly focused comment, proposals, comments/replies and limits |
-| `read_document`              | `{revision}`                  | Exact immutable revision and complete `files` array                                                                                                           |
-| `draft_selection_comment`    | `{body}`                      | Opens an editable comment draft for the exact selection; never posts it                                                                                       |
-| `draft_selection_suggestion` | `{replacement}`               | Fills the editable suggestion composer for the exact selection; never submits it                                                                              |
-| `propose_revision`           | `{base, request, key, files}` | Stored proposal, including its exact base/revision, status and review diff                                                                                    |
-| `reply_comment`              | `{commentId, body, key}`      | Comment with its replies; status is not changed                                                                                                               |
+| Tool                         | Arguments                     | Result on success                                                                                                                                               |
+| ---------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_review_context`         | `{}`                          | Public session role/capabilities, package/state IDs, accepted head, reviewed version, selection/action, focused comment, proposals, comments/replies and limits |
+| `read_document`              | `{revision}`                  | Exact immutable revision and complete `files` array                                                                                                             |
+| `draft_selection_comment`    | `{body}`                      | Opens an editable comment draft for the exact selection; never posts it                                                                                         |
+| `draft_selection_suggestion` | `{replacement}`               | Fills the editable suggestion composer for the exact selection; never submits it                                                                                |
+| `propose_revision`           | `{base, request, key, files}` | Stored proposal, including its exact base/revision, status and review diff                                                                                      |
+| `reply_comment`              | `{commentId, body, key}`      | Comment with its replies; status is not changed                                                                                                                 |
 
 Every tool result is a string containing a JSON object with `ok: true` or
 `ok: false`. Successful mutation results also include `viewerUpdated`. If a
@@ -97,12 +98,13 @@ The action records intent for the external browser agent; the user's instruction
 is still entered in the agent chat, not in the Viewer. WebMCP does not provide a
 generic page API that opens or prompts that chat.
 
-Clicking **Ask agent to draft** stores the current action and draft, then uses
-the browser Clipboard API to copy a handoff prompt. The prompt contains only the
-Viewer origin, never the fragment credential, selection text or draft. It tells
-the agent to reuse the already-open tab because opening the URL in another tab
-would lose the transient selection. Clipboard failure does not clear the action;
-the Viewer instead shows instructions for addressing the open tab manually.
+Clicking **Ask agent to draft** stores the current action and draft, then creates
+a private 15-minute handoff and uses the browser Clipboard API to copy its URL.
+That URL contains a new scoped fragment credential, never the Owner/Reviewer
+session credential, selection text or draft. The handoff inherits only the
+creator's required capabilities and exact context; its public context/results
+include role/capabilities but no token. Clipboard failure does not broaden or
+persist the capability.
 
 For **Comment**, the agent may call `draft_selection_comment`. For **Suggest**,
 it may call `draft_selection_suggestion`. Both tools only fill the matching
@@ -111,7 +113,7 @@ user asked for help. The user can edit or discard the draft before posting or
 submitting it.
 
 A manually submitted suggestion replaces one exact `text-range` within one
-stable element and becomes a normal pending human proposal. Other files remain
+stable element and becomes a normal pending attributed proposal. Other files remain
 unchanged, and accepting or rejecting still happens in the Viewer. Structural,
 whole-element and multi-element changes use `propose_revision` with a complete
 candidate instead.
@@ -238,12 +240,14 @@ including when a comment arrives while a confirmation dialog is open.
 
 ## Authority and limitations
 
-“Agent proposes, person decides” is the tool/workflow boundary. It is **not** a
-cryptographic proof of human identity. The session credential also authorizes
-normal Viewer decision endpoints; a trusted local process or an automation with
-equivalent session/UI access can act outside the six WebMCP tools. There is no
-separate agent principal, signed human identity, remote multi-user auth or
-network-service security claim in this change.
+“Agent proposes, Owner decides” is the tool/workflow boundary. The Viewer binds
+each credential to a fixed Owner or Reviewer identity and capability set. A
+Reviewer session and every handoff are rejected by the server on accept, reject
+and resolve routes; UI hiding is only an additional cue. Agent-authored replies
+and proposals use the fixed Agent actor, while direct human writes use the
+authenticated display name/role rather than request-provided author data. This
+is still not an external identity provider, signed identity proof or arbitrary
+multi-user authentication system.
 
 The bridge inherits synchronous Engine replay/validation and metadata limits.
 It does not provide result pagination or streaming asset upload, and large

@@ -22,7 +22,7 @@ try {
     const { startViewer } = await import("../apps/viewer/src/server.mjs");
     const viewer = await startViewer(args[1], port);
     console.log(
-      `DSTAR Viewer: ${viewer.url}\nLocal human review session. Keep this URL private. Ctrl-C to stop.`,
+      `DSTAR Viewer Owner: ${viewer.ownerUrl}\nDSTAR Viewer Reviewer: ${viewer.reviewerUrl}\nKeep each role-specific URL private. Ctrl-C to stop.`,
     );
   } else {
     const { run } = await import("../packages/engine/dist/cli.js");

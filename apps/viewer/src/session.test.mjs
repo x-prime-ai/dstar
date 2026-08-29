@@ -136,6 +136,37 @@ it("keeps login usable when session storage is unavailable", async () => {
   expect(session.authorized).toBe(true);
 });
 
+it("caches public role capabilities and never lets a reviewer copy a share link", async () => {
+  const f = setup();
+  f.restore(`#${token}`);
+  f.fetch.mockResolvedValueOnce(
+    response(200, {
+      state: { generation: 1 },
+      session: {
+        role: "reviewer",
+        identity: {
+          id: "reviewer",
+          displayName: "Ravi Reviewer",
+          role: "reviewer",
+        },
+        capabilities: [
+          "read",
+          "comment",
+          "suggest",
+          "propose",
+          "handoff",
+          "reply",
+        ],
+      },
+    }),
+  );
+  await f.session.request("state");
+  expect(f.session.can("comment")).toBe(true);
+  expect(f.session.can("decide")).toBe(false);
+  expect(f.session.session.identity.displayName).toBe("Ravi Reviewer");
+  expect(() => f.session.accessLink(origin)).toThrow(/Only the Owner/);
+});
+
 it.each([200, 401])(
   "ignores a late %s from a replaced credential",
   async (status) => {

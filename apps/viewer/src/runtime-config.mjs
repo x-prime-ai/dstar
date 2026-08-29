@@ -93,12 +93,70 @@ function readTokenFile(path, root) {
   }
 }
 
+function credential(value, name) {
+  if (
+    typeof value !== "string" ||
+    value.length < 48 ||
+    value.length > 256 ||
+    /[^A-Za-z0-9_-]/.test(value)
+  )
+    fail(
+      `${name} must contain 48–256 base64url characters; generate it randomly`,
+    );
+  return value;
+}
+
+export function displayName(value, role) {
+  const name =
+    value === undefined ? role[0].toUpperCase() + role.slice(1) : value;
+  if (
+    typeof name !== "string" ||
+    name !== name.trim() ||
+    [...name].length < 1 ||
+    [...name].length > 80 ||
+    !/^[\p{L}\p{N}](?:[\p{L}\p{N} .,'’_-]*[\p{L}\p{N}])?$/u.test(name)
+  )
+    fail(
+      `${role}DisplayName must be 1–80 letters/numbers with internal spaces or . , ' ’ _ -`,
+    );
+  return name;
+}
+
+function source(options, root, role) {
+  const title = role[0].toUpperCase() + role.slice(1),
+    tokenKey = `${role}Token`,
+    fileKey = `${role}TokenFile`;
+  if (options[tokenKey] !== undefined && options[fileKey] !== undefined)
+    fail(`Configure only one of ${tokenKey} or ${fileKey}`);
+  if (options[fileKey] !== undefined)
+    return credential(
+      readTokenFile(options[fileKey], root),
+      `${title} credential`,
+    );
+  if (options[tokenKey] !== undefined)
+    return credential(options[tokenKey], `${title} credential`);
+  return undefined;
+}
+
 /** Explicit options only: programmatic/local callers never inherit process.env. */
 export function resolveViewerConfig(root, port = 0, options = {}) {
   if (!options || typeof options !== "object" || Array.isArray(options))
     fail("Viewer options must be an object");
   for (const key of Object.keys(options))
-    if (!["host", "externalOrigin", "token", "tokenFile"].includes(key))
+    if (
+      ![
+        "host",
+        "externalOrigin",
+        "token",
+        "tokenFile",
+        "ownerToken",
+        "ownerTokenFile",
+        "reviewerToken",
+        "reviewerTokenFile",
+        "ownerDisplayName",
+        "reviewerDisplayName",
+      ].includes(key)
+    )
       fail("Unknown Viewer option");
   if (typeof root !== "string" || !root.trim() || root.includes("\0"))
     fail("A package root is required");
@@ -117,32 +175,68 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
   const resolvedRoot = resolve(root);
   if (options.token !== undefined && options.tokenFile !== undefined)
     fail("Configure only one of token or tokenFile");
-  const explicit =
-    options.token !== undefined || options.tokenFile !== undefined;
-  if (origin && !explicit)
-    fail("externalOrigin requires an explicit token or tokenFile");
-  const token =
-    options.tokenFile !== undefined
-      ? readTokenFile(options.tokenFile, resolvedRoot)
-      : options.token === undefined
-        ? randomBytes(24).toString("hex")
-        : options.token;
-  if (
-    typeof token !== "string" ||
-    token.length < 48 ||
-    token.length > 256 ||
-    /[^A-Za-z0-9_-]/.test(token)
-  )
+  const legacyOwner =
+      options.token !== undefined || options.tokenFile !== undefined,
+    namedOwner =
+      options.ownerToken !== undefined || options.ownerTokenFile !== undefined;
+  if (legacyOwner && namedOwner)
     fail(
-      "Credential must contain 48–256 base64url characters; generate it randomly",
+      "Configure legacy token/tokenFile or ownerToken/ownerTokenFile, not both",
     );
+  const normalized = {
+      ...options,
+      ownerToken: legacyOwner ? options.token : options.ownerToken,
+      ownerTokenFile: legacyOwner ? options.tokenFile : options.ownerTokenFile,
+    },
+    explicitOwner = legacyOwner || namedOwner,
+    explicitReviewer =
+      options.reviewerToken !== undefined ||
+      options.reviewerTokenFile !== undefined;
+  if (origin && !explicitOwner)
+    fail("externalOrigin requires an explicit owner credential");
+  if (!explicitOwner && explicitReviewer)
+    fail("A reviewer credential requires an explicit owner credential");
+  let ownerToken = source(normalized, resolvedRoot, "owner"),
+    reviewerToken = source(normalized, resolvedRoot, "reviewer");
+  if (!explicitOwner) {
+    ownerToken = randomBytes(24).toString("hex");
+    reviewerToken = randomBytes(24).toString("hex");
+  }
+  if (reviewerToken && reviewerToken === ownerToken)
+    fail("Owner and reviewer credentials must be different");
+  if (options.reviewerDisplayName !== undefined && reviewerToken === undefined)
+    fail("reviewerDisplayName requires a reviewer credential");
+  const ownerIdentity = Object.freeze({
+      id: "owner",
+      displayName: displayName(options.ownerDisplayName, "owner"),
+      role: "owner",
+    }),
+    reviewerIdentity = reviewerToken
+      ? Object.freeze({
+          id: "reviewer",
+          displayName: displayName(options.reviewerDisplayName, "reviewer"),
+          role: "reviewer",
+        })
+      : undefined;
   return Object.freeze({
     root: resolvedRoot,
     host,
     port,
     externalOrigin: origin,
-    token,
-    ephemeral: !explicit,
+    token: ownerToken,
+    reviewerToken,
+    credentials: Object.freeze({
+      owner: Object.freeze({ token: ownerToken, identity: ownerIdentity }),
+      ...(reviewerToken
+        ? {
+            reviewer: Object.freeze({
+              token: reviewerToken,
+              identity: reviewerIdentity,
+            }),
+          }
+        : {}),
+    }),
+    ephemeral: !explicitOwner,
   });
 }
 
@@ -155,6 +249,12 @@ export function viewerConfigFromEnv(env = process.env) {
     "DSTAR_EXTERNAL_ORIGIN",
     "DSTAR_VIEWER_TOKEN",
     "DSTAR_VIEWER_TOKEN_FILE",
+    "DSTAR_OWNER_TOKEN",
+    "DSTAR_OWNER_TOKEN_FILE",
+    "DSTAR_REVIEWER_TOKEN",
+    "DSTAR_REVIEWER_TOKEN_FILE",
+    "DSTAR_OWNER_DISPLAY_NAME",
+    "DSTAR_REVIEWER_DISPLAY_NAME",
   ];
   for (const name of names)
     if (
@@ -173,15 +273,23 @@ export function viewerConfigFromEnv(env = process.env) {
   // Persistent services must never generate unreported ephemeral credentials.
   if (
     env.DSTAR_VIEWER_TOKEN === undefined &&
-    env.DSTAR_VIEWER_TOKEN_FILE === undefined
+    env.DSTAR_VIEWER_TOKEN_FILE === undefined &&
+    env.DSTAR_OWNER_TOKEN === undefined &&
+    env.DSTAR_OWNER_TOKEN_FILE === undefined
   )
-    fail("Set DSTAR_VIEWER_TOKEN or DSTAR_VIEWER_TOKEN_FILE");
+    fail("Set an owner token or owner token file");
   const port = env.DSTAR_PORT === undefined ? 0 : Number(env.DSTAR_PORT);
   const options = {
     host: env.DSTAR_BIND_HOST,
     externalOrigin: env.DSTAR_EXTERNAL_ORIGIN,
     token: env.DSTAR_VIEWER_TOKEN,
     tokenFile: env.DSTAR_VIEWER_TOKEN_FILE,
+    ownerToken: env.DSTAR_OWNER_TOKEN,
+    ownerTokenFile: env.DSTAR_OWNER_TOKEN_FILE,
+    reviewerToken: env.DSTAR_REVIEWER_TOKEN,
+    reviewerTokenFile: env.DSTAR_REVIEWER_TOKEN_FILE,
+    ownerDisplayName: env.DSTAR_OWNER_DISPLAY_NAME,
+    reviewerDisplayName: env.DSTAR_REVIEWER_DISPLAY_NAME,
   };
   // Validate before opening the Engine or binding a socket.
   const config = resolveViewerConfig(env.DSTAR_PACKAGE_ROOT, port, options);
@@ -191,7 +299,10 @@ export function viewerConfigFromEnv(env = process.env) {
     options: {
       host: config.host,
       externalOrigin: config.externalOrigin,
-      token: config.token,
+      ownerToken: config.token,
+      reviewerToken: config.reviewerToken,
+      ownerDisplayName: config.credentials.owner.identity.displayName,
+      reviewerDisplayName: config.credentials.reviewer?.identity.displayName,
     },
   };
 }

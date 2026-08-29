@@ -11,6 +11,7 @@
       <a class="brand" href="/" aria-label="DSTAR home">DSTAR</a>
       <div class="document">
         <strong id="title">Opening document…</strong>
+        <span id="session-identity" class="session-identity" hidden></span>
       </div>
       <nav class="header-actions" aria-label="Viewer panels">
         <button
@@ -39,7 +40,9 @@
             </svg>
           </summary>
           <div class="menu-content">
-            <button id="copy-access-link" disabled>Copy access link</button>
+            <button id="copy-access-link" disabled hidden>
+              Copy Owner access link
+            </button>
             <button id="refresh" disabled>Refresh document</button>
             <div class="connection-details">
               <small id="revision"></small>
@@ -63,8 +66,9 @@
       </p>
       <p>
         Or use <strong>Copy access link</strong> in an already authorized Viewer
-        and paste it below. Keep this link private: it grants review and
-        decision access. WebMCP tools connect only after authorization succeeds.
+        and paste it below. Keep each role-specific link private: Owner can
+        decide and resolve; Reviewer can contribute comments and proposals but
+        cannot decide. WebMCP tools connect only after authorization succeeds.
       </p>
       <form id="authorize-form">
         <label for="access-link">Private access link or session token</label>

@@ -1,4 +1,11 @@
 export type Files = Map<string, Buffer>;
+export interface ActorIdentity {
+  id: string;
+  displayName: string;
+  role: "owner" | "reviewer" | "agent";
+}
+/** String actors remain readable for pre-identity state and non-Viewer callers. */
+export type Actor = ActorIdentity | string;
 export interface ElementInfo {
   id: string;
   tag: string;
@@ -41,12 +48,14 @@ export interface Comment {
   id: string;
   target: Target;
   body: string;
-  author: string;
+  author: Actor;
   createdAt: string;
   status: "open" | "resolved";
+  resolvedAt?: string;
+  resolvedBy?: Actor;
   replies: {
     id: string;
-    author: string;
+    author: Actor;
     body: string;
     createdAt: string;
     key?: string;
@@ -87,14 +96,14 @@ export interface Proposal {
   parent: string | null;
   revision: string;
   request: string;
-  author: string;
+  author: Actor;
   createdAt: string;
   status: "pending" | "accepted" | "rejected";
   changes: FileChange[];
   diff: ReviewDiff;
   key: string;
   command: string;
-  decision?: { actor: string; at: string; action: "accept" | "reject" };
+  decision?: { actor: Actor; at: string; action: "accept" | "reject" };
   checkpoint?: {
     path: string;
     digest: string;

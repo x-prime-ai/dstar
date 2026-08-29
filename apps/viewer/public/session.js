@@ -39,6 +39,7 @@ export class ViewerSession {
   #token = "";
   #epoch = 0;
   authorized = false;
+  session = null;
 
   constructor({ fetch, storage, onAuthorization }) {
     this.fetch = fetch;
@@ -79,13 +80,23 @@ export class ViewerSession {
     ++this.#epoch;
     this.#token = token;
     this.authorized = false;
+    this.session = null;
     this.#save("");
     this.onAuthorization(false);
   }
 
   accessLink(origin) {
     if (!this.authorized) throw authError();
+    if (!this.can("share"))
+      throw Object.assign(
+        new Error("Only the Owner can manage Viewer access links."),
+        { code: "forbidden" },
+      );
     return `${origin}/#${this.#token}`;
+  }
+
+  can(capability) {
+    return Boolean(this.session?.capabilities?.includes(capability));
   }
 
   async request(path, body, signal) {
@@ -111,6 +122,7 @@ export class ViewerSession {
       ++this.#epoch;
       this.#token = "";
       this.authorized = false;
+      this.session = null;
       this.#save("");
       this.onAuthorization(false);
       throw authError();
@@ -127,9 +139,28 @@ export class ViewerSession {
       throw Object.assign(new Error(data.error), { code: data.code });
     // Discoverability alone is not authentication. Verify an actual state read.
     if (path === "state" && !this.authorized) {
+      this.session = data.session ??
+        // Owner-only servers before the role-aware protocol remain usable.
+        {
+          role: "owner",
+          identity: { id: "owner", displayName: "Owner", role: "owner" },
+          capabilities: [
+            "read",
+            "comment",
+            "suggest",
+            "propose",
+            "handoff",
+            "reply",
+            "decide",
+            "resolve",
+            "share",
+          ],
+        };
       this.authorized = true;
       this.#save(this.#token);
       this.onAuthorization(true);
+    } else if (path === "state") {
+      this.session = data.session ?? this.session;
     }
     return data;
   }

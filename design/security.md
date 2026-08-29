@@ -20,6 +20,32 @@ Trusted code includes the protocol core, package runtime, HTML/CSS parsers and
 validators, sandbox bridge, review application, and authenticated human
 decision controls.
 
+## Viewer roles and identity
+
+The HTML-first Viewer binds credentials to one of two fixed principals. Owner
+has `read`, `comment`, `suggest`, `propose`, `handoff`, `reply`, `decide`,
+`resolve` and `share`. Reviewer has the first six capabilities and cannot
+accept, reject, resolve or manage access links. `src/access-control.mjs` maps
+HTTP method/path to one required capability before route handlers read or act
+on a mutation. UI visibility uses the same public capability names but is not a
+security boundary.
+
+Each credential also binds a trusted `{id, displayName, role}`. Display names
+contain 1–80 Unicode letters/numbers, with only internal spaces or
+`. , ' ’ _ -`; surrounding whitespace, controls, markup and longer values are
+rejected. Comment, reply, manual-suggestion proposal, decision and resolution
+attribution comes from the authenticated principal, never an `author` request
+field. Agent routes use the fixed `Agent` identity. Old string actors remain
+readable for package compatibility but grant no capability.
+
+Owner and Reviewer bearer tokens are independent 48–256-character base64url
+secrets and may not match. They remain outside package state, HTML, previews,
+WebMCP arguments/results and public session projections. A short-lived handoff
+stores only its creator's public identity and the intersection of the creator's
+authority with the exact handoff action. Its result exposes role/capabilities,
+not any session or handoff token. Resource binding and expiry checks remain
+additional restrictions beyond the capability gate.
+
 ## Package controls
 
 The runtime rejects traversal, links, special files, duplicate JSON keys,

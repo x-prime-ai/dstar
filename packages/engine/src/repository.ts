@@ -11,6 +11,7 @@ import {
 } from "./delta.js";
 import { filePath, validateHtml, validateTarget, reviewDiff } from "./html.js";
 import type {
+  Actor,
   Comment,
   Files,
   Proposal,
@@ -22,6 +23,25 @@ import type {
 
 const HASH = /^sha256:[a-f0-9]{64}$/;
 const STATE_LIMIT = 64 * 1024 * 1024;
+function actorField(value: Actor, name: string): void {
+  if (typeof value === "string") {
+    textField(value, name, 200);
+    return;
+  }
+  if (
+    !value ||
+    Object.keys(value).sort().join(",") !== "displayName,id,role" ||
+    !/^[a-z][a-z0-9-]{0,63}$/.test(value.id) ||
+    !["owner", "reviewer", "agent"].includes(value.role) ||
+    value.displayName !== value.displayName.trim() ||
+    [...value.displayName].length < 1 ||
+    [...value.displayName].length > 80 ||
+    !/^[\p{L}\p{N}](?:[\p{L}\p{N} .,'’_-]*[\p{L}\p{N}])?$/u.test(
+      value.displayName,
+    )
+  )
+    throw new Error(`Invalid ${name}`);
+}
 function exists(path: string): boolean {
   try {
     fs.lstatSync(path);
@@ -179,6 +199,8 @@ function validateState(value: State): State {
       p.changes.length > 1024
     )
       throw new Error("Corrupt proposal metadata");
+    actorField(p.author, "proposal author");
+    if (p.decision) actorField(p.decision.actor, "decision actor");
     ids.add(p.id);
     const paths = new Set<string>();
     for (const c of p.changes) {
@@ -199,6 +221,17 @@ function validateState(value: State): State {
       (!Array.isArray(p.checkpoint) || p.checkpoint.length > 512)
     )
       throw new Error("Corrupt checkpoint");
+  }
+  for (const c of value.comments) {
+    actorField(c.author, "comment author");
+    for (const reply of c.replies) actorField(reply.author, "reply author");
+    if (c.status === "resolved" && (c.resolvedAt || c.resolvedBy)) {
+      if (!c.resolvedAt || !c.resolvedBy)
+        throw new Error("Resolved comment has incomplete attribution");
+      actorField(c.resolvedBy, "resolution actor");
+    } else if (c.resolvedAt !== undefined || c.resolvedBy !== undefined) {
+      throw new Error("Open comment has resolution attribution");
+    }
   }
   if (
     value.head !== null &&
@@ -441,7 +474,7 @@ export class Repository {
     candidate: string;
     base: string | null;
     request: string;
-    author: string;
+    author: Actor;
     key: string;
   }): Proposal {
     const candidate = safe(args.candidate);
@@ -456,7 +489,7 @@ export class Repository {
     const files = readCandidate(candidate),
       result = revision(files);
     textField(args.request, "request");
-    textField(args.author, "author", 200);
+    actorField(args.author, "author");
     textField(args.key, "key", 200);
     return this.transaction((state) => {
       const command = digest(
@@ -509,9 +542,9 @@ export class Repository {
       return p;
     }, true);
   }
-  comment(args: { target: Target; body: string; author: string }): Comment {
+  comment(args: { target: Target; body: string; author: Actor }): Comment {
     textField(args.body, "comment");
-    textField(args.author, "author", 200);
+    actorField(args.author, "author");
     return this.transaction((state) => {
       const p = state.proposals.find(
         (p) => p.revision === args.target.revision,
@@ -530,9 +563,9 @@ export class Repository {
       return comment;
     });
   }
-  reply(id: string, body: string, author: string, key?: string): Comment {
+  reply(id: string, body: string, author: Actor, key?: string): Comment {
     textField(body, "reply");
-    textField(author, "author", 200);
+    actorField(author, "author");
     if (key !== undefined) textField(key, "key", 200);
     return this.transaction((state) => {
       if (key !== undefined) {
@@ -542,7 +575,7 @@ export class Repository {
           if (
             comment.id !== id ||
             previous.body !== body ||
-            previous.author !== author
+            JSON.stringify(previous.author) !== JSON.stringify(author)
           )
             throw new Error(
               "Idempotency key already used for a different reply",
@@ -568,9 +601,9 @@ export class Repository {
     action: "accept" | "reject",
     expectedRevision: string,
     expectedState: string,
-    actor: string,
+    actor: Actor,
   ): Proposal {
-    textField(actor, "actor", 200);
+    actorField(actor, "actor");
     return this.transaction((state) => {
       if (digest(JSON.stringify(state)) !== expectedState)
         throw new Error("Review state changed; refresh before deciding");
@@ -611,13 +644,21 @@ export class Repository {
       return p;
     });
   }
-  resolveComment(id: string, expectedState: string): Comment {
+  resolveComment(
+    id: string,
+    expectedState: string,
+    actor: Actor = "human",
+  ): Comment {
+    actorField(actor, "actor");
     return this.transaction((state) => {
       if (digest(JSON.stringify(state)) !== expectedState)
         throw new Error("Review state changed; refresh");
       const c = state.comments.find((c) => c.id === id);
       if (!c) throw new Error("Unknown comment");
+      if (c.status !== "open") throw new Error("Comment is already resolved");
       c.status = "resolved";
+      c.resolvedAt = new Date().toISOString();
+      c.resolvedBy = actor;
       this.save(state);
       return c;
     });

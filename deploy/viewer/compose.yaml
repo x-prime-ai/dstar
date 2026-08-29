@@ -8,14 +8,18 @@ services:
       DSTAR_BIND_HOST: 0.0.0.0
       DSTAR_PORT: "3000"
       DSTAR_EXTERNAL_ORIGIN: ${DSTAR_EXTERNAL_ORIGIN:?Set the unique HTTPS origin for this instance}
-      DSTAR_VIEWER_TOKEN_FILE: /run/secrets/viewer_token
+      DSTAR_OWNER_TOKEN_FILE: /run/secrets/owner_token
+      DSTAR_REVIEWER_TOKEN_FILE: /run/secrets/reviewer_token
+      DSTAR_OWNER_DISPLAY_NAME: ${DSTAR_OWNER_DISPLAY_NAME:-Owner}
+      DSTAR_REVIEWER_DISPLAY_NAME: ${DSTAR_REVIEWER_DISPLAY_NAME:-Reviewer}
     # Only a host-local TLS proxy can reach this published port by default.
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
       - document_data:/data
     secrets:
-      - viewer_token
+      - owner_token
+      - reviewer_token
     read_only: true
     tmpfs:
       # Agent proposals stage up to 32 MiB before Engine validation/persistence.
@@ -32,5 +36,7 @@ volumes:
   document_data:
 
 secrets:
-  viewer_token:
-    file: ${DSTAR_VIEWER_TOKEN_FILE:?Set the host path of this instance's credential file}
+  owner_token:
+    file: ${DSTAR_OWNER_TOKEN_FILE:?Set the host path of this instance's Owner credential file}
+  reviewer_token:
+    file: ${DSTAR_REVIEWER_TOKEN_FILE:?Set the host path of this instance's Reviewer credential file}

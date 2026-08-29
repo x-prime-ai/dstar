@@ -26,6 +26,14 @@ import {
   trustedRequestUrl,
   viewerOrigin,
 } from "./runtime-config.mjs";
+import {
+  CAPABILITIES,
+  handoffPrincipal,
+  publicPrincipal,
+  requireCapability,
+  routeCapability,
+  sessionPrincipal,
+} from "./access-control.mjs";
 
 const publicFile = (path) =>
   readFileSync(new URL(`../public/${path}`, import.meta.url));
@@ -35,11 +43,19 @@ const handoffId = (value) =>
   typeof value === "string" && /^[a-f0-9-]{36}$/.test(value);
 const handoffToken = (value) =>
   typeof value === "string" && /^[A-Za-z0-9_-]{48,256}$/.test(value);
+const exactBody = (body, keys) => {
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body) ||
+    Object.keys(body).sort().join(",") !== [...keys].sort().join(",")
+  )
+    throw new Error("Unknown or missing request fields");
+};
 export async function startViewer(root, port = 0, options = {}) {
   const config = resolveViewerConfig(root, port, options);
   const engine = open(config.root),
-    review = decisions(config.root),
-    token = config.token;
+    review = decisions(config.root);
   engine.snapshot();
   const capabilities = createPreviewCache(),
     handoffs = new Map();
@@ -52,10 +68,11 @@ export async function startViewer(root, port = 0, options = {}) {
     }
     return handoff;
   };
-  const publicHandoff = ({ context, draft, expiresAt }) => ({
+  const publicHandoff = ({ context, draft, expiresAt, principal }) => ({
     context,
     draft,
     expiresAt,
+    session: publicPrincipal(principal),
   });
   const authorizedHandoff = (req) => {
     for (const [id] of handoffs) {
@@ -185,9 +202,10 @@ export async function startViewer(root, port = 0, options = {}) {
           );
         return res.end(bytes);
       }
-      const owner = authorized(req, token),
-        scoped = owner ? null : authorizedHandoff(req);
-      if (!path.startsWith("/api/") || (!owner && !scoped))
+      const session = sessionPrincipal(req, config),
+        scoped = session ? null : authorizedHandoff(req),
+        principal = session ?? scoped?.handoff.principal;
+      if (!path.startsWith("/api/") || !principal)
         return json(401, { error: "Viewer authorization required" });
       if (req.headers.origin !== undefined && req.headers.origin !== origin)
         return json(403, { error: "Invalid review origin" });
@@ -210,10 +228,23 @@ export async function startViewer(root, port = 0, options = {}) {
         )
       )
         return json(403, { error: "Agent handoff does not allow this route" });
-      if (await agentRoute({ engine, req, json, path, origin })) return;
+      const needed = routeCapability(req.method, path);
+      if (needed) requireCapability(principal, needed);
+      if (
+        await agentRoute({
+          engine,
+          req,
+          json,
+          path,
+          origin,
+          principal,
+        })
+      )
+        return;
       if (req.method === "GET" && path === "/api/state") {
         const s = engine.snapshot();
         return json(200, {
+          session: publicPrincipal(principal),
           state: s.state,
           stateId: s.stateId,
           revision: s.revision,
@@ -297,20 +328,30 @@ export async function startViewer(root, port = 0, options = {}) {
         chunks.push(chunk);
       }
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      if (path === "/api/comments")
+      if (path === "/api/comments") {
+        exactBody(body, ["target", "body"]);
         return json(
           201,
           engine.comment({
             target: body.target,
             body: body.body,
-            author: "human",
+            author: principal.identity,
           }),
         );
+      }
       if (path === "/api/handoffs") {
-        if (!owner)
-          return json(403, { error: "Only the owner can start a handoff" });
+        exactBody(body, ["id", "accessToken", "context"]);
         if (!handoffId(body.id) || !handoffToken(body.accessToken))
           throw new Error("Invalid agent handoff credential");
+        if (
+          Object.values(config.credentials).some(
+            (credential) => credential.token === body.accessToken,
+          ) ||
+          [...handoffs.values()].some(
+            (handoff) => handoff.accessToken === body.accessToken,
+          )
+        )
+          throw new Error("Agent handoff credential must be unique");
         const existing = getHandoff(body.id);
         if (existing) throw new Error("Agent handoff already exists");
         const context = validateHandoffContext(body.context),
@@ -319,6 +360,14 @@ export async function startViewer(root, port = 0, options = {}) {
             draft: null,
             expiresAt: Date.now() + HANDOFF_TTL,
             accessToken: body.accessToken,
+            principal: handoffPrincipal(principal, [
+              CAPABILITIES.READ,
+              CAPABILITIES.HANDOFF,
+              ...(context.action.kind === "suggest" &&
+              context.selection.selector.type !== "text-range"
+                ? [CAPABILITIES.PROPOSE]
+                : []),
+            ]),
           };
         handoffs.set(body.id, record);
         return json(201, publicHandoff(record));
@@ -327,6 +376,7 @@ export async function startViewer(root, port = 0, options = {}) {
         path,
       );
       if (handoffDraft) {
+        exactBody(body, ["kind", "content"]);
         const record = getHandoff(handoffDraft[1]);
         if (!record)
           return json(404, { error: "Agent handoff expired or was not found" });
@@ -345,6 +395,7 @@ export async function startViewer(root, port = 0, options = {}) {
         return json(200, { draft: record.draft });
       }
       if (path === "/api/suggestions") {
+        exactBody(body, ["target", "replacement", "key"]);
         const head = engine.snapshot(),
           viewed = engine.snapshot(body.target?.revision);
         if (!viewed.index)
@@ -384,7 +435,7 @@ export async function startViewer(root, port = 0, options = {}) {
             candidate: directory,
             base: head.revision,
             request: `Replace “${body.target.selector.exact.slice(0, 160)}” with “${body.replacement.slice(0, 160)}”`,
-            author: "human",
+            author: principal.identity,
             key: body.key,
           });
         } finally {
@@ -394,16 +445,23 @@ export async function startViewer(root, port = 0, options = {}) {
       }
       const comment =
         /^\/api\/comments\/([a-f0-9-]{36})\/(reply|resolve)$/.exec(path);
-      if (comment)
+      if (comment) {
+        exactBody(body, [comment[2] === "reply" ? "body" : "stateId"]);
         return json(
           200,
           comment[2] === "reply"
-            ? engine.reply(comment[1], body.body, "human")
-            : review.resolveComment(comment[1], body.stateId),
+            ? engine.reply(comment[1], body.body, principal.identity)
+            : review.resolveComment(
+                comment[1],
+                body.stateId,
+                principal.identity,
+              ),
         );
+      }
       const decision =
         /^\/api\/proposals\/([a-f0-9-]{36})\/(accept|reject)$/.exec(path);
-      if (decision)
+      if (decision) {
+        exactBody(body, ["revision", "stateId"]);
         return json(
           200,
           review.decide(
@@ -411,12 +469,14 @@ export async function startViewer(root, port = 0, options = {}) {
             decision[2],
             body.revision,
             body.stateId,
-            "human",
+            principal.identity,
           ),
         );
+      }
       return json(404, { error: "Unknown route" });
     } catch (error) {
-      return json(409, {
+      return json(error?.status ?? 409, {
+        ...(error?.code ? { code: error.code } : {}),
         error: error instanceof Error ? error.message : "Request failed",
       });
     }
@@ -430,5 +490,15 @@ export async function startViewer(root, port = 0, options = {}) {
     server.listen(config.port, config.host, resolve);
   });
   origin = viewerOrigin(config, server.address().port);
-  return { server, origin, url: `${origin}/#${token}` };
+  const ownerUrl = `${origin}/#${config.token}`,
+    reviewerUrl = config.reviewerToken
+      ? `${origin}/#${config.reviewerToken}`
+      : undefined;
+  return {
+    server,
+    origin,
+    url: ownerUrl,
+    ownerUrl,
+    ...(reviewerUrl ? { reviewerUrl } : {}),
+  };
 }

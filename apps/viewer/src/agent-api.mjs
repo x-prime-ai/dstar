@@ -7,6 +7,13 @@ import {
   validateTarget,
   resolveTarget,
 } from "@dstar/engine";
+import { publicPrincipal } from "./access-control.mjs";
+
+export const AGENT_IDENTITY = Object.freeze({
+  id: "agent",
+  displayName: "Agent",
+  role: "agent",
+});
 
 export const AGENT_LIMITS = Object.freeze({
   files: 512,
@@ -67,6 +74,9 @@ function publicComment(c) {
     author: c.author,
     createdAt: c.createdAt,
     status: c.status,
+    ...(c.resolvedAt
+      ? { resolvedAt: c.resolvedAt, resolvedBy: c.resolvedBy }
+      : {}),
     replies: c.replies.map(({ id, body, author, createdAt }) => ({
       id,
       body,
@@ -166,7 +176,7 @@ export function decodeCandidate(input) {
   }
   return files;
 }
-function selectionContext(engine, input) {
+function selectionContext(engine, input, principal) {
   object(input, ["review", "selection", "action", "focusedCommentId"], []);
   const review = input.review ?? null,
     selection = input.selection ?? null,
@@ -248,6 +258,7 @@ function selectionContext(engine, input) {
       : { status: "orphaned" },
   });
   return {
+    session: publicPrincipal(principal),
     packageId: state.id,
     stateId: snapshot.stateId,
     generation: state.generation,
@@ -310,7 +321,14 @@ function errorResult(error) {
       "The document or request failed validation. Check HTML/CSS, local assets, exact selection and resource limits; no successful operation is implied.",
   };
 }
-export async function agentRoute({ engine, req, json, path, origin }) {
+export async function agentRoute({
+  engine,
+  req,
+  json,
+  path,
+  origin,
+  principal,
+}) {
   if (!path.startsWith("/api/agent/")) return false;
   const send = (status, data) => {
     json(status, data);
@@ -353,7 +371,7 @@ export async function agentRoute({ engine, req, json, path, origin }) {
       throw new InputError("Invalid JSON");
     }
     if (path.endsWith("/context"))
-      return send(200, selectionContext(engine, body));
+      return send(200, selectionContext(engine, body, principal));
     if (path.endsWith("/document")) {
       object(body, ["revision"]);
       requireInput(
@@ -384,7 +402,7 @@ export async function agentRoute({ engine, req, json, path, origin }) {
       text(body.key, "key", 200);
       return send(200, {
         comment: publicComment(
-          engine.reply(body.commentId, body.body, "agent", body.key),
+          engine.reply(body.commentId, body.body, AGENT_IDENTITY, body.key),
         ),
       });
     }
@@ -410,7 +428,7 @@ export async function agentRoute({ engine, req, json, path, origin }) {
         base: body.base,
         request: body.request,
         key: body.key,
-        author: "agent",
+        author: AGENT_IDENTITY,
       });
     } finally {
       rmSync(directory, { recursive: true, force: true });
