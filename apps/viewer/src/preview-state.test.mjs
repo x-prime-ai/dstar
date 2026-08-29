@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { PreviewState } from "../public/preview-state.js";
 import {
   RefreshGate,
+  agentHandoffPrompt,
   reviewContext,
   selectionFromEvent,
   selectionMessageFromEvent,
@@ -9,6 +10,27 @@ import {
   commentGroups,
   annotationEventFromFrame,
 } from "../public/review-state.js";
+
+it("creates token-free handoff prompts for the already-open Viewer tab", () => {
+  const comment = agentHandoffPrompt(
+      "comment",
+      "http://127.0.0.1:4321/#private-token",
+    ),
+    suggest = agentHandoffPrompt(
+      "suggest",
+      "https://viewer.example/review?x=1#private-token",
+    );
+  expect(comment).toContain("already-open DSTAR Viewer tab");
+  expect(comment).toContain("http://127.0.0.1:4321");
+  expect(comment).toContain("draft_selection_comment");
+  expect(suggest).toContain("https://viewer.example");
+  expect(suggest).toContain("draft_selection_suggestion");
+  expect(suggest).toContain("propose_revision");
+  expect(comment + suggest).not.toContain("private-token");
+  expect(() => agentHandoffPrompt("resolve", "https://viewer.example")).toThrow(
+    "Unsupported agent handoff action",
+  );
+});
 
 const frame = { capability: "cap-a", revision: "rev-a" };
 const proposal = { status: "pending", parent: "base", revision: "rev-a" };

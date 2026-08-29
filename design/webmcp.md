@@ -97,6 +97,13 @@ The action records intent for the external browser agent; the user's instruction
 is still entered in the agent chat, not in the Viewer. WebMCP does not provide a
 generic page API that opens or prompts that chat.
 
+Clicking **Ask agent to draft** stores the current action and draft, then uses
+the browser Clipboard API to copy a handoff prompt. The prompt contains only the
+Viewer origin, never the fragment credential, selection text or draft. It tells
+the agent to reuse the already-open tab because opening the URL in another tab
+would lose the transient selection. Clipboard failure does not clear the action;
+the Viewer instead shows instructions for addressing the open tab manually.
+
 For **Comment**, the agent may call `draft_selection_comment`. For **Suggest**,
 it may call `draft_selection_suggestion`. Both tools only fill the matching
 editable Viewer composer and fail rather than overwrite text changed since the

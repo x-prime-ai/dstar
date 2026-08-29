@@ -1,6 +1,7 @@
 import { PreviewState } from "./preview-state.js";
 import {
   RefreshGate,
+  agentHandoffPrompt,
   reviewContext,
   selectionMessageFromEvent,
   selectionButtonPosition,
@@ -226,7 +227,20 @@ $("selection-suggest").onclick = () => {
   selectionAction = null;
   composeSuggestion(selectedTarget);
 };
-$("ask-agent-comment").onclick = () => {
+async function copyAgentHandoff(kind) {
+  const prompt = agentHandoffPrompt(kind, location.origin),
+    clipboard = document.defaultView.navigator.clipboard;
+  try {
+    if (!clipboard?.writeText) throw new Error("Clipboard unavailable");
+    await clipboard.writeText(prompt);
+    note("Agent prompt copied — paste it into your agent chat.");
+  } catch {
+    note(
+      "Agent context is ready, but copying failed. Tell your browser agent to use the already-open DSTAR Viewer tab.",
+    );
+  }
+}
+$("ask-agent-comment").onclick = async () => {
   if (!commentTarget || postingComment) return;
   target = commentTarget;
   selectionAction = {
@@ -234,11 +248,9 @@ $("ask-agent-comment").onclick = () => {
     target: commentTarget,
     draft: $("body").value,
   };
-  note(
-    "Comment request ready. Tell your browser agent what the comment should say.",
-  );
+  await copyAgentHandoff("comment");
 };
-$("ask-agent-suggestion").onclick = () => {
+$("ask-agent-suggestion").onclick = async () => {
   if (!suggestionTarget || postingSuggestion) return;
   target = suggestionTarget;
   selectionAction = {
@@ -246,9 +258,7 @@ $("ask-agent-suggestion").onclick = () => {
     target: suggestionTarget,
     draft: $("suggestion-body").value,
   };
-  note(
-    "Suggestion request ready. Tell your browser agent what replacement you want.",
-  );
+  await copyAgentHandoff("suggest");
 };
 $("cancel-comment").onclick = () => {
   $("body").value = "";

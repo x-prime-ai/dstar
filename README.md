@@ -74,7 +74,8 @@ When the browser supports WebMCP, the top-level Viewer also registers six
 document/review tools for browser agents. They can read exact versions, propose
 complete HTML/CSS/assets, prepare editable comment and suggestion drafts, and
 reply to comments; acceptance, posting and suggestion submission remain explicit
-Viewer actions. See
+Viewer actions. **Ask agent** copies a token-free handoff prompt for the
+already-open Viewer tab. See
 [WebMCP interfaces and limits](design/webmcp.md). Browsers
 without WebMCP retain normal Viewer functionality.
 

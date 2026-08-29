@@ -52,6 +52,19 @@ export function reviewContext(
   };
 }
 
+export function agentHandoffPrompt(kind, viewerUrl) {
+  if (!["comment", "suggest"].includes(kind))
+    throw new Error("Unsupported agent handoff action");
+  const origin = new URL(viewerUrl).origin;
+  return [
+    `Use the already-open DSTAR Viewer tab at ${origin}. Do not open a new tab; the current selection and draft exist only in that tab.`,
+    `Call get_review_context and confirm action.kind is "${kind}". Follow the user's instruction in this chat.`,
+    kind === "comment"
+      ? "Use draft_selection_comment to fill the editable comment draft. Do not post or resolve anything."
+      : "For a text selection, use draft_selection_suggestion to fill the editable replacement draft. For a structural or multi-element change, use propose_revision. Do not submit, accept, or reject anything.",
+  ].join("\n");
+}
+
 export function selectionFromEvent(event, source, frame, previewState) {
   return (
     selectionMessageFromEvent(event, source, frame, previewState)?.target ??
