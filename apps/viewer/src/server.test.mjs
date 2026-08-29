@@ -349,6 +349,132 @@ it("uses a short-lived scoped handoff to return an agent draft", async () => {
     kind: "suggest",
     content: "world",
   });
+  expect(
+    (
+      await wire(viewer, `/api/handoffs/${id}/revoke`, {
+        headers: ownerHeaders,
+        method: "POST",
+        body: "{}",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (await wire(viewer, "/api/state", { headers: scopedHeaders })).status,
+  ).toBe(401);
+});
+
+it("binds an existing-comment handoff to an editable reply or linked pending proposal", async () => {
+  const { root, engine, proposal } = fixture(),
+    comment = engine.comment({
+      target: {
+        revision: proposal.revision,
+        element: "intro",
+        selector: { type: "element" },
+      },
+      body: "Make this greeting clearer",
+      author: "human",
+    }),
+    viewer = await startViewer(root),
+    ownerToken = new URL(viewer.url).hash.slice(1),
+    scopedToken = "j".repeat(64),
+    id = "33333333-3333-4333-8333-333333333333",
+    context = {
+      review: null,
+      selection: null,
+      action: {
+        kind: "address-comment",
+        commentId: comment.id,
+        target: comment.target,
+        draft: "",
+      },
+      focusedCommentId: comment.id,
+    },
+    ownerHeaders = {
+      Authorization: `Bearer ${ownerToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    scopedHeaders = {
+      Authorization: `Bearer ${scopedToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    post = (path, body, headers = scopedHeaders) =>
+      wire(viewer, path, {
+        headers,
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+  cleanup.push(() => close(viewer.server));
+  const created = await post(
+    "/api/handoffs",
+    { id, accessToken: scopedToken, context },
+    ownerHeaders,
+  );
+  expect(created.status).toBe(201);
+  expect(created.json().session.capabilities).toEqual([
+    "read",
+    "reply",
+    "propose",
+  ]);
+  const read = await post("/api/agent/context", context);
+  expect(read.status).toBe(200);
+  expect(read.json()).toMatchObject({
+    focusedComment: { id: comment.id, status: "open" },
+    action: { kind: "address-comment", commentId: comment.id },
+  });
+  expect(
+    (
+      await post(`/api/handoffs/${id}/reply-draft`, {
+        commentId: comment.id,
+        body: "I prepared a linked proposal for your review.",
+      })
+    ).status,
+  ).toBe(200);
+  const returned = await wire(viewer, `/api/handoffs/${id}`, {
+    headers: ownerHeaders,
+  });
+  expect(returned.json().replyDraft).toMatchObject({
+    commentId: comment.id,
+    body: "I prepared a linked proposal for your review.",
+  });
+  expect(
+    (
+      await post("/api/agent/reply", {
+        commentId: comment.id,
+        body: "Do not post this",
+        key: "forbidden-direct-reply",
+      })
+    ).status,
+  ).toBe(403);
+  const request = {
+    base: null,
+    request: "Address the greeting comment",
+    key: "address-comment-proposal",
+    commentIds: [comment.id],
+    files: candidateFiles("A clearer greeting"),
+  };
+  expect(
+    (
+      await post("/api/agent/proposals", {
+        ...request,
+        commentIds: ["44444444-4444-4444-8444-444444444444"],
+      })
+    ).status,
+  ).toBe(403);
+  const proposed = await post("/api/agent/proposals", request);
+  expect(proposed.status).toBe(200);
+  expect(proposed.json().proposal.motivatedBy).toEqual([comment.id]);
+  expect(engine.snapshot().state.comments[0].status).toBe("open");
+  expect((await post("/api/agent/context", context)).status).toBe(409);
+  const linked = engine.snapshot().state.proposals.at(-1);
+  const accepted = await post(
+    `/api/proposals/${linked.id}/accept`,
+    { revision: linked.revision, stateId: engine.snapshot().stateId },
+    ownerHeaders,
+  );
+  expect(accepted.status).toBe(200);
+  expect(engine.snapshot().state.comments[0].status).toBe("open");
 });
 
 it("resolves comment markers against the viewed revision without changing canonical files", async () => {
@@ -962,7 +1088,10 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
     await wire(viewer, `/api/comments/${posted.id}/reply`, {
       method: "POST",
       headers: reviewer,
-      body: JSON.stringify({ body: "Reviewer reply" }),
+      body: JSON.stringify({
+        body: "Reviewer reply",
+        stateId: engine.snapshot().stateId,
+      }),
     })
   ).json();
   expect(replied.replies[0].author).toEqual({
@@ -1033,6 +1162,19 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
     role: "reviewer",
     capabilities: ["read", "handoff"],
   });
+  expect(
+    (await wire(viewer, `/api/handoffs/${handoffId}`, { headers: owner }))
+      .status,
+  ).toBe(403);
+  expect(
+    (
+      await wire(viewer, `/api/handoffs/${handoffId}/revoke`, {
+        method: "POST",
+        headers: owner,
+        body: "{}",
+      })
+    ).status,
+  ).toBe(403);
   expect(
     (
       await wire(viewer, `/api/proposals/${pending.id}/reject`, {

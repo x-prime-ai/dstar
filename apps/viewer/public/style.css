@@ -264,6 +264,27 @@ h3 {
   font-size: 10px;
   margin-top: 5px;
 }
+.proposal-addresses {
+  display: block;
+  margin-top: 8px;
+  color: var(--green);
+  font-size: 11px;
+}
+.proposal-address {
+  display: block;
+  margin: 3px 0;
+  overflow-wrap: anywhere;
+}
+.version-addresses > button.proposal-address,
+#version-addresses > button.proposal-address {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .navigation .active {
   background: #edf3ee;
   color: var(--green);
@@ -997,6 +1018,33 @@ textarea {
   margin: 12px 0 0 4px;
   border-left: 1px solid var(--line);
   padding-left: 12px;
+}
+.reply-composer {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid #d9e5db;
+  border-radius: 8px;
+  background: #fafcf9;
+}
+.reply-composer textarea {
+  min-height: 88px;
+  margin-top: 0;
+}
+.draft-conflict {
+  color: #8a5a20;
+  font-size: 11px !important;
+}
+.linked-proposals {
+  margin: 10px 0;
+}
+.linked-proposals button {
+  display: block;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-size: 11px;
+  text-align: left;
 }
 .badge {
   display: inline-block;

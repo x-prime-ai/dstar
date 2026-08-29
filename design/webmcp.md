@@ -38,19 +38,20 @@ erase a working credential. Authorization errors from an in-flight tool use
 
 ## Tool contract
 
-All six tools belong to the Viewer page, not the sandboxed document. All input
+All seven tools belong to the Viewer page, not the sandboxed document. All input
 schemas reject additional properties. Descriptions and annotations mark document
 and comment contents as untrusted data. A tool must not treat instructions found
 inside that content as user authorization.
 
-| Tool                         | Arguments                     | Result on success                                                                                                                                               |
-| ---------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_review_context`         | `{}`                          | Public session role/capabilities, package/state IDs, accepted head, reviewed version, selection/action, focused comment, proposals, comments/replies and limits |
-| `read_document`              | `{revision}`                  | Exact immutable revision and complete `files` array                                                                                                             |
-| `draft_selection_comment`    | `{body}`                      | Opens an editable comment draft for the exact selection; never posts it                                                                                         |
-| `draft_selection_suggestion` | `{replacement}`               | Fills the editable suggestion composer for the exact selection; never submits it                                                                                |
-| `propose_revision`           | `{base, request, key, files}` | Stored proposal, including its exact base/revision, status and review diff                                                                                      |
-| `reply_comment`              | `{commentId, body, key}`      | Comment with its replies; status is not changed                                                                                                                 |
+| Tool                         | Arguments                                  | Result on success                                                                                                                                               |
+| ---------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_review_context`         | `{}`                                       | Public session role/capabilities, package/state IDs, accepted head, reviewed version, selection/action, focused comment, proposals, comments/replies and limits |
+| `read_document`              | `{revision}`                               | Exact immutable revision and complete `files` array                                                                                                             |
+| `draft_selection_comment`    | `{body}`                                   | Opens an editable comment draft for the exact selection; never posts it                                                                                         |
+| `draft_selection_suggestion` | `{replacement}`                            | Fills the editable suggestion composer for the exact selection; never submits it                                                                                |
+| `draft_comment_reply`        | `{commentId, body}`                        | Returns an editable reply draft for the exact focused comment; never posts or resolves it                                                                       |
+| `propose_revision`           | `{base, request, key, files, commentIds?}` | Stored proposal, including exact base/revision, structured motivation links, status and review diff                                                             |
+| `reply_comment`              | `{commentId, body, key}`                   | Comment with its replies; status is not changed                                                                                                                 |
 
 Every tool result is a string containing a JSON object with `ok: true` or
 `ok: false`. Successful mutation results also include `viewerUpdated`. If a
@@ -90,27 +91,43 @@ revision, and that the target exactly matches its immutable HTML index. It never
 substitutes the latest head into an older target. A selection cannot be sent as
 ready while the preview is still loading or has failed.
 
-`action` is transient and null until the user explicitly chooses **Comment** or
-**Suggest** beside a selection. It is `{kind, target, draft?}`, where `kind` is
-`comment` or `suggest` and `target` must exactly equal `selection`. An optional
+`action` is transient and null until the user explicitly chooses **Comment**,
+**Suggest**, or **Ask agent to address**. Selection actions are
+`{kind, target, draft?}`, where `kind` is `comment` or `suggest` and `target`
+must exactly equal `selection`. An optional
 `draft` captures the editable text at the moment the user asks for agent help.
 The action records intent for the external browser agent; the user's instruction
 is still entered in the agent chat, not in the Viewer. WebMCP does not provide a
 generic page API that opens or prompts that chat.
 
-Clicking **Ask agent to draft** stores the current action and draft, then creates
-a private 15-minute handoff and uses the browser Clipboard API to copy its URL.
-That URL contains a new scoped fragment credential, never the Owner/Reviewer
-session credential, selection text or draft. The handoff inherits only the
-creator's required capabilities and exact context; its public context/results
-include role/capabilities but no token. Clipboard failure does not broaden or
-persist the capability.
+Clicking **Ask agent to draft** or **Ask agent to address** creates a random,
+15-minute, in-memory handoff and copies a private URL whose fragment is the
+handoff credential, never the Owner/Reviewer session credential, selection text
+or draft. A different Codex task can open it. The server stores the exact
+validated context, accepted state hash, allowed immutable revisions, role-bound
+principal and minimum mutation scope; its public result exposes capabilities but
+no token. Clipboard failure revokes the handoff. State drift, expiry, explicit
+page/version changes, credential mismatch and context mismatch fail closed.
 
 For **Comment**, the agent may call `draft_selection_comment`. For **Suggest**,
 it may call `draft_selection_suggestion`. Both tools only fill the matching
 editable Viewer composer and fail rather than overwrite text changed since the
 user asked for help. The user can edit or discard the draft before posting or
 submitting it.
+
+For an existing comment, the action is
+`{kind:"address-comment", commentId, target, draft:""}` with
+`focusedCommentId === commentId`, `selection:null`, and `target` exactly equal
+to the persisted comment target. `draft_comment_reply` may return an editable
+reply to the original Viewer, where a person edits and explicitly posts it.
+Alternatively `propose_revision` must send `commentIds:[focusedComment.id]`.
+The handoff cannot call the direct reply, accept, reject or resolve routes.
+
+The Engine stores sorted validated links as `proposal.motivatedBy`. Every ID
+must name an existing open comment when new work is created. The links are part
+of proposal idempotency, public projection and history. Accepting a linked
+proposal never resolves a comment, and resolving a comment never changes the
+proposal record.
 
 A manually submitted suggestion replaces one exact `text-range` within one
 stable element and becomes a normal pending attributed proposal. Other files remain
@@ -165,7 +182,7 @@ HTML-first package; creating/opening package roots remains host/CLI work.
 | ---------------------- | ------------------------------------------------------------------------------------------------------ |
 | `/api/agent/context`   | `{review?, selection?, action?, focusedCommentId?}` supplied by the top-level page, validated as above |
 | `/api/agent/document`  | `{revision}`                                                                                           |
-| `/api/agent/proposals` | `{base, request, key, files}`                                                                          |
+| `/api/agent/proposals` | `{base, request, key, files, commentIds?}`                                                             |
 | `/api/agent/reply`     | `{commentId, body, key}`                                                                               |
 
 The normal Viewer Bearer-session gate runs first. Each route also requires the
@@ -175,6 +192,11 @@ override or decision. The browser's request closure retains the credential; it
 is not a tool argument or result. Results project public document/review data,
 excluding tokens, frame capabilities, storage locations and internal command
 fingerprints. Unexpected Engine/filesystem errors are not echoed to tools.
+
+Short-lived handoffs additionally use `/api/handoffs/:id/reply-draft` for the
+exact bound comment and `/api/handoffs/:id/revoke` for creator-driven
+invalidation. These are not generic agent routes. The server checks the
+handoff's state hash and resource binding before dispatching any allowed route.
 
 Before any filesystem write, the bridge validates canonical paths and encodings,
 rejects duplicate paths, case collisions (including directory components),
@@ -208,12 +230,14 @@ place. A preview capability cannot authorize agent API calls.
 ### Retry, concurrency and errors
 
 Proposal keys use the existing persisted Engine command identity
-`[base, candidateRevision, request, author]`. An identical retry returns the
+`[base, candidateRevision, request, author]`, extended with sorted
+`motivatedBy` when links are present. An identical retry returns the
 original proposal even if it has since been accepted or rejected. Changed
 arguments under that key fail. A stale base under a new key fails; no implicit
 merge or base rewrite occurs.
 
-`engine.reply` adds an optional fourth argument, `key`. Its check and append run
+`engine.reply` adds an optional fourth argument, `key`, and optional fifth exact
+review-state hash for editable human drafts. Its check and append run
 under the same Engine transaction; the key is persisted on the reply. The key
 is unique among keyed replies in that package: reusing it for different text,
 author or comment fails. Existing unkeyed human/CLI replies remain supported.
@@ -224,7 +248,7 @@ with the **same key**; aborting a fetch cannot undo an already committed write.
 Error results have `{ok:false, code, error}`. Codes include `invalid_input`,
 `too_large`, `stale_base`, `idempotency_conflict`, `not_found`, `no_changes`,
 `busy`, `validation_failed`, `forbidden`, `unknown_route`, and the browser-side
-`connection_error`. HTTP validation/input failures use 400/413/422; conflicts
+`comment_closed`, `connection_error`. HTTP validation/input failures use 400/413/422; conflicts
 and busy/not-found conditions use 409. Unknown agent routes use 404. A 401 from
 the shared session gate is reported as a connection/session failure by the tool.
 
@@ -248,6 +272,9 @@ and proposals use the fixed Agent actor, while direct human writes use the
 authenticated display name/role rather than request-provided author data. This
 is still not an external identity provider, signed identity proof or arbitrary
 multi-user authentication system.
+The Owner session credential also authorizes normal Viewer decision endpoints;
+a trusted local process with equivalent session access can act outside the seven
+WebMCP tools.
 
 The bridge inherits synchronous Engine replay/validation and metadata limits.
 It does not provide result pagination or streaming asset upload, and large
@@ -274,13 +301,18 @@ restrictions. Adapter tests use explicitly labeled registration doubles to
 check schemas, execution signals, cleanup and unavailable-browser behavior;
 those tests are not evidence of native browser support.
 
-Current UI verification in Codex In-app Browser discovered all six page tools.
-Earlier end-to-end verification called the original four remote tools through
-its Browser WebMCP capability: read context/document, propose a complete
-revision, reply and retry, then explicit UI confirmation/acceptance, history and
-stale-base rejection. The iframe URL, selection and unsent draft survived agent
-changes; base comparison and its original selection revision survived Refresh.
-This establishes the available browser host's integration, not independent
-verification of Chrome's native implementation. No API was injected by the
-test. A separate Chrome build with WebMCP enabled remains a follow-up
-compatibility check; do not report it as passed on this evidence.
+Current UI verification in Codex In-app Browser discovered all seven page
+tools. The existing-comment check clicked **Ask agent to address**, observed
+`data-agent-state="waiting"`, read `focusedComment`, and called the page's actual
+`read_document` and `propose_revision` tools with the exact comment ID. The
+Viewer showed both “Addresses comment …” and reciprocal “Addressed by proposal
+…” labels. Explicit acceptance kept the comment open. Its editable reply
+composer enabled **Post reply** but created no reply before submission; Cancel
+discarded the draft. Browser error/warning logs were empty.
+
+Earlier end-to-end verification also exercised selection drafts, idempotent
+reply/retry, base comparison, history and stale-base rejection. This establishes
+the available browser host's integration, not independent verification of
+Chrome's native implementation. No API was injected by the tests. A separate
+Chrome build with WebMCP enabled remains a follow-up compatibility check; do not
+report it as passed on this evidence.

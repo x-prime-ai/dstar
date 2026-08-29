@@ -7,6 +7,7 @@ const callbacks = () => ({
   onMutation: vi.fn(),
   onDraftComment: vi.fn().mockReturnValue(true),
   onDraftSuggestion: vi.fn().mockReturnValue(true),
+  onDraftReply: vi.fn().mockReturnValue(true),
 });
 it("defines page-context, draft and proposal tools with the current WebMCP signature", async () => {
   const cb = callbacks(),
@@ -16,6 +17,7 @@ it("defines page-context, draft and proposal tools with the current WebMCP signa
     "read_document",
     "draft_selection_comment",
     "draft_selection_suggestion",
+    "draft_comment_reply",
     "propose_revision",
     "reply_comment",
   ]);
@@ -32,8 +34,9 @@ it("defines page-context, draft and proposal tools with the current WebMCP signa
     false,
     false,
     false,
+    false,
   ]);
-  for (const tool of tools.filter((t) => !t.name.startsWith("draft_selection")))
+  for (const tool of tools.filter((t) => !t.name.startsWith("draft_")))
     expect(JSON.parse(await tool.execute({}, { signal })).ok).toBe(true);
   expect(cb.api.mock.calls.every((call) => call[2] === signal)).toBe(true);
   expect(cb.api.mock.calls[0]).toEqual([
@@ -42,6 +45,34 @@ it("defines page-context, draft and proposal tools with the current WebMCP signa
     signal,
   ]);
   expect(cb.onMutation).toHaveBeenCalledTimes(2);
+});
+it("returns an editable reply draft only for the exact focused comment action", async () => {
+  const cb = callbacks(),
+    tool = createTools(cb).find(
+      (entry) => entry.name === "draft_comment_reply",
+    ),
+    commentId = "11111111-1111-4111-8111-111111111111";
+  expect(
+    JSON.parse(await tool.execute({ commentId, body: "Candidate is ready" })),
+  ).toMatchObject({ ok: false, code: "invalid_input" });
+  cb.getReviewContext.mockReturnValue({
+    stateId: "state-one",
+    focusedComment: { id: commentId },
+    action: { kind: "address-comment", commentId },
+  });
+  expect(
+    JSON.parse(await tool.execute({ commentId, body: "Candidate is ready" })),
+  ).toEqual({ ok: true, drafted: true, viewerUpdated: true });
+  expect(cb.onDraftReply).toHaveBeenCalledWith({
+    commentId,
+    body: "Candidate is ready",
+    expectedStateId: "state-one",
+  });
+  cb.onDraftReply.mockReturnValue(false);
+  expect(
+    JSON.parse(await tool.execute({ commentId, body: "Changed locally" })),
+  ).toMatchObject({ ok: false, code: "draft_conflict" });
+  expect(cb.api).not.toHaveBeenCalled();
 });
 it("fills an editable comment draft only for an exact Viewer comment action", async () => {
   const cb = callbacks(),
@@ -176,7 +207,7 @@ it("progressively enhances document.modelContext and unregisters with AbortSigna
   };
   const result = await registerWebMCP({ document, ...cb });
   expect(result.status).toBe("registered");
-  expect(entries).toHaveLength(6);
+  expect(entries).toHaveLength(7);
   expect(entries.every(([, options]) => !options.signal.aborted)).toBe(true);
   result.dispose();
   expect(entries.every(([, options]) => options.signal.aborted)).toBe(true);

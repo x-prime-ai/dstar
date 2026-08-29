@@ -2,6 +2,7 @@ import { PreviewState } from "./preview-state.js";
 import {
   RefreshGate,
   agentHandoffPrompt,
+  addressCommentContext,
   reviewContext,
   selectionMessageFromEvent,
   selectionButtonPosition,
@@ -62,10 +63,13 @@ let current,
   showingBase = false,
   postingComment = false,
   postingSuggestion = false,
+  postingReply = false,
+  replyDraft = null,
   suggestionDeletion = false,
   incomingHandoff = null,
   outgoingHandoff = null,
   outgoingDraftId = null,
+  commentAgentStates = new Map(),
   messageTimer;
 let previewSerial = 0;
 function ask(title, detail, reply = false) {
@@ -143,6 +147,26 @@ function resetTarget() {
 }
 const sameTarget = (left, right) =>
   JSON.stringify(left) === JSON.stringify(right);
+const motivatingComments = (proposal) =>
+  (proposal?.motivatedBy ?? []).map((id) => ({
+    id,
+    comment: current?.state.comments.find((entry) => entry.id === id),
+  }));
+function renderProposalAddresses(proposal, container, compact = false) {
+  container.replaceChildren();
+  for (const { id, comment } of motivatingComments(proposal)) {
+    const item = el(
+      compact ? "small" : "button",
+      `Addresses comment ${id.slice(0, 8)}${comment ? `: ${comment.body.slice(0, compact ? 60 : 120)}` : ""}`,
+      "proposal-address",
+    );
+    if (!compact && comment) {
+      item.type = "button";
+      item.onclick = () => focusComment(id);
+    }
+    container.append(item);
+  }
+}
 const suggestionReady = () =>
   suggestionTarget?.selector.type === "text-range" &&
   (suggestionDeletion || $("suggestion-body").value.trim());
@@ -287,6 +311,71 @@ const newHandoffToken = () => {
   document.defaultView.crypto.getRandomValues(bytes);
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
+async function revokeOutgoingHandoff(nextState = "expired") {
+  const handoff = outgoingHandoff;
+  outgoingHandoff = null;
+  outgoingDraftId = null;
+  if (!handoff) return;
+  if (handoff.context.action.kind === "address-comment") {
+    commentAgentStates.set(handoff.context.action.commentId, nextState);
+    if (current) comments();
+  }
+  setAgentStatus(
+    nextState,
+    nextState === "returned"
+      ? "Agent result returned. Review it before posting or deciding."
+      : "The agent handoff expired or was revoked because the review context changed.",
+  );
+  try {
+    await api(`handoffs/${handoff.id}/revoke`, {});
+  } catch {
+    // Local state still fails closed; the server also expires and state-binds it.
+  }
+}
+async function createAgentHandoff(kind, context) {
+  if (context.action?.kind !== kind)
+    throw new Error("The requested action is no longer ready for an agent");
+  await revokeOutgoingHandoff();
+  const id = document.defaultView.crypto.randomUUID(),
+    accessToken = newHandoffToken(),
+    handoffUrl = new URL(location.origin);
+  handoffUrl.searchParams.set("handoff", id);
+  handoffUrl.hash = accessToken;
+  await api("handoffs", { id, accessToken, context });
+  outgoingHandoff = {
+    id,
+    context,
+    stateId: current.stateId,
+    proposalIds: current.state.proposals.map((proposal) => proposal.id),
+  };
+  if (kind === "address-comment") {
+    commentAgentStates.set(context.action.commentId, "waiting");
+    comments();
+  }
+  setAgentStatus(
+    "waiting",
+    "Waiting for the agent. You can keep reading; the draft will return here.",
+  );
+  outgoingDraftId = null;
+  const prompt = agentHandoffPrompt(
+      kind,
+      handoffUrl.href,
+      context.selection?.selector.type,
+    ),
+    clipboard = document.defaultView.navigator.clipboard;
+  try {
+    if (!clipboard?.writeText) throw new Error("Clipboard unavailable");
+    await clipboard.writeText(prompt);
+    note(
+      "Private 15-minute agent handoff copied — paste it into your agent chat.",
+    );
+  } catch {
+    await revokeOutgoingHandoff();
+    throw new Error(
+      "Agent handoff was revoked because copying failed. Try again.",
+    );
+  }
+}
 async function copyAgentHandoff(kind) {
   if (!session.can("handoff"))
     throw new Error("This role cannot create an agent handoff");
@@ -299,36 +388,7 @@ async function copyAgentHandoff(kind) {
     selectionAction,
     activeCommentId,
   );
-  if (context.action?.kind !== kind)
-    throw new Error("The selected action is no longer ready for an agent");
-  const id = document.defaultView.crypto.randomUUID(),
-    accessToken = newHandoffToken(),
-    handoffUrl = new URL(location.origin);
-  handoffUrl.searchParams.set("handoff", id);
-  handoffUrl.hash = accessToken;
-  await api("handoffs", { id, accessToken, context });
-  outgoingHandoff = { id, context };
-  outgoingDraftId = null;
-  const prompt = agentHandoffPrompt(
-      kind,
-      handoffUrl.href,
-      context.selection.selector.type,
-    ),
-    clipboard = document.defaultView.navigator.clipboard;
-  try {
-    if (!clipboard?.writeText) throw new Error("Clipboard unavailable");
-    await clipboard.writeText(prompt);
-    setAgentStatus(
-      "waiting",
-      "Waiting for the agent. You can keep reading; the draft will return here.",
-    );
-    note(
-      "Private 15-minute agent handoff copied — paste it into your agent chat.",
-    );
-  } catch {
-    outgoingHandoff = null;
-    throw new Error("Agent handoff is ready, but copying failed. Try again.");
-  }
+  await createAgentHandoff(kind, context);
 }
 $("ask-agent-comment").onclick = async () => {
   if (!commentTarget || postingComment) return;
@@ -438,6 +498,7 @@ async function preview(id) {
 }
 async function select(id, { keepPreview = false } = {}) {
   const previous = selected?.id;
+  if (outgoingHandoff && previous !== id) await revokeOutgoingHandoff();
   selected = current.state.proposals.find((p) => p.id === id);
   if (!keepPreview) showingBase = false;
   const copy = versionCopy(selected, current.state, showingBase),
@@ -489,6 +550,7 @@ async function select(id, { keepPreview = false } = {}) {
       : viewMode === "changes"
         ? "The exact After preview is ready; you can decide here or return to Preview."
         : "Review the After version and its changes before deciding.";
+    renderProposalAddresses(selected, $("version-addresses"));
     const bytes = selected.changes.reduce(
         (sum, c) => sum + (c.storage?.size ?? 0),
         0,
@@ -498,7 +560,7 @@ async function select(id, { keepPreview = false } = {}) {
       ).length;
     $("storage").textContent =
       `${selected.changes.length} changed files · ${bytes.toLocaleString()} compressed bytes · ${deltas} deltas · ${selected.diff.anchorRisks.length} comment anchor warnings`;
-  }
+  } else $("version-addresses").replaceChildren();
   if (previous !== selected?.id) {
     diffFile = null;
     ++diffSerial;
@@ -749,10 +811,17 @@ function focusGroup(id, fromList = true) {
   if (!group || !group.comments.some(located)) return;
   setView("preview");
   activeGroup = id;
-  if (!group.comments.some((comment) => comment.id === activeCommentId))
-    activeCommentId =
+  if (!group.comments.some((comment) => comment.id === activeCommentId)) {
+    const nextCommentId =
       group.comments.find((comment) => comment.status === "open")?.id ??
       group.comments[0].id;
+    if (
+      outgoingHandoff?.context.action.kind === "address-comment" &&
+      outgoingHandoff.context.action.commentId !== nextCommentId
+    )
+      safely(revokeOutgoingHandoff)();
+    activeCommentId = nextCommentId;
+  }
   setPanel("comments-panel", true);
   updateReviewFocus();
   const card = $(`comment-group-${group.number}`);
@@ -794,12 +863,103 @@ function updateReviewFocus() {
 function focusComment(id, announce = true) {
   const comment = current?.state.comments.find((entry) => entry.id === id);
   if (!comment) return;
+  if (
+    outgoingHandoff?.context.action.kind === "address-comment" &&
+    outgoingHandoff.context.action.commentId !== id
+  )
+    safely(revokeOutgoingHandoff)();
   activeCommentId = id;
   activeGroup = comment.target.element;
   setPanel("comments-panel", true);
   updateReviewFocus();
   sendAnnotations();
   if (announce) note("Comment selected for agent context.");
+}
+function openReplyDraft(comment, body = "") {
+  if (replyDraft?.commentId === comment.id) {
+    focusComment(comment.id, false);
+    comments();
+    return true;
+  }
+  if (replyDraft) {
+    note("Post or cancel your current reply draft first.");
+    return false;
+  }
+  replyDraft = {
+    commentId: comment.id,
+    body,
+    expectedStateId: current.stateId,
+  };
+  focusComment(comment.id, false);
+  comments();
+  document
+    .querySelector(`.reply-composer[data-comment="${comment.id}"] textarea`)
+    ?.focus();
+  return true;
+}
+function replyComposer(comment) {
+  const form = el("form", undefined, "reply-composer");
+  form.dataset.comment = comment.id;
+  const input = el("textarea", undefined, "reply-draft");
+  input.value = replyDraft.body;
+  input.maxLength = 20000;
+  input.placeholder = "Edit the reply before posting…";
+  input.setAttribute("aria-label", `Reply to comment ${comment.id}`);
+  const stale = replyDraft.expectedStateId !== current.stateId;
+  input.disabled = postingReply || stale;
+  input.oninput = () => {
+    if (replyDraft?.commentId === comment.id) replyDraft.body = input.value;
+    submit.disabled = postingReply || stale || !input.value.trim();
+  };
+  const actions = el("div", undefined, "composer-actions"),
+    cancel = el("button", "Cancel"),
+    submit = el("button", postingReply ? "Posting…" : "Post reply", "primary");
+  cancel.type = "button";
+  cancel.disabled = postingReply;
+  cancel.onclick = () => {
+    commentAgentStates.set(comment.id, "idle");
+    replyDraft = null;
+    comments();
+  };
+  submit.disabled = postingReply || stale || !input.value.trim();
+  form.onsubmit = safely(async (event) => {
+    event.preventDefault();
+    if (
+      postingReply ||
+      stale ||
+      replyDraft?.commentId !== comment.id ||
+      !replyDraft.body.trim()
+    )
+      return;
+    postingReply = true;
+    comments();
+    try {
+      await api(`comments/${comment.id}/reply`, {
+        body: replyDraft.body,
+        stateId: replyDraft.expectedStateId,
+      });
+      commentAgentStates.set(comment.id, "idle");
+      replyDraft = null;
+      await refresh();
+      focusComment(comment.id, false);
+      note("Reply posted");
+    } finally {
+      postingReply = false;
+      if (replyDraft) comments();
+    }
+  });
+  actions.append(cancel, submit);
+  form.append(input);
+  if (stale)
+    form.append(
+      el(
+        "p",
+        "The review state changed. Cancel this draft and start again.",
+        "draft-conflict",
+      ),
+    );
+  form.append(actions);
+  return form;
 }
 function commentThread(c) {
   const article = el("article", undefined, "comment"),
@@ -812,6 +972,8 @@ function commentThread(c) {
     "aria-label",
     `Comment by ${commentActor.name}: ${c.body.slice(0, 160)}`,
   );
+  const agentState = commentAgentStates.get(c.id) ?? "idle";
+  article.dataset.agentState = agentState;
   article.onclick = (event) => {
     if (!event.target.closest("button")) focusComment(c.id);
   };
@@ -847,6 +1009,26 @@ function commentThread(c) {
     reply.append(replyBy, el("p", r.body));
     article.append(reply);
   }
+  const linked = current.state.proposals.filter((proposal) =>
+    (proposal.motivatedBy ?? []).includes(c.id),
+  );
+  if (linked.length) {
+    const links = el("div", undefined, "linked-proposals");
+    for (const proposal of linked) {
+      const link = el(
+        "button",
+        `Addressed by proposal ${proposal.id.slice(0, 8)} · ${proposal.status}`,
+      );
+      link.type = "button";
+      link.onclick = safely(async () => {
+        await select(proposal.id);
+        setPanel("navigation", true);
+      });
+      links.append(link);
+    }
+    article.append(links);
+  }
+  if (replyDraft?.commentId === c.id) article.append(replyComposer(c));
   const actions = el("div", undefined, "comment-actions");
   const selectComment = el(
     "button",
@@ -857,15 +1039,37 @@ function commentThread(c) {
   selectComment.setAttribute("aria-pressed", String(c.id === activeCommentId));
   selectComment.onclick = () => focusComment(c.id);
   actions.append(selectComment);
+  if (
+    c.status === "open" &&
+    ["handoff", "read", "reply", "propose"].every((capability) =>
+      session.can(capability),
+    )
+  ) {
+    const address = el(
+      "button",
+      "Ask agent to address",
+      "comment-address-agent",
+    );
+    address.type = "button";
+    address.onclick = safely(async () => {
+      if (replyDraft?.body)
+        return note("Post or cancel your current reply draft first.");
+      focusComment(c.id, false);
+      const context = addressCommentContext(
+        selected,
+        showingBase,
+        frame,
+        previewState,
+        c,
+      );
+      await createAgentHandoff("address-comment", context);
+    });
+    actions.append(address);
+  }
   if (session.can("reply")) {
     const reply = el("button", "Reply");
-    reply.onclick = safely(async () => {
-      const body = await ask("Reply to comment", c.body, true);
-      if (body?.trim()) {
-        await api(`comments/${c.id}/reply`, { body });
-        await refresh();
-      }
-    });
+    reply.type = "button";
+    reply.onclick = () => openReplyDraft(c);
     actions.append(reply);
   }
   if (c.status === "open" && session.can("resolve")) {
@@ -1024,6 +1228,11 @@ function versionButton(proposal, kind) {
             : `Declined · ${changeSummary(proposal)}`,
     ),
   );
+  if (proposal.motivatedBy?.length) {
+    const addresses = el("span", undefined, "proposal-addresses");
+    renderProposalAddresses(proposal, addresses, true);
+    button.append(addresses);
+  }
   button.onclick = safely(async () => {
     await select(proposal.id);
     if (document.documentElement.clientWidth <= 760)
@@ -1097,6 +1306,7 @@ $("width").onchange = () => {
 };
 async function showComparison(before) {
   if (!selected || selected.status !== "pending") return;
+  await revokeOutgoingHandoff();
   showingBase = before && !!selected.parent;
   const copy = versionCopy(selected, current.state, showingBase);
   $("view-label").textContent = copy.preview;
@@ -1147,13 +1357,14 @@ for (const [button, direction] of [
   ["previous-slide", -1],
   ["next-slide", 1],
 ])
-  $(button).onclick = () => {
+  $(button).onclick = safely(async () => {
+    await revokeOutgoingHandoff();
     if (frame)
       $("preview").contentWindow.postMessage(
         { kind: "dstar-slide", direction, capability: frame.capability },
         "*",
       );
-  };
+  });
 addEventListener("message", (event) => {
   if (previewState.receive(event, $("preview").contentWindow)) {
     clearTimeout(previewTimer);
@@ -1317,6 +1528,35 @@ async function sendIncomingHandoffDraft(kind, content) {
   note("Agent draft sent back to the original Viewer.");
   return true;
 }
+async function sendIncomingReplyDraft({ commentId, body }) {
+  if (
+    incomingHandoff?.context.action?.kind !== "address-comment" ||
+    incomingHandoff.context.action.commentId !== commentId
+  )
+    return false;
+  await api(`handoffs/${incomingHandoffId}/reply-draft`, { commentId, body });
+  note("Editable reply draft sent back to the original Viewer.");
+  return true;
+}
+function applyReplyDraft({ commentId, body, expectedStateId }) {
+  const comment = current?.state.comments.find(
+    (entry) => entry.id === commentId,
+  );
+  if (
+    replyDraft ||
+    current?.stateId !== expectedStateId ||
+    activeCommentId !== commentId ||
+    !comment ||
+    comment.status !== "open"
+  )
+    return false;
+  const applied = openReplyDraft(comment, body);
+  if (applied) {
+    commentAgentStates.set(commentId, "returned");
+    comments();
+  }
+  return applied;
+}
 async function loadIncomingHandoff() {
   if (!incomingHandoffId || incomingHandoff) return;
   incomingHandoff = await api(`handoffs/${incomingHandoffId}`);
@@ -1328,10 +1568,42 @@ async function loadIncomingHandoff() {
 }
 async function syncOutgoingHandoff() {
   if (!outgoingHandoff) return;
+  if (current?.stateId !== outgoingHandoff.stateId) {
+    const commentId = outgoingHandoff.context.action.commentId,
+      linked = current?.state.proposals.find(
+        (proposal) =>
+          proposal.status === "pending" &&
+          !outgoingHandoff.proposalIds.includes(proposal.id) &&
+          (proposal.motivatedBy ?? []).includes(commentId),
+      );
+    if (commentId)
+      commentAgentStates.set(commentId, linked ? "returned" : "expired");
+    setAgentStatus(
+      linked ? "returned" : "expired",
+      linked
+        ? "A linked proposal returned. Review it before deciding."
+        : "The agent handoff expired because the review state changed.",
+    );
+    if (current) comments();
+    outgoingHandoff = null;
+    outgoingDraftId = null;
+    note(
+      linked
+        ? `Linked proposal ready for review: ${linked.request}`
+        : "Agent handoff closed because the review state changed.",
+    );
+    return;
+  }
   let record;
   try {
     record = await api(`handoffs/${outgoingHandoff.id}`);
   } catch {
+    if (outgoingHandoff?.context.action.kind === "address-comment")
+      commentAgentStates.set(
+        outgoingHandoff.context.action.commentId,
+        "expired",
+      );
+    if (current) comments();
     outgoingHandoff = null;
     setAgentStatus(
       "expired",
@@ -1340,9 +1612,41 @@ async function syncOutgoingHandoff() {
     note("Agent handoff expired. Use Ask agent again if needed.");
     return;
   }
-  if (!record.draft || record.draft.id === outgoingDraftId) return;
-  outgoingDraftId = record.draft.id;
+  const returned = record.replyDraft ?? record.draft;
+  if (!returned || returned.id === outgoingDraftId) return;
+  outgoingDraftId = returned.id;
   const { action, selection } = outgoingHandoff.context;
+  if (action.kind === "address-comment") {
+    const review = outgoingHandoff.context.review;
+    const sameView =
+      !review ||
+      (selected?.id === review.proposalId &&
+        showingBase === review.showingBase &&
+        frame?.revision === review.revision &&
+        previewState.status === "ready");
+    const applied =
+      sameView &&
+      record.replyDraft?.commentId === action.commentId &&
+      applyReplyDraft({
+        commentId: action.commentId,
+        body: record.replyDraft.body,
+        expectedStateId: outgoingHandoff.stateId,
+      });
+    if (!applied)
+      note(
+        "Agent returned a reply draft, but the focused comment, page or local draft changed; it was preserved.",
+      );
+    if (!applied) commentAgentStates.set(action.commentId, "expired");
+    setAgentStatus(
+      applied ? "returned" : "expired",
+      applied
+        ? "Agent reply draft returned. Review and edit it before posting."
+        : "The returned reply draft no longer matches the focused review context.",
+    );
+    comments();
+    outgoingHandoff = null;
+    return;
+  }
   if (
     !sameTarget(target, selection) ||
     selectionAction?.kind !== action.kind ||
@@ -1354,15 +1658,15 @@ async function syncOutgoingHandoff() {
     return;
   }
   const applied =
-    record.draft.kind === "comment"
+    returned.kind === "comment"
       ? applyCommentDraft({
           target: selection,
-          body: record.draft.content,
+          body: returned.content,
           expectedDraft: action.draft,
         })
       : applySuggestionDraft({
           target: selection,
-          replacement: record.draft.content,
+          replacement: returned.content,
           expectedDraft: action.draft,
         });
   if (!applied)
@@ -1411,6 +1715,8 @@ async function connectTools() {
             replacement,
             expectedDraft,
           }),
+    onDraftReply: (draft) =>
+      incomingHandoff ? sendIncomingReplyDraft(draft) : applyReplyDraft(draft),
     onMutation: async (result, route) => {
       await refresh();
       const updated =
@@ -1439,7 +1745,7 @@ async function connectTools() {
   registration = result;
   $("webmcp-status").textContent =
     result.status === "registered"
-      ? "WebMCP connected · 6 tools · comments and suggested changes remain human-reviewed"
+      ? "WebMCP connected · 7 tools · comments and proposals remain human-reviewed"
       : result.status === "unsupported"
         ? "WebMCP unavailable · manual review works normally"
         : "WebMCP registration failed · manual review works normally";
@@ -1513,6 +1819,12 @@ function authorizationChanged(authorized) {
   annotations = null;
   activeGroup = null;
   activeCommentId = null;
+  outgoingHandoff = null;
+  outgoingDraftId = null;
+  replyDraft = null;
+  postingReply = false;
+  commentAgentStates.clear();
+  setAgentStatus("idle");
   ++annotationSerial;
   frame = null;
   $("preview").removeAttribute("src");

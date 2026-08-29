@@ -19,6 +19,7 @@ export function createTools({
   onMutation,
   onDraftComment,
   onDraftSuggestion,
+  onDraftReply,
 }) {
   const definitions = [
     {
@@ -124,33 +125,88 @@ export function createTools({
       },
     },
     {
+      name: "draft_comment_reply",
+      description:
+        "Return an editable reply draft for the exact focusedComment after the user chose Ask agent to address. The original Viewer shows it for explicit human submission; this never posts or resolves the comment.",
+      inputSchema: object({
+        commentId: { type: "string", pattern: "^[a-f0-9-]{36}$" },
+        body: { type: "string", minLength: 1, maxLength: 20000 },
+      }),
+      readOnly: false,
+      local: async (args) => {
+        const context = getReviewContext();
+        if (
+          !args ||
+          Object.keys(args).length !== 2 ||
+          typeof args.commentId !== "string" ||
+          typeof args.body !== "string" ||
+          !args.body.trim() ||
+          args.body.length > 20000 ||
+          context.action?.kind !== "address-comment" ||
+          context.action.commentId !== args.commentId ||
+          context.focusedComment?.id !== args.commentId
+        )
+          return {
+            ok: false,
+            code: "invalid_input",
+            error:
+              "Choose Ask agent to address on this exact focused comment before drafting a reply.",
+          };
+        const viewerUpdated = await onDraftReply({
+          commentId: args.commentId,
+          body: args.body,
+          expectedStateId: context.stateId,
+        });
+        return viewerUpdated === false
+          ? {
+              ok: false,
+              code: "draft_conflict",
+              error:
+                "The focused comment, Viewer page or reply draft changed. Ask the agent again from the current comment.",
+            }
+          : { ok: true, drafted: true, viewerUpdated: true };
+      },
+    },
+    {
       name: "propose_revision",
       description:
-        "Submit a complete replacement HTML/CSS/local asset file set against the exact accepted head (null only before first acceptance). Omitted files are deleted. Preserve stable data-dstar-id values. Stores a pending proposal and diff; a person must review and decide in the Viewer. Never accepts, rejects or resolves.",
-      inputSchema: object({
-        base: { anyOf: [revision, { type: "null" }] },
-        request: { type: "string", minLength: 1, maxLength: 20000 },
-        key,
-        files: {
-          type: "array",
-          minItems: 1,
-          maxItems: 512,
-          items: object({
-            path: {
-              type: "string",
-              maxLength: 240,
-              description:
-                "Canonical relative path: document.html, styles.css, styles/**/*.css or assets/**. No dot segments or absolute paths.",
-            },
-            encoding: { type: "string", enum: ["utf8", "base64"] },
-            content: {
-              type: "string",
-              description:
-                "Full file bytes: utf8 for HTML/CSS, canonical base64 for supported raster images/fonts. Maximum 8 MiB per decoded file, 32 MiB total, 48 MiB request JSON.",
-            },
-          }),
+        "Submit a complete replacement HTML/CSS/local asset file set against the exact accepted head (null only before first acceptance). Omitted files are deleted. Preserve stable data-dstar-id values. commentIds creates validated persistent motivation links and is required by an address-comment handoff. Stores a pending proposal and diff; a person must review and decide in the Viewer. Never accepts, rejects or resolves.",
+      inputSchema: object(
+        {
+          base: { anyOf: [revision, { type: "null" }] },
+          request: { type: "string", minLength: 1, maxLength: 20000 },
+          key,
+          commentIds: {
+            type: "array",
+            minItems: 1,
+            maxItems: 100,
+            uniqueItems: true,
+            items: { type: "string", pattern: "^[a-f0-9-]{36}$" },
+            description:
+              "Open comment IDs this proposal addresses. Use the exact focused comment ID for an address-comment handoff.",
+          },
+          files: {
+            type: "array",
+            minItems: 1,
+            maxItems: 512,
+            items: object({
+              path: {
+                type: "string",
+                maxLength: 240,
+                description:
+                  "Canonical relative path: document.html, styles.css, styles/**/*.css or assets/**. No dot segments or absolute paths.",
+              },
+              encoding: { type: "string", enum: ["utf8", "base64"] },
+              content: {
+                type: "string",
+                description:
+                  "Full file bytes: utf8 for HTML/CSS, canonical base64 for supported raster images/fonts. Maximum 8 MiB per decoded file, 32 MiB total, 48 MiB request JSON.",
+              },
+            }),
+          },
         },
-      }),
+        ["base", "request", "key", "files"],
+      ),
       route: "proposals",
       readOnly: false,
     },
@@ -215,6 +271,7 @@ export function createTools({
           "idempotency_conflict",
           "not_found",
           "no_changes",
+          "comment_closed",
           "busy",
           "validation_failed",
         ];

@@ -59,7 +59,7 @@ export function agentHandoffPrompt(
   viewerUrl,
   selectorType = "text-range",
 ) {
-  if (!["comment", "suggest"].includes(kind))
+  if (!["comment", "suggest", "address-comment"].includes(kind))
     throw new Error("Unsupported agent handoff action");
   const url = new URL(viewerUrl);
   if (!url.hash || !url.searchParams.get("handoff"))
@@ -67,12 +67,47 @@ export function agentHandoffPrompt(
   return [
     `Open this private, short-lived DSTAR handoff link in the in-app browser: ${url.href}`,
     `Call get_review_context and confirm action.kind is "${kind}". Follow the user's instruction in this chat.`,
-    kind === "comment"
-      ? "Use draft_selection_comment to return an editable comment draft. Do not post, resolve, accept, or reject anything."
-      : selectorType === "text-range"
-        ? "Use draft_selection_suggestion to return editable replacement text. An empty replacement means delete the selection. Do not submit, accept, reject, or resolve anything."
-        : "This structural or multi-element suggestion cannot use the text draft tool. You may use propose_revision to create a pending proposal for human review; do not accept, reject, or resolve anything.",
+    kind === "address-comment"
+      ? "Use draft_comment_reply to return an editable reply, or propose_revision with commentIds containing exactly focusedComment.id to create a linked pending proposal. Do not post, accept, reject, resolve, or omit the structured comment link."
+      : kind === "comment"
+        ? "Use draft_selection_comment to return an editable comment draft. Do not post, resolve, accept, or reject anything."
+        : selectorType === "text-range"
+          ? "Use draft_selection_suggestion to return editable replacement text. An empty replacement means delete the selection. Do not submit, accept, reject, or resolve anything."
+          : "This structural or multi-element suggestion cannot use the text draft tool. You may use propose_revision to create a pending proposal for human review; do not accept, reject, or resolve anything.",
   ].join("\n");
+}
+
+export function addressCommentContext(
+  selected,
+  showingBase,
+  frame,
+  previewState,
+  comment,
+) {
+  if (!comment || comment.status !== "open")
+    throw new Error("Only an open comment can be addressed");
+  const context = reviewContext(
+    selected,
+    showingBase,
+    frame,
+    previewState,
+    null,
+    null,
+    comment.id,
+  );
+  return {
+    ...context,
+    // A ready view is useful for page-switch revocation, but the immutable
+    // comment target is sufficient when its original page is not open.
+    review: context.review?.previewStatus === "ready" ? context.review : null,
+    selection: null,
+    action: {
+      kind: "address-comment",
+      commentId: comment.id,
+      target: comment.target,
+      draft: "",
+    },
+  };
 }
 
 export function selectionFromEvent(event, source, frame, previewState) {

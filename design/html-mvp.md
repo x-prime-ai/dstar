@@ -186,6 +186,20 @@ recovered; multiple are ambiguous; none are orphaned. The Viewer shows original
 quotes/revisions and current-head status. No cross-element guessing occurs.
 Replies do not resolve, and acceptance does not auto-resolve comments.
 
+A proposal may persist `motivatedBy`, a sorted array of one or more comment
+UUIDs. Creation validates the IDs, uniqueness, existence and open status under
+the proposal write lock. The exact array participates in the idempotency
+command, so a key cannot be retried with different motivation. An exact retry
+still returns its original proposal after a linked comment is resolved or the
+proposal is decided. Older proposals may omit the field and project it as an
+empty list.
+
+Motivation is an explanatory relationship, not a lifecycle transition.
+Accepting or rejecting a proposal leaves all linked comments unchanged;
+replying or resolving a comment leaves proposal history unchanged. Viewer and
+agent projections expose `motivatedBy` so “Addresses comment …” is derived from
+structured state rather than proposal request text.
+
 ## Presentation and security profile
 
 - Static HTML; one html/body; meaningful text requires a stable-ID ancestor.

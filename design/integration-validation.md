@@ -31,6 +31,37 @@ test double are contract tests only. A read-only browser evaluation returning
 `typeof document.modelContext === "undefined"` is not proof of API absence in
 the page's main environment.
 
+### Existing-comment agent closure (2026-08-29)
+
+The comment-addressing work starts from `main` commit `0910f8a` in an
+independent worktree. It does not merge the separate Engine record-storage
+work, change main, deploy a service or create a demo. Its regression scope is:
+
+- create an exact `address-comment` handoff from an existing open comment and
+  restore `focusedComment` in a separate browser task without the source tab;
+- return a reply draft to an editable human composer without creating a reply;
+- create a pending proposal with validated `commentIds`, project the persisted
+  `motivatedBy` relation, and show “Addresses comment …” in proposal history;
+- reject wrong-comment, stale-state, changed-page, expired and over-broad
+  handoff operations; and
+- prove proposal decisions do not resolve comments and agent scope contains no
+  accept, reject or resolve mutation.
+
+The focused Engine suite passed 35 tests and the Viewer suite passed 127 tests,
+including real loopback HTTP, process restart, handoff scope and WebMCP adapter
+coverage. A Codex In-app Browser check against a temporary local package found
+all seven page tools, exercised the visible **Ask agent to address** action,
+created a linked pending proposal through actual page WebMCP, displayed both
+directions of the comment/proposal relationship, explicitly accepted it, and
+confirmed the comment remained open. The reply composer retained editable text
+without posting and discarded it on Cancel. Browser warning/error logs were
+empty. The fixture was removed after the check.
+
+The complete `pnpm verify` then passed under Node 22.22.3 and pnpm 10.28.2:
+format, lint, boundaries, schemas/spec/links, build, conformance, security,
+portable reopen, release packaging, type checking, every workspace test and the
+consumer build. Loopback permission was granted for the real Viewer HTTP tests.
+
 ## Regression procedure
 
 1. Preview a pending genesis and verify that accepted head remains empty.
@@ -49,6 +80,10 @@ the page's main environment.
 6. Repeat tool HTTP routes under a configured external origin. Restart the
    persistent Node entrypoint and verify document revision, comments and
    decisions survive while process-local preview capabilities expire.
+7. From an existing comment, exercise both handoff outcomes: return an editable
+   reply draft, then create an exact linked proposal. Verify wrong links and
+   direct agent reply/decision routes fail, accept the linked proposal as a
+   person, and confirm the comment remains open.
 
 ## Integration results
 

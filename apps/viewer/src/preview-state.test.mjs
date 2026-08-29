@@ -3,6 +3,7 @@ import { PreviewState } from "../public/preview-state.js";
 import {
   RefreshGate,
   agentHandoffPrompt,
+  addressCommentContext,
   reviewContext,
   selectionFromEvent,
   selectionMessageFromEvent,
@@ -21,6 +22,10 @@ it("creates private handoff prompts that another browser task can open", () => {
     suggest = agentHandoffPrompt(
       "suggest",
       `https://viewer.example/?handoff=${id}#${token}`,
+    ),
+    address = agentHandoffPrompt(
+      "address-comment",
+      `https://viewer.example/?handoff=${id}#${token}`,
     );
   expect(comment).toContain("Open this private, short-lived DSTAR handoff");
   expect(comment).toContain("http://127.0.0.1:4321");
@@ -28,6 +33,9 @@ it("creates private handoff prompts that another browser task can open", () => {
   expect(suggest).toContain("https://viewer.example");
   expect(suggest).toContain("draft_selection_suggestion");
   expect(suggest).not.toContain("propose_revision");
+  expect(address).toContain("draft_comment_reply");
+  expect(address).toContain("commentIds");
+  expect(address).toContain("focusedComment.id");
   expect(
     agentHandoffPrompt(
       "suggest",
@@ -41,6 +49,63 @@ it("creates private handoff prompts that another browser task can open", () => {
   expect(() =>
     agentHandoffPrompt("comment", "https://viewer.example/#token"),
   ).toThrow("incomplete");
+});
+
+it("builds an exact existing-comment action without borrowing a page selection", () => {
+  const selected = {
+      id: "proposal",
+      base: "base-rev",
+      revision: "candidate-rev",
+    },
+    comment = {
+      id: "11111111-1111-4111-8111-111111111111",
+      status: "open",
+      target: {
+        revision: "older-rev",
+        element: "intro",
+        selector: { type: "element" },
+      },
+    },
+    context = addressCommentContext(
+      selected,
+      false,
+      { revision: "candidate-rev" },
+      { status: "ready" },
+      comment,
+    );
+  expect(context).toMatchObject({
+    review: {
+      proposalId: "proposal",
+      revision: "candidate-rev",
+      previewStatus: "ready",
+    },
+    selection: null,
+    focusedCommentId: comment.id,
+    action: {
+      kind: "address-comment",
+      commentId: comment.id,
+      target: comment.target,
+      draft: "",
+    },
+  });
+  expect(
+    addressCommentContext(
+      selected,
+      false,
+      { revision: "old" },
+      { status: "failed" },
+      comment,
+    ).review,
+  ).toBeNull();
+  expect(() =>
+    addressCommentContext(
+      selected,
+      false,
+      null,
+      { status: "loading" },
+      { ...comment, status: "resolved" },
+    ),
+  ).toThrow("open comment");
 });
 
 const frame = { capability: "cap-a", revision: "rev-a" };

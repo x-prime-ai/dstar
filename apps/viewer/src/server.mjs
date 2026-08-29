@@ -68,9 +68,16 @@ export async function startViewer(root, port = 0, options = {}) {
     }
     return handoff;
   };
-  const publicHandoff = ({ context, draft, expiresAt, principal }) => ({
+  const publicHandoff = ({
     context,
     draft,
+    replyDraft,
+    expiresAt,
+    principal,
+  }) => ({
+    context,
+    draft,
+    replyDraft,
     expiresAt,
     session: publicPrincipal(principal),
   });
@@ -86,6 +93,47 @@ export async function startViewer(root, port = 0, options = {}) {
     const selection = context?.selection,
       action = context?.action,
       viewed = context?.review;
+    if (action?.kind === "address-comment") {
+      const current = engine.snapshot(),
+        comment = current.state.comments.find(
+          (entry) => entry.id === action.commentId,
+        );
+      if (
+        !comment ||
+        comment.status !== "open" ||
+        context.focusedCommentId !== comment.id ||
+        selection !== null ||
+        JSON.stringify(action.target) !== JSON.stringify(comment.target) ||
+        action.draft !== ""
+      )
+        throw new Error("Invalid focused comment handoff context");
+      const original = engine.snapshot(comment.target.revision);
+      if (!original.index)
+        throw new Error("Focused comment revision is unavailable");
+      validateTarget(original.index, comment.target);
+      if (viewed) {
+        const proposal = current.state.proposals.find(
+          (candidate) => candidate.id === viewed.proposalId,
+        );
+        if (
+          !proposal ||
+          viewed.previewStatus !== "ready" ||
+          (viewed.showingBase
+            ? proposal.base !== viewed.revision
+            : proposal.revision !== viewed.revision)
+        )
+          throw new Error("Focused comment handoff review changed");
+      }
+      return {
+        context: JSON.parse(JSON.stringify(context)),
+        stateId: current.stateId,
+        headRevision: current.revision,
+        allowedRevisions: [comment.target.revision, current.revision].filter(
+          (revision, index, values) =>
+            revision !== null && values.indexOf(revision) === index,
+        ),
+      };
+    }
     if (
       !selection ||
       !action ||
@@ -111,7 +159,16 @@ export async function startViewer(root, port = 0, options = {}) {
         : proposal.revision !== selection.revision)
     )
       throw new Error("Handoff review does not match the selection");
-    return JSON.parse(JSON.stringify(context));
+    const current = engine.snapshot();
+    return {
+      context: JSON.parse(JSON.stringify(context)),
+      stateId: current.stateId,
+      headRevision: current.revision,
+      allowedRevisions: [selection.revision, current.revision].filter(
+        (revision, index, values) =>
+          revision !== null && values.indexOf(revision) === index,
+      ),
+    };
   };
   let origin;
   const server = createServer(async (req, res) => {
@@ -210,6 +267,27 @@ export async function startViewer(root, port = 0, options = {}) {
         return json(401, { error: "Viewer authorization required" });
       if (req.headers.origin !== undefined && req.headers.origin !== origin)
         return json(403, { error: "Invalid review origin" });
+      if (scoped && engine.snapshot().stateId !== scoped.handoff.stateId) {
+        handoffs.delete(scoped.id);
+        return json(409, {
+          error: "Agent handoff context changed; ask the agent again",
+        });
+      }
+      const scopedRevisionRead = scoped
+        ? /^\/api\/(?:preview|annotations)\/([a-f0-9-]{36})$/.exec(path)
+        : null;
+      if (scopedRevisionRead) {
+        const proposal = engine
+          .snapshot()
+          .state.proposals.find((entry) => entry.id === scopedRevisionRead[1]);
+        if (
+          !proposal ||
+          !scoped.handoff.allowedRevisions.includes(proposal.revision)
+        )
+          return json(403, {
+            error: "Agent handoff does not allow this revision",
+          });
+      }
       if (
         scoped &&
         !(
@@ -222,10 +300,14 @@ export async function startViewer(root, port = 0, options = {}) {
             (path === "/api/agent/context" ||
               path === "/api/agent/document" ||
               (path === "/api/agent/proposals" &&
-                scoped.handoff.context.action.kind === "suggest" &&
-                scoped.handoff.context.selection.selector.type !==
-                  "text-range") ||
-              path === `/api/handoffs/${scoped.id}/draft`))
+                (scoped.handoff.context.action.kind === "address-comment" ||
+                  (scoped.handoff.context.action.kind === "suggest" &&
+                    scoped.handoff.context.selection.selector.type !==
+                      "text-range"))) ||
+              (path === `/api/handoffs/${scoped.id}/draft` &&
+                scoped.handoff.context.action.kind !== "address-comment") ||
+              (path === `/api/handoffs/${scoped.id}/reply-draft` &&
+                scoped.handoff.context.action.kind === "address-comment")))
         )
       )
         return json(403, { error: "Agent handoff does not allow this route" });
@@ -239,6 +321,7 @@ export async function startViewer(root, port = 0, options = {}) {
           path,
           origin,
           principal,
+          scope: scoped?.handoff,
         })
       )
         return;
@@ -263,8 +346,16 @@ export async function startViewer(root, port = 0, options = {}) {
       const handoff = /^\/api\/handoffs\/([a-f0-9-]{36})$/.exec(path);
       if (req.method === "GET" && handoff) {
         const record = getHandoff(handoff[1]);
+        const ownsRecord =
+          record &&
+          (scoped?.id === handoff[1] ||
+            (principal.kind === "session" &&
+              JSON.stringify(record.creator) ===
+                JSON.stringify(principal.identity)));
         return record
-          ? json(200, publicHandoff(record))
+          ? ownsRecord
+            ? json(200, publicHandoff(record))
+            : json(403, { error: "Agent handoff resource mismatch" })
           : json(404, { error: "Agent handoff expired or was not found" });
       }
       const diff = /^\/api\/diff\/([a-f0-9-]{36})$/.exec(path);
@@ -355,20 +446,28 @@ export async function startViewer(root, port = 0, options = {}) {
           throw new Error("Agent handoff credential must be unique");
         const existing = getHandoff(body.id);
         if (existing) throw new Error("Agent handoff already exists");
-        const context = validateHandoffContext(body.context),
+        const validated = validateHandoffContext(body.context),
+          action = validated.context.action,
           record = {
-            context,
+            ...validated,
             draft: null,
+            replyDraft: null,
             expiresAt: Date.now() + HANDOFF_TTL,
             accessToken: body.accessToken,
-            principal: handoffPrincipal(principal, [
-              CAPABILITIES.READ,
-              CAPABILITIES.HANDOFF,
-              ...(context.action.kind === "suggest" &&
-              context.selection.selector.type !== "text-range"
-                ? [CAPABILITIES.PROPOSE]
-                : []),
-            ]),
+            creator: principal.identity,
+            principal: handoffPrincipal(
+              principal,
+              action.kind === "address-comment"
+                ? [CAPABILITIES.READ, CAPABILITIES.REPLY, CAPABILITIES.PROPOSE]
+                : [
+                    CAPABILITIES.READ,
+                    CAPABILITIES.HANDOFF,
+                    ...(action.kind === "suggest" &&
+                    validated.context.selection.selector.type !== "text-range"
+                      ? [CAPABILITIES.PROPOSE]
+                      : []),
+                  ],
+            ),
           };
         handoffs.set(body.id, record);
         return json(201, publicHandoff(record));
@@ -381,6 +480,8 @@ export async function startViewer(root, port = 0, options = {}) {
         const record = getHandoff(handoffDraft[1]);
         if (!record)
           return json(404, { error: "Agent handoff expired or was not found" });
+        if (scoped?.id !== handoffDraft[1])
+          return json(403, { error: "Agent handoff resource mismatch" });
         if (
           body.kind !== record.context.action.kind ||
           typeof body.content !== "string" ||
@@ -394,6 +495,46 @@ export async function startViewer(root, port = 0, options = {}) {
           content: body.content,
         };
         return json(200, { draft: record.draft });
+      }
+      const replyDraft = /^\/api\/handoffs\/([a-f0-9-]{36})\/reply-draft$/.exec(
+        path,
+      );
+      if (replyDraft) {
+        exactBody(body, ["commentId", "body"]);
+        const record = getHandoff(replyDraft[1]),
+          commentId = record?.context.action.commentId;
+        if (!record)
+          return json(404, { error: "Agent handoff expired or was not found" });
+        if (scoped?.id !== replyDraft[1])
+          return json(403, { error: "Agent handoff resource mismatch" });
+        if (
+          record.context.action.kind !== "address-comment" ||
+          body.commentId !== commentId ||
+          typeof body.body !== "string" ||
+          !body.body.trim() ||
+          body.body.length > 20000
+        )
+          throw new Error("Invalid focused comment reply draft");
+        record.replyDraft = {
+          id: secret(),
+          commentId,
+          body: body.body,
+        };
+        return json(200, { replyDraft: record.replyDraft });
+      }
+      const revoke = /^\/api\/handoffs\/([a-f0-9-]{36})\/revoke$/.exec(path);
+      if (revoke) {
+        exactBody(body, []);
+        const record = getHandoff(revoke[1]);
+        if (!record)
+          return json(404, { error: "Agent handoff expired or was not found" });
+        if (
+          principal.kind !== "session" ||
+          JSON.stringify(record.creator) !== JSON.stringify(principal.identity)
+        )
+          return json(403, { error: "Only the handoff creator can revoke it" });
+        handoffs.delete(revoke[1]);
+        return json(200, { revoked: true });
       }
       if (path === "/api/suggestions") {
         exactBody(body, ["target", "replacement", "key"]);
@@ -447,11 +588,20 @@ export async function startViewer(root, port = 0, options = {}) {
       const comment =
         /^\/api\/comments\/([a-f0-9-]{36})\/(reply|resolve)$/.exec(path);
       if (comment) {
-        exactBody(body, [comment[2] === "reply" ? "body" : "stateId"]);
+        exactBody(
+          body,
+          comment[2] === "reply" ? ["body", "stateId"] : ["stateId"],
+        );
         return json(
           200,
           comment[2] === "reply"
-            ? engine.reply(comment[1], body.body, principal.identity)
+            ? engine.reply(
+                comment[1],
+                body.body,
+                principal.identity,
+                undefined,
+                body.stateId,
+              )
             : review.resolveComment(
                 comment[1],
                 body.stateId,
