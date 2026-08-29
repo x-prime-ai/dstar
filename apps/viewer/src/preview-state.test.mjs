@@ -11,25 +11,36 @@ import {
   annotationEventFromFrame,
 } from "../public/review-state.js";
 
-it("creates token-free handoff prompts for the already-open Viewer tab", () => {
+it("creates private handoff prompts that another browser task can open", () => {
+  const id = "11111111-1111-4111-8111-111111111111",
+    token = "a".repeat(64);
   const comment = agentHandoffPrompt(
       "comment",
-      "http://127.0.0.1:4321/#private-token",
+      `http://127.0.0.1:4321/?handoff=${id}#${token}`,
     ),
     suggest = agentHandoffPrompt(
       "suggest",
-      "https://viewer.example/review?x=1#private-token",
+      `https://viewer.example/?handoff=${id}#${token}`,
     );
-  expect(comment).toContain("already-open DSTAR Viewer tab");
+  expect(comment).toContain("Open this private, short-lived DSTAR handoff");
   expect(comment).toContain("http://127.0.0.1:4321");
   expect(comment).toContain("draft_selection_comment");
   expect(suggest).toContain("https://viewer.example");
   expect(suggest).toContain("draft_selection_suggestion");
-  expect(suggest).toContain("propose_revision");
-  expect(comment + suggest).not.toContain("private-token");
+  expect(suggest).not.toContain("propose_revision");
+  expect(
+    agentHandoffPrompt(
+      "suggest",
+      `https://viewer.example/?handoff=${id}#${token}`,
+      "element",
+    ),
+  ).toContain("propose_revision");
   expect(() => agentHandoffPrompt("resolve", "https://viewer.example")).toThrow(
     "Unsupported agent handoff action",
   );
+  expect(() =>
+    agentHandoffPrompt("comment", "https://viewer.example/#token"),
+  ).toThrow("incomplete");
 });
 
 const frame = { capability: "cap-a", revision: "rev-a" };

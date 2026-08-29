@@ -100,6 +100,16 @@ it("fills an editable suggestion draft and preserves a newer Viewer draft", asyn
     replacement: "A concise replacement",
     expectedDraft: "shorter",
   });
+  expect(JSON.parse(await tool.execute({ replacement: "" }))).toEqual({
+    ok: true,
+    drafted: true,
+    viewerUpdated: true,
+  });
+  expect(cb.onDraftSuggestion).toHaveBeenLastCalledWith({
+    target,
+    replacement: "",
+    expectedDraft: "shorter",
+  });
   cb.onDraftSuggestion.mockReturnValue(false);
   expect(
     JSON.parse(await tool.execute({ replacement: "Do not overwrite" })),

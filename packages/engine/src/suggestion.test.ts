@@ -19,9 +19,10 @@ const target = (
   start: number,
   end: number,
   exact: string,
+  element = "intro",
 ): Target => ({
   revision: revision(files),
-  element: "intro",
+  element,
   selector: {
     type: "text-range",
     start,
@@ -76,5 +77,34 @@ describe("manual text suggestions", () => {
         "Hi",
       ),
     ).toThrow("within one element");
+  });
+
+  it("supports deletion and elements with omitted HTML end tags", () => {
+    const files = fixture(),
+      deleted = replaceTargetText(
+        files,
+        target(files, 6, 17, "brave & new"),
+        "",
+      );
+    expect(deleted.get("document.html")?.toString()).toContain(
+      "<strong></strong> world.",
+    );
+
+    const optionalEndTag = new Map([
+        [
+          "document.html",
+          Buffer.from(
+            '<!doctype html><html><head><title>Test</title></head><body><p data-dstar-id="one">First<p data-dstar-id="two">Second</body></html>',
+          ),
+        ],
+      ]),
+      replaced = replaceTargetText(
+        optionalEndTag,
+        target(optionalEndTag, 0, 5, "First", "one"),
+        "Updated",
+      );
+    expect(replaced.get("document.html")?.toString()).toContain(
+      '<p data-dstar-id="one">Updated</p><p data-dstar-id="two">Second',
+    );
   });
 });

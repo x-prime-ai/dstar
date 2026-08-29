@@ -14,6 +14,7 @@ import {
   mediaType,
   replaceTargetText,
   resolveTarget,
+  validateTarget,
 } from "@dstar/engine";
 import { decisions } from "@dstar/engine/decisions";
 import { agentRoute, publicProposal } from "./agent-api.mjs";
@@ -29,13 +30,72 @@ import {
 const publicFile = (path) =>
   readFileSync(new URL(`../public/${path}`, import.meta.url));
 const secret = () => randomBytes(24).toString("hex");
+const HANDOFF_TTL = 15 * 60 * 1000;
+const handoffId = (value) =>
+  typeof value === "string" && /^[a-f0-9-]{36}$/.test(value);
+const handoffToken = (value) =>
+  typeof value === "string" && /^[A-Za-z0-9_-]{48,256}$/.test(value);
 export async function startViewer(root, port = 0, options = {}) {
   const config = resolveViewerConfig(root, port, options);
   const engine = open(config.root),
     review = decisions(config.root),
     token = config.token;
   engine.snapshot();
-  const capabilities = createPreviewCache();
+  const capabilities = createPreviewCache(),
+    handoffs = new Map();
+  const getHandoff = (id) => {
+    const handoff = handoffs.get(id);
+    if (!handoff) return null;
+    if (handoff.expiresAt <= Date.now()) {
+      handoffs.delete(id);
+      return null;
+    }
+    return handoff;
+  };
+  const publicHandoff = ({ context, draft, expiresAt }) => ({
+    context,
+    draft,
+    expiresAt,
+  });
+  const authorizedHandoff = (req) => {
+    for (const [id] of handoffs) {
+      const handoff = getHandoff(id);
+      if (handoff && authorized(req, handoff.accessToken))
+        return { id, handoff };
+    }
+    return null;
+  };
+  const validateHandoffContext = (context) => {
+    const selection = context?.selection,
+      action = context?.action,
+      viewed = context?.review;
+    if (
+      !selection ||
+      !action ||
+      !viewed ||
+      !["comment", "suggest"].includes(action.kind) ||
+      JSON.stringify(action.target) !== JSON.stringify(selection) ||
+      viewed.revision !== selection.revision ||
+      viewed.previewStatus !== "ready" ||
+      typeof action.draft !== "string" ||
+      action.draft.length > 20000
+    )
+      throw new Error("Invalid agent handoff context");
+    const snapshot = engine.snapshot(selection.revision);
+    if (!snapshot.index) throw new Error("Handoff revision is unavailable");
+    validateTarget(snapshot.index, selection);
+    const proposal = engine
+      .snapshot()
+      .state.proposals.find((candidate) => candidate.id === viewed.proposalId);
+    if (
+      !proposal ||
+      (viewed.showingBase
+        ? proposal.base !== selection.revision
+        : proposal.revision !== selection.revision)
+    )
+      throw new Error("Handoff review does not match the selection");
+    return JSON.parse(JSON.stringify(context));
+  };
   let origin;
   const server = createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -125,10 +185,31 @@ export async function startViewer(root, port = 0, options = {}) {
           );
         return res.end(bytes);
       }
-      if (!path.startsWith("/api/") || !authorized(req, token))
+      const owner = authorized(req, token),
+        scoped = owner ? null : authorizedHandoff(req);
+      if (!path.startsWith("/api/") || (!owner && !scoped))
         return json(401, { error: "Viewer authorization required" });
       if (req.headers.origin !== undefined && req.headers.origin !== origin)
         return json(403, { error: "Invalid review origin" });
+      if (
+        scoped &&
+        !(
+          (req.method === "GET" &&
+            (path === "/api/state" ||
+              /^\/api\/preview\/[a-f0-9-]{36}$/.test(path) ||
+              /^\/api\/annotations\/[a-f0-9-]{36}$/.test(path) ||
+              path === `/api/handoffs/${scoped.id}`)) ||
+          (req.method === "POST" &&
+            (path === "/api/agent/context" ||
+              path === "/api/agent/document" ||
+              (path === "/api/agent/proposals" &&
+                scoped.handoff.context.action.kind === "suggest" &&
+                scoped.handoff.context.selection.selector.type !==
+                  "text-range") ||
+              path === `/api/handoffs/${scoped.id}/draft`))
+        )
+      )
+        return json(403, { error: "Agent handoff does not allow this route" });
       if (await agentRoute({ engine, req, json, path, origin })) return;
       if (req.method === "GET" && path === "/api/state") {
         const s = engine.snapshot();
@@ -146,6 +227,13 @@ export async function startViewer(root, port = 0, options = {}) {
             ]),
           ),
         });
+      }
+      const handoff = /^\/api\/handoffs\/([a-f0-9-]{36})$/.exec(path);
+      if (req.method === "GET" && handoff) {
+        const record = getHandoff(handoff[1]);
+        return record
+          ? json(200, publicHandoff(record))
+          : json(404, { error: "Agent handoff expired or was not found" });
       }
       const diff = /^\/api\/diff\/([a-f0-9-]{36})$/.exec(path);
       if (req.method === "GET" && diff) {
@@ -218,12 +306,70 @@ export async function startViewer(root, port = 0, options = {}) {
             author: "human",
           }),
         );
+      if (path === "/api/handoffs") {
+        if (!owner)
+          return json(403, { error: "Only the owner can start a handoff" });
+        if (!handoffId(body.id) || !handoffToken(body.accessToken))
+          throw new Error("Invalid agent handoff credential");
+        const existing = getHandoff(body.id);
+        if (existing) throw new Error("Agent handoff already exists");
+        const context = validateHandoffContext(body.context),
+          record = {
+            context,
+            draft: null,
+            expiresAt: Date.now() + HANDOFF_TTL,
+            accessToken: body.accessToken,
+          };
+        handoffs.set(body.id, record);
+        return json(201, publicHandoff(record));
+      }
+      const handoffDraft = /^\/api\/handoffs\/([a-f0-9-]{36})\/draft$/.exec(
+        path,
+      );
+      if (handoffDraft) {
+        const record = getHandoff(handoffDraft[1]);
+        if (!record)
+          return json(404, { error: "Agent handoff expired or was not found" });
+        if (
+          body.kind !== record.context.action.kind ||
+          typeof body.content !== "string" ||
+          body.content.length > 20000 ||
+          (body.kind === "comment" && !body.content.trim())
+        )
+          throw new Error("Invalid agent handoff draft");
+        record.draft = {
+          id: secret(),
+          kind: body.kind,
+          content: body.content,
+        };
+        return json(200, { draft: record.draft });
+      }
       if (path === "/api/suggestions") {
         const head = engine.snapshot(),
-          source = engine.snapshot(body.target?.revision),
+          viewed = engine.snapshot(body.target?.revision);
+        if (!viewed.index)
+          throw new Error("Suggestion revision is unavailable");
+        validateTarget(viewed.index, body.target);
+        const source = head.revision === null ? viewed : head,
+          resolution = source.index
+            ? resolveTarget(source.index, body.target)
+            : { status: "orphaned" };
+        if (!["exact", "recovered"].includes(resolution.status))
+          throw new Error(
+            "Suggestion selection no longer has one exact match in the accepted document",
+          );
+        const rebasedTarget = {
+            ...body.target,
+            revision: source.revision,
+            selector: {
+              ...body.target.selector,
+              start: resolution.start,
+              end: resolution.end,
+            },
+          },
           files = replaceTargetText(
             source.files,
-            body.target,
+            rebasedTarget,
             body.replacement,
           ),
           directory = mkdtempSync(join(tmpdir(), "dstar-suggestion-"));
@@ -275,7 +421,10 @@ export async function startViewer(root, port = 0, options = {}) {
       });
     }
   });
-  server.once("close", () => capabilities.clear());
+  server.once("close", () => {
+    capabilities.clear();
+    handoffs.clear();
+  });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);

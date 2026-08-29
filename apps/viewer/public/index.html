@@ -239,13 +239,15 @@
               id="suggestion-body"
               placeholder="Write replacement text…"
               maxlength="20000"
-              required
             ></textarea>
             <p id="suggestion-hint" class="composer-hint" hidden>
               Manual replacement requires text selected within one element. Ask
               the agent for structural or multi-element changes.
             </p>
             <div class="composer-actions">
+              <button type="button" id="delete-suggestion">
+                Suggest deletion
+              </button>
               <button type="button" id="ask-agent-suggestion">
                 Ask agent to draft</button
               ><button type="button" id="cancel-suggestion">Cancel</button

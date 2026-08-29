@@ -26,6 +26,12 @@ const session = new ViewerSession({
   onAuthorization: authorizationChanged,
 });
 session.restore(location, history);
+const requestedHandoff = new document.defaultView.URLSearchParams(
+    location.search,
+  ).get("handoff"),
+  incomingHandoffId = /^[a-f0-9-]{36}$/.test(requestedHandoff ?? "")
+    ? requestedHandoff
+    : null;
 let current,
   selected,
   frame,
@@ -46,6 +52,10 @@ let current,
   showingBase = false,
   postingComment = false,
   postingSuggestion = false,
+  suggestionDeletion = false,
+  incomingHandoff = null,
+  outgoingHandoff = null,
+  outgoingDraftId = null,
   messageTimer;
 let previewSerial = 0;
 function ask(title, detail, reply = false) {
@@ -97,6 +107,9 @@ function resetTarget() {
   commentTriggerTarget = null;
   suggestionTarget = null;
   suggestionKey = null;
+  suggestionDeletion = false;
+  $("body").value = "";
+  $("suggestion-body").value = "";
   $("selection-actions").hidden = true;
   $("comment-form").hidden = true;
   $("suggestion-form").hidden = true;
@@ -106,6 +119,11 @@ function resetTarget() {
   $("add-suggestion").disabled = true;
   $("whole-element").hidden = true;
 }
+const sameTarget = (left, right) =>
+  JSON.stringify(left) === JSON.stringify(right);
+const suggestionReady = () =>
+  suggestionTarget?.selector.type === "text-range" &&
+  (suggestionDeletion || $("suggestion-body").value.trim());
 function setPanel(panel, open, focus = false) {
   activeTab = panel;
   $("review-sidebar").hidden = !open;
@@ -163,7 +181,10 @@ function composeComment(selectedTarget = target) {
     return;
   setView("preview");
   setPanel("comments-panel", true);
-  if (suggestionTarget && $("suggestion-body").value.trim())
+  if (
+    suggestionTarget &&
+    ($("suggestion-body").value.trim() || suggestionDeletion)
+  )
     return note("Submit or cancel your current suggestion first.");
   suggestionTarget = null;
   $("suggestion-form").hidden = true;
@@ -188,7 +209,10 @@ function composeSuggestion(selectedTarget = target) {
     return note("Post or cancel your current comment first.");
   commentTarget = null;
   $("comment-form").hidden = true;
-  if (suggestionTarget && $("suggestion-body").value.trim()) {
+  if (
+    suggestionTarget &&
+    ($("suggestion-body").value.trim() || suggestionDeletion)
+  ) {
     note("Submit or cancel your current suggestion before starting another.");
   } else {
     suggestionTarget = selectedTarget;
@@ -200,7 +224,8 @@ function composeSuggestion(selectedTarget = target) {
   $("suggestion-hint").hidden = manual;
   $("comments-empty").hidden = true;
   $("add-suggestion").disabled =
-    postingSuggestion || !manual || !$("suggestion-body").value.trim();
+    postingSuggestion || !manual || !suggestionReady();
+  $("delete-suggestion").disabled = postingSuggestion || !manual;
   $("suggestion-body").focus();
 }
 const preserveCommentSelection = (event) => {
@@ -227,17 +252,45 @@ $("selection-suggest").onclick = () => {
   selectionAction = null;
   composeSuggestion(selectedTarget);
 };
+const newHandoffToken = () => {
+  const bytes = new Uint8Array(32);
+  document.defaultView.crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
 async function copyAgentHandoff(kind) {
-  const prompt = agentHandoffPrompt(kind, location.origin),
+  const context = reviewContext(
+    selected,
+    showingBase,
+    frame,
+    previewState,
+    target,
+    selectionAction,
+  );
+  if (context.action?.kind !== kind)
+    throw new Error("The selected action is no longer ready for an agent");
+  const id = document.defaultView.crypto.randomUUID(),
+    accessToken = newHandoffToken(),
+    handoffUrl = new URL(location.origin);
+  handoffUrl.searchParams.set("handoff", id);
+  handoffUrl.hash = accessToken;
+  await api("handoffs", { id, accessToken, context });
+  outgoingHandoff = { id, context };
+  outgoingDraftId = null;
+  const prompt = agentHandoffPrompt(
+      kind,
+      handoffUrl.href,
+      context.selection.selector.type,
+    ),
     clipboard = document.defaultView.navigator.clipboard;
   try {
     if (!clipboard?.writeText) throw new Error("Clipboard unavailable");
     await clipboard.writeText(prompt);
-    note("Agent prompt copied — paste it into your agent chat.");
-  } catch {
     note(
-      "Agent context is ready, but copying failed. Tell your browser agent to use the already-open DSTAR Viewer tab.",
+      "Private 15-minute agent handoff copied — paste it into your agent chat.",
     );
+  } catch {
+    outgoingHandoff = null;
+    throw new Error("Agent handoff is ready, but copying failed. Try again.");
   }
 }
 $("ask-agent-comment").onclick = async () => {
@@ -267,7 +320,6 @@ $("cancel-comment").onclick = () => {
   $("tab-comments").focus();
 };
 $("cancel-suggestion").onclick = () => {
-  $("suggestion-body").value = "";
   resetTarget();
   $("comments-empty").hidden = !!current?.state.comments.length;
   $("tab-comments").focus();
@@ -277,10 +329,16 @@ $("body").oninput = () => {
     postingComment || !commentTarget || !$("body").value.trim();
 };
 $("suggestion-body").oninput = () => {
-  $("add-suggestion").disabled =
-    postingSuggestion ||
-    suggestionTarget?.selector.type !== "text-range" ||
-    !$("suggestion-body").value.trim();
+  suggestionDeletion = false;
+  $("add-suggestion").disabled = postingSuggestion || !suggestionReady();
+};
+$("delete-suggestion").onclick = () => {
+  if (postingSuggestion || suggestionTarget?.selector.type !== "text-range")
+    return;
+  $("suggestion-body").value = "";
+  suggestionDeletion = true;
+  $("add-suggestion").disabled = false;
+  note("Deletion suggestion ready — submit it to the review queue.");
 };
 addEventListener("resize", () => {
   $("selection-actions").hidden = true;
@@ -1009,7 +1067,7 @@ $("suggestion-form").onsubmit = safely(async (event) => {
     !suggestionTarget ||
     suggestionTarget.selector.type !== "text-range" ||
     postingSuggestion ||
-    !$("suggestion-body").value.trim()
+    !suggestionReady()
   )
     return;
   const replacement = $("suggestion-body").value,
@@ -1039,12 +1097,89 @@ $("suggestion-form").onsubmit = safely(async (event) => {
     postingSuggestion = false;
     $("add-suggestion").textContent = "Submit suggestion";
     $("cancel-suggestion").disabled = false;
-    $("add-suggestion").disabled =
-      !suggestionTarget ||
-      suggestionTarget.selector.type !== "text-range" ||
-      !$("suggestion-body").value.trim();
+    $("add-suggestion").disabled = !suggestionTarget || !suggestionReady();
   }
 });
+function applyCommentDraft({ target: draftedTarget, body, expectedDraft }) {
+  if ($("body").value !== expectedDraft) return false;
+  target = draftedTarget;
+  selectionAction = null;
+  composeComment(draftedTarget);
+  $("body").value = body;
+  $("add-comment").disabled = false;
+  $("body").focus();
+  note("Agent comment draft is ready for review.");
+  return true;
+}
+function applySuggestionDraft({
+  target: draftedTarget,
+  replacement,
+  expectedDraft,
+}) {
+  if ($("suggestion-body").value !== expectedDraft) return false;
+  target = draftedTarget;
+  selectionAction = null;
+  composeSuggestion(draftedTarget);
+  $("suggestion-body").value = replacement;
+  suggestionDeletion = replacement === "";
+  $("add-suggestion").disabled =
+    draftedTarget.selector.type !== "text-range" || !suggestionReady();
+  $("suggestion-body").focus();
+  note("Agent suggestion draft is ready for review.");
+  return true;
+}
+async function sendIncomingHandoffDraft(kind, content) {
+  if (incomingHandoff?.context.action?.kind !== kind) return false;
+  await api(`handoffs/${incomingHandoffId}/draft`, { kind, content });
+  note("Agent draft sent back to the original Viewer.");
+  return true;
+}
+async function loadIncomingHandoff() {
+  if (!incomingHandoffId || incomingHandoff) return;
+  incomingHandoff = await api(`handoffs/${incomingHandoffId}`);
+  note("Agent handoff loaded · read and draft access expires in 15 minutes.");
+}
+async function syncOutgoingHandoff() {
+  if (!outgoingHandoff) return;
+  let record;
+  try {
+    record = await api(`handoffs/${outgoingHandoff.id}`);
+  } catch {
+    outgoingHandoff = null;
+    note("Agent handoff expired. Use Ask agent again if needed.");
+    return;
+  }
+  if (!record.draft || record.draft.id === outgoingDraftId) return;
+  outgoingDraftId = record.draft.id;
+  const { action, selection } = outgoingHandoff.context;
+  if (
+    !sameTarget(target, selection) ||
+    selectionAction?.kind !== action.kind ||
+    !sameTarget(selectionAction.target, selection)
+  ) {
+    note(
+      "Agent returned a draft, but the original selection is no longer open.",
+    );
+    return;
+  }
+  const applied =
+    record.draft.kind === "comment"
+      ? applyCommentDraft({
+          target: selection,
+          body: record.draft.content,
+          expectedDraft: action.draft,
+        })
+      : applySuggestionDraft({
+          target: selection,
+          replacement: record.draft.content,
+          expectedDraft: action.draft,
+        });
+  if (!applied)
+    note(
+      "Agent returned a draft, but your local draft changed; it was preserved.",
+    );
+  outgoingHandoff = null;
+}
 let registration,
   connecting = false,
   lifecycle = 0,
@@ -1059,6 +1194,7 @@ async function connectTools() {
     document,
     api,
     getReviewContext: () =>
+      incomingHandoff?.context ??
       reviewContext(
         selected,
         showingBase,
@@ -1067,33 +1203,22 @@ async function connectTools() {
         target,
         selectionAction,
       ),
-    onDraftComment: ({ target: draftedTarget, body, expectedDraft }) => {
-      if ($("body").value !== expectedDraft) return false;
-      target = draftedTarget;
-      selectionAction = null;
-      composeComment(draftedTarget);
-      $("body").value = body;
-      $("add-comment").disabled = false;
-      $("body").focus();
-      note("Agent comment draft is ready for review.");
-      return true;
-    },
+    onDraftComment: (draft) =>
+      incomingHandoff
+        ? sendIncomingHandoffDraft("comment", draft.body)
+        : applyCommentDraft(draft),
     onDraftSuggestion: ({
       target: draftedTarget,
       replacement,
       expectedDraft,
-    }) => {
-      if ($("suggestion-body").value !== expectedDraft) return false;
-      target = draftedTarget;
-      selectionAction = null;
-      composeSuggestion(draftedTarget);
-      $("suggestion-body").value = replacement;
-      $("add-suggestion").disabled =
-        draftedTarget.selector.type !== "text-range";
-      $("suggestion-body").focus();
-      note("Agent suggestion draft is ready for review.");
-      return true;
-    },
+    }) =>
+      incomingHandoff
+        ? sendIncomingHandoffDraft("suggest", replacement)
+        : applySuggestionDraft({
+            target: draftedTarget,
+            replacement,
+            expectedDraft,
+          }),
     onMutation: async (result, route) => {
       await refresh();
       const updated =
@@ -1132,6 +1257,7 @@ async function poll() {
   try {
     if (!document.hidden && session.authorized) {
       await refresh();
+      await syncOutgoingHandoff();
       $("sync-status").textContent = "Live";
     }
   } catch {
@@ -1166,7 +1292,12 @@ function authorizationChanged(authorized) {
   $("sync-status").textContent = authorized ? "Live" : "Authorization required";
   if (authorized) {
     $("authorization-error").textContent = "";
-    connectTools();
+    if (incomingHandoffId)
+      safely(async () => {
+        await loadIncomingHandoff();
+        await connectTools();
+      })();
+    else connectTools();
     return;
   }
   ++lifecycle;
@@ -1180,7 +1311,7 @@ function authorizationChanged(authorized) {
   $("authorization-error").textContent = AUTH_MESSAGE;
   $("accept").disabled = true;
   $("confirmation").close();
-  // Invalidate in-flight refreshes/previews without erasing a comment draft.
+  // Invalidate in-flight refreshes/previews and drafts tied to that session.
   refreshGate.begin();
   refreshGate.generation = -1;
   ++previewSerial;
@@ -1239,6 +1370,7 @@ authorizationChanged(false);
 safely(async () => {
   try {
     await refresh();
+    await loadIncomingHandoff();
   } catch (error) {
     $("authorization-error").textContent =
       error.code === "authorization_required" ? AUTH_MESSAGE : error.message;

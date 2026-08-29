@@ -83,7 +83,13 @@ export function createTools({
       description:
         "Draft replacement text for the exact selection after the user chose Suggest in the Viewer. Fills the editable suggestion composer; it never submits a proposal. Use only when get_review_context returns action.kind=suggest.",
       inputSchema: object({
-        replacement: { type: "string", minLength: 1, maxLength: 20000 },
+        replacement: {
+          type: "string",
+          minLength: 0,
+          maxLength: 20000,
+          description:
+            "Replacement text. Use an empty string to delete the selection.",
+        },
       }),
       readOnly: false,
       local: async (args) => {
@@ -92,7 +98,6 @@ export function createTools({
           !args ||
           Object.keys(args).length !== 1 ||
           typeof args.replacement !== "string" ||
-          !args.replacement.trim() ||
           args.replacement.length > 20000 ||
           context.action?.kind !== "suggest" ||
           context.action.target?.selector?.type !== "text-range"

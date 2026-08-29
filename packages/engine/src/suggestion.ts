@@ -67,12 +67,8 @@ export function replaceTargetText(
   target: Target,
   replacement: string,
 ): Files {
-  if (
-    typeof replacement !== "string" ||
-    !replacement.trim() ||
-    replacement.length > 20000
-  )
-    throw new Error("Suggested replacement is required");
+  if (typeof replacement !== "string" || replacement.length > 20000)
+    throw new Error("Suggested replacement must be at most 20000 characters");
   if (target.selector.type !== "text-range")
     throw new Error(
       "Manual suggestions require a text selection within one element",
@@ -89,7 +85,11 @@ export function replaceTargetText(
     element = findElement(document, target.element);
   if (!element) throw new Error("Suggestion element is unavailable");
   const location = adapter.getNodeSourceCodeLocation(element);
-  if (!location?.startTag || !location.endTag)
+  if (
+    !location?.startTag ||
+    !Number.isInteger(location.startOffset) ||
+    !Number.isInteger(location.endOffset)
+  )
     throw new Error("Suggestion element has no editable source range");
   replaceRange(element, target.selector, replacement);
   const next = new Map(files);

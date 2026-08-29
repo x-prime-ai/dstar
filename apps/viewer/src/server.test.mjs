@@ -180,7 +180,7 @@ it("serves immutable isolated previews and requires session credentials for deci
 });
 
 it("turns a manual text suggestion into a pending human proposal", async () => {
-  const { root, engine, proposal } = fixture(),
+  const { root, candidate, engine, proposal } = fixture(),
     viewer = await startViewer(root),
     token = new URL(viewer.url).hash.slice(1),
     headers = {
@@ -201,6 +201,26 @@ it("turns a manual text suggestion into a pending human proposal", async () => {
       await request(`/api/proposals/${proposal.id}/accept`, {
         revision: proposal.revision,
         stateId: initial.stateId,
+      })
+    ).status,
+  ).toBe(200);
+  const original = readFileSync(join(candidate, "document.html"), "utf8");
+  writeFileSync(
+    join(candidate, "document.html"),
+    original.replace("Hello 🌍", "Current heading · Hello 🌍"),
+  );
+  const newer = engine.propose({
+    candidate,
+    base: proposal.revision,
+    request: "Unrelated accepted edit",
+    author: "agent",
+    key: "newer-head",
+  });
+  expect(
+    (
+      await request(`/api/proposals/${newer.id}/accept`, {
+        revision: newer.revision,
+        stateId: engine.snapshot().stateId,
       })
     ).status,
   ).toBe(200);
@@ -225,10 +245,103 @@ it("turns a manual text suggestion into a pending human proposal", async () => {
   expect(result.proposal).toMatchObject({ author: "human", status: "pending" });
   expect(
     engine.snapshot(result.proposal.id).files.get("document.html").toString(),
-  ).toContain("Hello world");
-  expect(engine.snapshot().revision).toBe(proposal.revision);
+  ).toContain("Current heading · Hello world");
+  expect(engine.snapshot().revision).toBe(newer.revision);
   const retry = await (await request("/api/suggestions", args)).json();
   expect(retry.proposal.id).toBe(result.proposal.id);
+});
+
+it("uses a short-lived scoped handoff to return an agent draft", async () => {
+  const { root, engine, proposal } = fixture(),
+    viewer = await startViewer(root),
+    ownerToken = new URL(viewer.url).hash.slice(1),
+    scopedToken = "h".repeat(64),
+    id = "11111111-1111-4111-8111-111111111111",
+    target = {
+      revision: proposal.revision,
+      element: "intro",
+      selector: {
+        type: "text-range",
+        start: 6,
+        end: 7,
+        unit: "unicode-code-point",
+        exact: "🌍",
+      },
+    },
+    context = {
+      review: {
+        proposalId: proposal.id,
+        showingBase: false,
+        revision: proposal.revision,
+        previewStatus: "ready",
+      },
+      selection: target,
+      action: { kind: "suggest", target, draft: "" },
+    },
+    ownerHeaders = {
+      Authorization: `Bearer ${ownerToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    scopedHeaders = {
+      Authorization: `Bearer ${scopedToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    };
+  cleanup.push(() => close(viewer.server));
+  const created = await wire(viewer, "/api/handoffs", {
+    headers: ownerHeaders,
+    method: "POST",
+    body: JSON.stringify({ id, accessToken: scopedToken, context }),
+  });
+  expect(created.status).toBe(201);
+  expect(created.text).not.toContain(ownerToken);
+  expect(created.text).not.toContain(scopedToken);
+  expect(
+    (await wire(viewer, "/api/state", { headers: scopedHeaders })).status,
+  ).toBe(200);
+  const toolContext = await wire(viewer, "/api/agent/context", {
+    headers: scopedHeaders,
+    method: "POST",
+    body: JSON.stringify(context),
+  });
+  expect(toolContext.status).toBe(200);
+  expect(toolContext.json().action).toMatchObject({
+    kind: "suggest",
+    target,
+  });
+  const document = await wire(viewer, "/api/agent/document", {
+    headers: scopedHeaders,
+    method: "POST",
+    body: JSON.stringify({ revision: proposal.revision }),
+  });
+  expect(document.status).toBe(200);
+  expect(document.json().files[0].content).toContain("Hello 🌍");
+  expect(
+    (
+      await wire(viewer, `/api/proposals/${proposal.id}/reject`, {
+        headers: scopedHeaders,
+        method: "POST",
+        body: JSON.stringify({
+          revision: proposal.revision,
+          stateId: engine.snapshot().stateId,
+        }),
+      })
+    ).status,
+  ).toBe(403);
+  const returned = await wire(viewer, `/api/handoffs/${id}/draft`, {
+    headers: scopedHeaders,
+    method: "POST",
+    body: JSON.stringify({ kind: "suggest", content: "world" }),
+  });
+  expect(returned.status).toBe(200);
+  const record = await wire(viewer, `/api/handoffs/${id}`, {
+    headers: ownerHeaders,
+  });
+  expect(record.json().draft).toMatchObject({
+    kind: "suggest",
+    content: "world",
+  });
 });
 
 it("resolves comment markers against the viewed revision without changing canonical files", async () => {
