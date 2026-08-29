@@ -35,7 +35,20 @@ function show(result) {
   if (result.sessions.reviewerUrl) reviewer.href = result.sessions.reviewerUrl;
   manage.hidden = false;
   create.hidden = true;
+  reset.disabled = false;
   status.textContent = "Workspace ready.";
+}
+
+function adoptReset(result) {
+  const next = new URL(result.manageUrl, location.href);
+  token = next.hash.slice(1);
+  try {
+    sessionStorage.setItem(storageKey, token);
+  } catch {
+    // The current page can still use the in-memory rotated credential.
+  }
+  history.replaceState(null, "", next.pathname);
+  show(result);
 }
 
 async function request(path, credential) {
@@ -72,7 +85,10 @@ reset.addEventListener("click", async () => {
   status.textContent = "Resetting workspace…";
   try {
     const result = await request(`/api/v1/workspaces/${match[1]}/reset`, token);
-    location.assign(result.manageUrl);
+    // The management path is stable across generations. A fragment-only
+    // location.assign() is a same-document navigation, so explicitly adopt
+    // the rotated credential and render the returned generation instead.
+    adoptReset(result);
   } catch (error) {
     status.textContent = error.message;
     reset.disabled = false;

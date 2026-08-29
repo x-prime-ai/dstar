@@ -144,7 +144,7 @@ export function createTools({
           args.body.length > 20000 ||
           context.action?.kind !== "address-comment" ||
           context.action.commentId !== args.commentId ||
-          context.focusedComment?.id !== args.commentId
+          context.focusedCommentId !== args.commentId
         )
           return {
             ok: false,

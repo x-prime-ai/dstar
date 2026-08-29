@@ -57,7 +57,7 @@ it("returns an editable reply draft only for the exact focused comment action", 
   ).toMatchObject({ ok: false, code: "invalid_input" });
   cb.getReviewContext.mockReturnValue({
     stateId: "state-one",
-    focusedComment: { id: commentId },
+    focusedCommentId: commentId,
     action: { kind: "address-comment", commentId },
   });
   expect(

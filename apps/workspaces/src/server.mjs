@@ -1,7 +1,12 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, request as httpRequest } from "node:http";
 import { isIP } from "node:net";
-import { clearInterval, setInterval } from "node:timers";
+import {
+  clearInterval,
+  clearTimeout,
+  setInterval,
+  setTimeout,
+} from "node:timers";
 import { startViewer } from "@dstar/viewer";
 
 import { WORKSPACE_ID, workspaceStore } from "./store.mjs";
@@ -135,10 +140,37 @@ async function body(request) {
   return value;
 }
 
-function closeServer(server) {
-  return new Promise((resolve, reject) =>
-    server.close((error) => (error ? reject(error) : resolve())),
-  );
+function closeServer(server, forceAfterMs = 5_000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      if (error) reject(error);
+      else resolve();
+    };
+    const deadline = setTimeout(() => {
+      try {
+        server.closeAllConnections();
+      } catch {
+        // close() may already have transitioned the server out of listening.
+      } finally {
+        // close() has already stopped new accepts. Some real browser
+        // transports do not deliver its callback after their keep-alive
+        // sockets are forced closed, so the drain itself must also have a hard
+        // completion bound. closeAllConnections() may itself report that the
+        // server is no longer listening; that state is safe to continue from.
+        done();
+      }
+    }, forceAfterMs);
+    deadline.unref();
+    server.close(done);
+    // Real browsers retain idle keep-alive sockets between the Viewer polls.
+    // Stop accepting new work, then close those idle sockets so reset can drain
+    // completed requests instead of waiting indefinitely for the browser tabs.
+    server.closeIdleConnections();
+  });
 }
 
 function bearer(request) {
