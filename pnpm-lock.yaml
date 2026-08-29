@@ -139,6 +139,19 @@ importers:
         specifier: 'catalog:'
         version: 3.2.7(@types/node@22.20.1)
 
+  apps/workspaces:
+    dependencies:
+      '@dstar/viewer':
+        specifier: workspace:*
+        version: link:../viewer
+    devDependencies:
+      '@dstar/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@22.20.1)
+
   packages/core:
     dependencies:
       ajv:

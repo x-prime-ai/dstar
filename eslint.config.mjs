@@ -12,7 +12,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["apps/viewer/public/*.js"],
+    files: ["apps/viewer/public/*.js", "apps/workspaces/public/*.js"],
     languageOptions: {
       globals: Object.fromEntries(
         [

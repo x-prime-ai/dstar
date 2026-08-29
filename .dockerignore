@@ -16,4 +16,10 @@
 !apps/viewer/src/**
 !apps/viewer/public/
 !apps/viewer/public/**
+!apps/workspaces/
+!apps/workspaces/package.json
+!apps/workspaces/src/
+!apps/workspaces/src/**
+!apps/workspaces/public/
+!apps/workspaces/public/**
 **/*.test.*

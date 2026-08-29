@@ -94,6 +94,12 @@ For a protected, fixed-document Node service, see the
 configuration, a Node 22 container and TLS-proxy/volume guidance; the local
 `serve` command above is unchanged. Nothing is deployed automatically.
 
+For isolated, resettable copies of one read-only seed, see the
+[workspace service](apps/workspaces/README.md) and its
+[deployment boundaries](deploy/workspaces/README.md). It adds a separate
+control service without changing fixed-document `startViewer` or the persistent
+Viewer entrypoint. No public deployment is included.
+
 ## Storage
 
 ```text

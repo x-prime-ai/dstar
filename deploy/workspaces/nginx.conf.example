@@ -1,0 +1,22 @@
+# TLS/certificates are intentionally omitted. Use exact deployed names.
+server {
+    listen 443 ssl;
+    server_name manage.review.example.com ~^[a-f0-9]{32}\.review\.example\.com$;
+
+    client_max_body_size 48m;
+    access_log off;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_pass_request_headers off;
+        proxy_set_header Host $host;
+        proxy_set_header Origin $http_origin;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Content-Type $http_content_type;
+        proxy_set_header Accept $http_accept;
+        proxy_set_header Accept-Encoding $http_accept_encoding;
+        proxy_http_version 1.1;
+        proxy_request_buffering on;
+        proxy_buffering off;
+    }
+}

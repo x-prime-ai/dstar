@@ -1,0 +1,42 @@
+services:
+  workspaces:
+    build:
+      context: ../..
+      dockerfile: deploy/workspaces/Dockerfile
+    environment:
+      DSTAR_SEED_ROOT: /seed
+      DSTAR_WORKSPACE_ROOT: /data/workspaces
+      DSTAR_BIND_HOST: 0.0.0.0
+      DSTAR_PORT: "3000"
+      DSTAR_EXTERNAL_ORIGIN: ${DSTAR_EXTERNAL_ORIGIN:?Set the control HTTPS origin}
+      DSTAR_WORKSPACE_DOMAIN: ${DSTAR_WORKSPACE_DOMAIN:?Set the workspace DNS suffix}
+      DSTAR_CREATION_TOKEN_FILE: /run/secrets/creation_token
+      DSTAR_MAX_WORKSPACES: ${DSTAR_MAX_WORKSPACES:-100}
+      DSTAR_MAX_WORKSPACE_MIB: ${DSTAR_MAX_WORKSPACE_MIB:-64}
+      DSTAR_MAX_TOTAL_MIB: ${DSTAR_MAX_TOTAL_MIB:-1024}
+      DSTAR_WORKSPACE_TTL_SECONDS: ${DSTAR_WORKSPACE_TTL_SECONDS:-86400}
+      DSTAR_CLEANUP_INTERVAL_SECONDS: ${DSTAR_CLEANUP_INTERVAL_SECONDS:-60}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - workspace_data:/data
+      - ${DSTAR_SEED_ROOT_HOST:?Set an initialized host seed path}:/seed:ro
+    secrets:
+      - creation_token
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+
+volumes:
+  workspace_data:
+
+secrets:
+  creation_token:
+    file: ${DSTAR_CREATION_TOKEN_FILE:?Set the host creation-token path}
