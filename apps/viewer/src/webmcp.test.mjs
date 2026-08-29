@@ -6,14 +6,16 @@ const callbacks = () => ({
   getReviewContext: vi.fn().mockReturnValue({ review: null, selection: null }),
   onMutation: vi.fn(),
   onDraftComment: vi.fn().mockReturnValue(true),
+  onDraftSuggestion: vi.fn().mockReturnValue(true),
 });
-it("defines page-context, comment-draft and proposal tools with the current WebMCP signature", async () => {
+it("defines page-context, draft and proposal tools with the current WebMCP signature", async () => {
   const cb = callbacks(),
     tools = createTools(cb);
   expect(tools.map((t) => t.name)).toEqual([
     "get_review_context",
     "read_document",
     "draft_selection_comment",
+    "draft_selection_suggestion",
     "propose_revision",
     "reply_comment",
   ]);
@@ -29,8 +31,9 @@ it("defines page-context, comment-draft and proposal tools with the current WebM
     false,
     false,
     false,
+    false,
   ]);
-  for (const tool of tools.filter((t) => t.name !== "draft_selection_comment"))
+  for (const tool of tools.filter((t) => !t.name.startsWith("draft_selection")))
     expect(JSON.parse(await tool.execute({}, { signal })).ok).toBe(true);
   expect(cb.api.mock.calls.every((call) => call[2] === signal)).toBe(true);
   expect(cb.api.mock.calls[0]).toEqual([
@@ -67,12 +70,40 @@ it("fills an editable comment draft only for an exact Viewer comment action", as
   expect(cb.onDraftComment).toHaveBeenCalledWith({
     target,
     body: "Draft this",
+    expectedDraft: "",
   });
   cb.onDraftComment.mockReturnValue(false);
   expect(
     JSON.parse(await tool.execute({ body: "Replace this" })),
   ).toMatchObject({ ok: false, code: "draft_conflict" });
   expect(cb.api).not.toHaveBeenCalled();
+});
+it("fills an editable suggestion draft and preserves a newer Viewer draft", async () => {
+  const cb = callbacks(),
+    tool = createTools(cb).find(
+      (entry) => entry.name === "draft_selection_suggestion",
+    ),
+    target = {
+      revision: "rev",
+      element: "intro",
+      selector: { type: "text-range", exact: "before" },
+    };
+  cb.getReviewContext.mockReturnValue({
+    selection: target,
+    action: { kind: "suggest", target, draft: "shorter" },
+  });
+  expect(
+    JSON.parse(await tool.execute({ replacement: "A concise replacement" })),
+  ).toEqual({ ok: true, drafted: true, viewerUpdated: true });
+  expect(cb.onDraftSuggestion).toHaveBeenCalledWith({
+    target,
+    replacement: "A concise replacement",
+    expectedDraft: "shorter",
+  });
+  cb.onDraftSuggestion.mockReturnValue(false);
+  expect(
+    JSON.parse(await tool.execute({ replacement: "Do not overwrite" })),
+  ).toMatchObject({ ok: false, code: "draft_conflict" });
 });
 it("captures current context when called, not when registered, and preserves successful writes after refresh failure", async () => {
   const cb = callbacks(),
@@ -135,7 +166,7 @@ it("progressively enhances document.modelContext and unregisters with AbortSigna
   };
   const result = await registerWebMCP({ document, ...cb });
   expect(result.status).toBe("registered");
-  expect(entries).toHaveLength(5);
+  expect(entries).toHaveLength(6);
   expect(entries.every(([, options]) => !options.signal.aborted)).toBe(true);
   result.dispose();
   expect(entries.every(([, options]) => options.signal.aborted)).toBe(true);

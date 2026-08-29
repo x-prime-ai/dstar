@@ -181,8 +181,9 @@ it("preserves exact selection revision for candidate/base and never rebinds it t
     reviewContext(selected, true, { revision: "base-rev" }, ready, target, {
       kind: "suggest",
       target,
+      draft: "Make this shorter",
     }).action,
-  ).toEqual({ kind: "suggest", target });
+  ).toEqual({ kind: "suggest", target, draft: "Make this shorter" });
   expect(
     reviewContext(selected, true, { revision: "candidate-rev" }, ready, target)
       .review.previewStatus,

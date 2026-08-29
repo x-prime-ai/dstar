@@ -70,10 +70,11 @@ accepted document. The agent CLI intentionally has no accept/reject/resolve
 commands. See the [skill workflow](skills/dstar-documents/references/authoring.md)
 and [comment commands](skills/dstar-documents/references/comments.md).
 
-When the browser supports WebMCP, the top-level Viewer also registers five
+When the browser supports WebMCP, the top-level Viewer also registers six
 document/review tools for browser agents. They can read exact versions, propose
-complete HTML/CSS/assets, prepare editable comment drafts and reply to comments;
-acceptance and posting remain explicit Viewer actions. See
+complete HTML/CSS/assets, prepare editable comment and suggestion drafts, and
+reply to comments; acceptance, posting and suggestion submission remain explicit
+Viewer actions. See
 [WebMCP interfaces and limits](design/webmcp.md). Browsers
 without WebMCP retain normal Viewer functionality.
 

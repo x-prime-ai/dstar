@@ -1,9 +1,22 @@
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { open, mediaType, resolveTarget } from "@dstar/engine";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import {
+  open,
+  mediaType,
+  replaceTargetText,
+  resolveTarget,
+} from "@dstar/engine";
 import { decisions } from "@dstar/engine/decisions";
-import { agentRoute } from "./agent-api.mjs";
+import { agentRoute, publicProposal } from "./agent-api.mjs";
 import { createPreviewCache } from "./preview-cache.mjs";
 import { fileDiff } from "./file-diff.mjs";
 import {
@@ -205,6 +218,34 @@ export async function startViewer(root, port = 0, options = {}) {
             author: "human",
           }),
         );
+      if (path === "/api/suggestions") {
+        const head = engine.snapshot(),
+          source = engine.snapshot(body.target?.revision),
+          files = replaceTargetText(
+            source.files,
+            body.target,
+            body.replacement,
+          ),
+          directory = mkdtempSync(join(tmpdir(), "dstar-suggestion-"));
+        let proposal;
+        try {
+          for (const [file, bytes] of files) {
+            const destination = join(directory, file);
+            mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
+            writeFileSync(destination, bytes, { flag: "wx", mode: 0o600 });
+          }
+          proposal = engine.propose({
+            candidate: directory,
+            base: head.revision,
+            request: `Replace “${body.target.selector.exact.slice(0, 160)}” with “${body.replacement.slice(0, 160)}”`,
+            author: "human",
+            key: body.key,
+          });
+        } finally {
+          rmSync(directory, { recursive: true, force: true });
+        }
+        return json(201, { proposal: publicProposal(proposal) });
+      }
       const comment =
         /^\/api\/comments\/([a-f0-9-]{36})\/(reply|resolve)$/.exec(path);
       if (comment)

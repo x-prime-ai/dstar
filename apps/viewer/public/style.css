@@ -767,7 +767,8 @@ textarea {
   margin: 12px 0;
   font-size: 13px;
 }
-#selection {
+#selection,
+#suggestion-selection {
   font-size: 12px;
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -777,18 +778,27 @@ textarea {
   max-height: 110px;
   overflow: auto;
 }
-#comment-form {
+#comment-form,
+#suggestion-form {
   padding: 14px;
   border: 1px solid #d9e5db;
   border-radius: 10px;
   margin-bottom: 20px;
   background: #fafcf9;
 }
-#comment-form label {
+#comment-form label,
+#suggestion-form label {
   font-size: 12px;
   font-weight: 600;
 }
-#comment-form button {
+.composer-hint {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+#comment-form button,
+#suggestion-form button {
   font-size: 12px;
 }
 .composer-actions {

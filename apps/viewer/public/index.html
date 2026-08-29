@@ -232,22 +232,43 @@
               Use whole element
             </button>
           </form>
+          <form id="suggestion-form" hidden>
+            <label for="suggestion-body">New suggestion</label>
+            <blockquote id="suggestion-selection"></blockquote>
+            <textarea
+              id="suggestion-body"
+              placeholder="Write replacement text…"
+              maxlength="20000"
+              required
+            ></textarea>
+            <p id="suggestion-hint" class="composer-hint" hidden>
+              Manual replacement requires text selected within one element. Ask
+              the agent for structural or multi-element changes.
+            </p>
+            <div class="composer-actions">
+              <button type="button" id="ask-agent-suggestion">
+                Ask agent to draft</button
+              ><button type="button" id="cancel-suggestion">Cancel</button
+              ><button class="primary" id="add-suggestion" disabled>
+                Submit suggestion
+              </button>
+            </div>
+          </form>
           <div id="comments-empty" class="empty-comments" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
                 d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5a10 10 0 0 1 20 0Z"
               /></svg
             ><strong>No comments yet</strong>
-            <p>
-              Select text, then click the comment icon to start a conversation.
-            </p>
+            <p>Select text, then choose Comment or Suggest.</p>
           </div>
           <details class="comment-help">
             <summary>How to comment</summary>
             <p>
-              Select text within one element, then click the comment icon. For
-              an image or a whole element, use Alt-click. Keyboard: select text,
-              then press Ctrl+Alt+M (⌘⌥M on Mac).
+              Select text within one element, then choose Comment or Suggest.
+              Suggestions become reviewable proposals. For an image or a whole
+              element, use Alt-click. Keyboard: select text, then press
+              Ctrl+Alt+M (⌘⌥M on Mac) to comment.
             </p>
           </details>
           <div id="comments"></div>

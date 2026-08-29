@@ -32,6 +32,8 @@ let current,
   selectionAction,
   commentTarget,
   commentTriggerTarget,
+  suggestionTarget,
+  suggestionKey,
   activeTab = "comments-panel",
   viewMode = "preview",
   diffFile = null,
@@ -42,6 +44,7 @@ let current,
   annotationSerial = 0,
   showingBase = false,
   postingComment = false,
+  postingSuggestion = false,
   messageTimer;
 let previewSerial = 0;
 function ask(title, detail, reply = false) {
@@ -91,10 +94,15 @@ function resetTarget() {
   selectionAction = null;
   commentTarget = null;
   commentTriggerTarget = null;
+  suggestionTarget = null;
+  suggestionKey = null;
   $("selection-actions").hidden = true;
   $("comment-form").hidden = true;
+  $("suggestion-form").hidden = true;
   $("selection").textContent = "";
+  $("suggestion-selection").textContent = "";
   $("add-comment").disabled = true;
+  $("add-suggestion").disabled = true;
   $("whole-element").hidden = true;
 }
 function setPanel(panel, open, focus = false) {
@@ -140,31 +148,59 @@ for (const [panel, tab] of [
   };
 }
 setPanel(activeTab, document.documentElement.clientWidth > 760);
-function describeTarget() {
-  $("selection").textContent =
-    commentTarget.selector.type === "element"
-      ? `Element: ${commentTarget.element}`
-      : `“${(commentTarget.selector.type === "text-ranges"
-          ? commentTarget.selector.ranges.map((part) => part.exact).join(" ")
-          : commentTarget.selector.exact
+function describeTarget(selectedTarget, output) {
+  $(output).textContent =
+    selectedTarget.selector.type === "element"
+      ? `Element: ${selectedTarget.element}`
+      : `“${(selectedTarget.selector.type === "text-ranges"
+          ? selectedTarget.selector.ranges.map((part) => part.exact).join(" ")
+          : selectedTarget.selector.exact
         ).slice(0, 240)}”`;
-  $("whole-element").hidden = commentTarget.selector.type !== "text-range";
 }
 function composeComment(selectedTarget = target) {
   if (!selectedTarget || !session.authorized || previewState.status !== "ready")
     return;
   setView("preview");
   setPanel("comments-panel", true);
+  if (suggestionTarget && $("suggestion-body").value.trim())
+    return note("Submit or cancel your current suggestion first.");
+  suggestionTarget = null;
+  $("suggestion-form").hidden = true;
   if (commentTarget && $("body").value.trim()) {
     note("Post or cancel your current comment before starting another.");
   } else {
     commentTarget = selectedTarget;
-    describeTarget();
+    describeTarget(commentTarget, "selection");
   }
+  $("whole-element").hidden = commentTarget.selector.type !== "text-range";
   $("comment-form").hidden = false;
   $("comments-empty").hidden = true;
   $("add-comment").disabled = postingComment || !$("body").value.trim();
   $("body").focus();
+}
+function composeSuggestion(selectedTarget = target) {
+  if (!selectedTarget || !session.authorized || previewState.status !== "ready")
+    return;
+  setView("preview");
+  setPanel("comments-panel", true);
+  if (commentTarget && $("body").value.trim())
+    return note("Post or cancel your current comment first.");
+  commentTarget = null;
+  $("comment-form").hidden = true;
+  if (suggestionTarget && $("suggestion-body").value.trim()) {
+    note("Submit or cancel your current suggestion before starting another.");
+  } else {
+    suggestionTarget = selectedTarget;
+    suggestionKey = document.defaultView.crypto.randomUUID();
+    describeTarget(suggestionTarget, "suggestion-selection");
+  }
+  const manual = suggestionTarget.selector.type === "text-range";
+  $("suggestion-form").hidden = false;
+  $("suggestion-hint").hidden = manual;
+  $("comments-empty").hidden = true;
+  $("add-suggestion").disabled =
+    postingSuggestion || !manual || !$("suggestion-body").value.trim();
+  $("suggestion-body").focus();
 }
 const preserveCommentSelection = (event) => {
   event.preventDefault();
@@ -187,19 +223,31 @@ $("selection-suggest").onclick = () => {
   const selectedTarget = commentTriggerTarget || target;
   commentTriggerTarget = null;
   if (!selectedTarget) return;
-  target = selectedTarget;
-  selectionAction = { kind: "suggest", target: selectedTarget };
-  $("selection-actions").hidden = true;
-  note(
-    "Suggestion ready. Tell your browser agent how this selection should change.",
-  );
+  selectionAction = null;
+  composeSuggestion(selectedTarget);
 };
 $("ask-agent-comment").onclick = () => {
   if (!commentTarget || postingComment) return;
   target = commentTarget;
-  selectionAction = { kind: "comment", target: commentTarget };
+  selectionAction = {
+    kind: "comment",
+    target: commentTarget,
+    draft: $("body").value,
+  };
   note(
     "Comment request ready. Tell your browser agent what the comment should say.",
+  );
+};
+$("ask-agent-suggestion").onclick = () => {
+  if (!suggestionTarget || postingSuggestion) return;
+  target = suggestionTarget;
+  selectionAction = {
+    kind: "suggest",
+    target: suggestionTarget,
+    draft: $("suggestion-body").value,
+  };
+  note(
+    "Suggestion request ready. Tell your browser agent what replacement you want.",
   );
 };
 $("cancel-comment").onclick = () => {
@@ -208,9 +256,21 @@ $("cancel-comment").onclick = () => {
   $("comments-empty").hidden = !!current?.state.comments.length;
   $("tab-comments").focus();
 };
+$("cancel-suggestion").onclick = () => {
+  $("suggestion-body").value = "";
+  resetTarget();
+  $("comments-empty").hidden = !!current?.state.comments.length;
+  $("tab-comments").focus();
+};
 $("body").oninput = () => {
   $("add-comment").disabled =
     postingComment || !commentTarget || !$("body").value.trim();
+};
+$("suggestion-body").oninput = () => {
+  $("add-suggestion").disabled =
+    postingSuggestion ||
+    suggestionTarget?.selector.type !== "text-range" ||
+    !$("suggestion-body").value.trim();
 };
 addEventListener("resize", () => {
   $("selection-actions").hidden = true;
@@ -644,7 +704,8 @@ function comments() {
   ).length;
   $("review-count").textContent = open + pending;
   $("review-count").hidden = !open && !pending;
-  $("comments-empty").hidden = !!list.length || !$("comment-form").hidden;
+  $("comments-empty").hidden =
+    !!list.length || !$("comment-form").hidden || !$("suggestion-form").hidden;
   $("comments-summary").textContent = groups.length
     ? `${open} open · ${groups.length} ${groups.length === 1 ? "location" : "locations"}`
     : "Comments are grouped by location.";
@@ -904,7 +965,7 @@ addEventListener("message", (event) => {
 $("whole-element").onclick = () => {
   if (commentTarget && !postingComment) {
     commentTarget = { ...commentTarget, selector: { type: "element" } };
-    describeTarget();
+    describeTarget(commentTarget, "selection");
   }
 };
 $("comment-form").onsubmit = safely(async (event) => {
@@ -932,6 +993,48 @@ $("comment-form").onsubmit = safely(async (event) => {
     $("add-comment").disabled = !commentTarget || !$("body").value.trim();
   }
 });
+$("suggestion-form").onsubmit = safely(async (event) => {
+  event.preventDefault();
+  if (
+    !suggestionTarget ||
+    suggestionTarget.selector.type !== "text-range" ||
+    postingSuggestion ||
+    !$("suggestion-body").value.trim()
+  )
+    return;
+  const replacement = $("suggestion-body").value,
+    submittedTarget = suggestionTarget,
+    key = suggestionKey;
+  postingSuggestion = true;
+  $("add-suggestion").disabled = true;
+  $("cancel-suggestion").disabled = true;
+  $("add-suggestion").textContent = "Submitting…";
+  try {
+    const result = await api("suggestions", {
+      target: submittedTarget,
+      replacement,
+      key,
+    });
+    if (
+      suggestionTarget === submittedTarget &&
+      $("suggestion-body").value === replacement
+    ) {
+      $("suggestion-body").value = "";
+      resetTarget();
+    }
+    await refresh();
+    await select(result.proposal.id);
+    note("Suggestion added to the review queue");
+  } finally {
+    postingSuggestion = false;
+    $("add-suggestion").textContent = "Submit suggestion";
+    $("cancel-suggestion").disabled = false;
+    $("add-suggestion").disabled =
+      !suggestionTarget ||
+      suggestionTarget.selector.type !== "text-range" ||
+      !$("suggestion-body").value.trim();
+  }
+});
 let registration,
   connecting = false,
   lifecycle = 0,
@@ -954,8 +1057,8 @@ async function connectTools() {
         target,
         selectionAction,
       ),
-    onDraftComment: ({ target: draftedTarget, body }) => {
-      if ($("body").value.trim()) return false;
+    onDraftComment: ({ target: draftedTarget, body, expectedDraft }) => {
+      if ($("body").value !== expectedDraft) return false;
       target = draftedTarget;
       selectionAction = null;
       composeComment(draftedTarget);
@@ -963,6 +1066,22 @@ async function connectTools() {
       $("add-comment").disabled = false;
       $("body").focus();
       note("Agent comment draft is ready for review.");
+      return true;
+    },
+    onDraftSuggestion: ({
+      target: draftedTarget,
+      replacement,
+      expectedDraft,
+    }) => {
+      if ($("suggestion-body").value !== expectedDraft) return false;
+      target = draftedTarget;
+      selectionAction = null;
+      composeSuggestion(draftedTarget);
+      $("suggestion-body").value = replacement;
+      $("add-suggestion").disabled =
+        draftedTarget.selector.type !== "text-range";
+      $("suggestion-body").focus();
+      note("Agent suggestion draft is ready for review.");
       return true;
     },
     onMutation: async (result, route) => {
@@ -993,7 +1112,7 @@ async function connectTools() {
   registration = result;
   $("webmcp-status").textContent =
     result.status === "registered"
-      ? "WebMCP connected · 5 tools · comments and proposals remain human-reviewed"
+      ? "WebMCP connected · 6 tools · comments and proposals remain human-reviewed"
       : result.status === "unsupported"
         ? "WebMCP unavailable · manual review works normally"
         : "WebMCP registration failed · manual review works normally";

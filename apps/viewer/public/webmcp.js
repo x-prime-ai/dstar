@@ -18,6 +18,7 @@ export function createTools({
   getReviewContext,
   onMutation,
   onDraftComment,
+  onDraftSuggestion,
 }) {
   const definitions = [
     {
@@ -65,6 +66,7 @@ export function createTools({
         const viewerUpdated = await onDraftComment({
           target: context.action.target,
           body: args.body,
+          expectedDraft: context.action.draft ?? "",
         });
         return viewerUpdated === false
           ? {
@@ -72,6 +74,46 @@ export function createTools({
               code: "draft_conflict",
               error:
                 "The Viewer comment draft changed. Keep the existing text or clear it before asking the agent to draft again.",
+            }
+          : { ok: true, drafted: true, viewerUpdated: true };
+      },
+    },
+    {
+      name: "draft_selection_suggestion",
+      description:
+        "Draft replacement text for the exact selection after the user chose Suggest in the Viewer. Fills the editable suggestion composer; it never submits a proposal. Use only when get_review_context returns action.kind=suggest.",
+      inputSchema: object({
+        replacement: { type: "string", minLength: 1, maxLength: 20000 },
+      }),
+      readOnly: false,
+      local: async (args) => {
+        const context = getReviewContext();
+        if (
+          !args ||
+          Object.keys(args).length !== 1 ||
+          typeof args.replacement !== "string" ||
+          !args.replacement.trim() ||
+          args.replacement.length > 20000 ||
+          context.action?.kind !== "suggest" ||
+          context.action.target?.selector?.type !== "text-range"
+        )
+          return {
+            ok: false,
+            code: "invalid_input",
+            error:
+              "Choose Suggest for a text selection within one element before drafting.",
+          };
+        const viewerUpdated = await onDraftSuggestion({
+          target: context.action.target,
+          replacement: args.replacement,
+          expectedDraft: context.action.draft ?? "",
+        });
+        return viewerUpdated === false
+          ? {
+              ok: false,
+              code: "draft_conflict",
+              error:
+                "The Viewer suggestion draft changed. Keep the existing text or ask the agent again from the current draft.",
             }
           : { ok: true, drafted: true, viewerUpdated: true };
       },

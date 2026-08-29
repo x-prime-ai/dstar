@@ -2,6 +2,7 @@ import { Repository } from "./repository.js";
 export type * from "./types.js";
 export { readCandidate } from "./repository.js";
 export { revision, digest } from "./delta.js";
+export { replaceTargetText } from "./suggestion.js";
 export {
   validateHtml,
   validateTarget,

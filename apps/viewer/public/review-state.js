@@ -41,7 +41,13 @@ export function reviewContext(
       action &&
       ["comment", "suggest"].includes(action.kind) &&
       action.target === target
-        ? { kind: action.kind, target: selection }
+        ? {
+            kind: action.kind,
+            target: selection,
+            ...(typeof action.draft === "string"
+              ? { draft: action.draft }
+              : {}),
+          }
         : null,
   };
 }

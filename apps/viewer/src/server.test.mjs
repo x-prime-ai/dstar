@@ -179,6 +179,58 @@ it("serves immutable isolated previews and requires session credentials for deci
   ).toBe(409);
 });
 
+it("turns a manual text suggestion into a pending human proposal", async () => {
+  const { root, engine, proposal } = fixture(),
+    viewer = await startViewer(root),
+    token = new URL(viewer.url).hash.slice(1),
+    headers = {
+      authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Origin: viewer.origin,
+    },
+    request = (path, body) =>
+      fetch(viewer.origin + path, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+  cleanup.push(() => close(viewer.server));
+  const initial = engine.snapshot();
+  expect(
+    (
+      await request(`/api/proposals/${proposal.id}/accept`, {
+        revision: proposal.revision,
+        stateId: initial.stateId,
+      })
+    ).status,
+  ).toBe(200);
+  const args = {
+      target: {
+        revision: proposal.revision,
+        element: "intro",
+        selector: {
+          type: "text-range",
+          start: 6,
+          end: 7,
+          unit: "unicode-code-point",
+          exact: "🌍",
+        },
+      },
+      replacement: "world",
+      key: "manual-suggestion-one",
+    },
+    response = await request("/api/suggestions", args),
+    result = await response.json();
+  expect(response.status).toBe(201);
+  expect(result.proposal).toMatchObject({ author: "human", status: "pending" });
+  expect(
+    engine.snapshot(result.proposal.id).files.get("document.html").toString(),
+  ).toContain("Hello world");
+  expect(engine.snapshot().revision).toBe(proposal.revision);
+  const retry = await (await request("/api/suggestions", args)).json();
+  expect(retry.proposal.id).toBe(result.proposal.id);
+});
+
 it("resolves comment markers against the viewed revision without changing canonical files", async () => {
   const { root, candidate, engine, proposal } = fixture();
   const viewer = await start(root);
@@ -832,9 +884,13 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   expect(context.resolutionRevision).toBe(p.revision);
   const suggestContext = await api("agent/context", {
     ...contextArgs,
-    action: { kind: "suggest", target },
+    action: { kind: "suggest", target, draft: "Make it friendlier" },
   });
-  expect(suggestContext.action).toEqual({ kind: "suggest", target });
+  expect(suggestContext.action).toEqual({
+    kind: "suggest",
+    target,
+    draft: "Make it friendlier",
+  });
   expect(
     (
       await api("agent/context", {
