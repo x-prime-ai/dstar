@@ -211,10 +211,11 @@ const annotationMessage = (page, extra = {}) => ({
     kind: "dstar-annotations",
     capability: "cap",
     revision: "rev",
-    active: "intro",
+    active: "thread-1",
     groups: [
       {
-        id: "intro",
+        id: "thread-1",
+        element: "intro",
         number: 2,
         anchors: [{ type: "text-range", start: 6, end: 7 }],
       },
@@ -231,7 +232,7 @@ it("renders accessible markers in an isolated overlay and maps code points to DO
     highlights = host.shadow.children[1],
     markers = host.shadow.children[2];
   const button = markers.children[0];
-  expect(button.attributes["aria-label"]).toBe("Open comment location 2");
+  expect(button.attributes["aria-label"]).toBe("Open comment thread 2");
   expect(button.attributes["aria-pressed"]).toBe("true");
   expect(button.style.left).toBe("118px");
   expect(button.style.top).toBe("56px");
@@ -256,16 +257,17 @@ it("renders accessible markers in an isolated overlay and maps code points to DO
     kind: "dstar-annotation-focus",
     capability: "cap",
     revision: "rev",
-    group: "intro",
+    group: "thread-1",
   });
-  page.listeners.message(annotationMessage(page, { focus: "intro" }));
+  page.listeners.message(annotationMessage(page, { focus: "thread-1" }));
   expect(fixture.scrolled).toEqual([{ block: "center", inline: "nearest" }]);
   expect(markers.children).toHaveLength(1);
   page.listeners.message(
     annotationMessage(page, {
       groups: [
         {
-          id: "intro",
+          id: "thread-1",
+          element: "intro",
           number: 2,
           anchors: [
             {
@@ -324,7 +326,7 @@ it("opens the matching slide when navigating to a comment on a hidden slide", as
     selector === "[data-dstar-slide]" ? slides : query(selector);
   const page = await run(fixture);
   expect(slides[1].style.display).toBe("none");
-  page.listeners.message(annotationMessage(page, { focus: "intro" }));
+  page.listeners.message(annotationMessage(page, { focus: "thread-1" }));
   expect(slides[0].style.display).toBe("none");
   expect(slides[1].style.display).toBe("");
 });

@@ -27,8 +27,9 @@ The interface has three user tasks:
 
 - **Read** the current document. This is always the default when a current
   version exists.
-- **Comments** as independent threads. Each root comment and its replies share
-  one Open or Resolved state.
+- **Comments** as independent, numbered, collapsible threads. Each root comment
+  and its replies share one Open or Resolved state. The thread number matches
+  its marker in the document.
 - **Versions** as one newest-first list. Each row identifies its status, author,
   date and change size without splitting the history into separate sections.
 

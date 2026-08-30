@@ -8,7 +8,7 @@ import {
   selectionFromEvent,
   selectionMessageFromEvent,
   selectionButtonPosition,
-  commentGroups,
+  commentThreads,
   annotationEventFromFrame,
 } from "../public/review-state.js";
 
@@ -148,7 +148,7 @@ it("does not accept iframe load events or untrusted/mismatched acknowledgements"
   ).toBe(false);
 });
 
-it("groups comment threads by stable element without renumbering resolved locations", () => {
+it("numbers comment threads independently without renumbering resolved threads", () => {
   const a = {
     id: "a",
     status: "open",
@@ -164,21 +164,25 @@ it("groups comment threads by stable element without renumbering resolved locati
     status: "open",
     target: { element: "intro", revision: "new" },
   };
-  const initial = commentGroups([a, b, c]);
+  const initial = commentThreads([a, b, c]);
   expect(initial).toEqual([
-    { id: "intro", number: 1, comments: [a, c], openCount: 2 },
-    { id: "heading", number: 2, comments: [b], openCount: 0 },
+    { id: "a", element: "intro", number: 1, comment: a },
+    { id: "b", element: "heading", number: 2, comment: b },
+    { id: "c", element: "intro", number: 3, comment: c },
   ]);
-  const next = commentGroups([
+  const next = commentThreads([
     { ...a, status: "resolved" },
     b,
     c,
     { ...a, id: "d", target: { element: "footer" } },
   ]);
-  expect(next.map((g) => [g.id, g.number, g.openCount])).toEqual([
-    ["intro", 1, 1],
-    ["heading", 2, 0],
-    ["footer", 3, 1],
+  expect(
+    next.map((thread) => [thread.id, thread.element, thread.number]),
+  ).toEqual([
+    ["a", "intro", 1],
+    ["b", "heading", 2],
+    ["c", "intro", 3],
+    ["d", "footer", 4],
   ]);
 });
 

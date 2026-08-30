@@ -815,20 +815,86 @@ textarea {
 .comment-help p {
   line-height: 1.8;
 }
-.comment {
-  padding: 14px;
+.comment-thread {
   margin-bottom: 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
+  overflow: hidden;
+}
+.comment-thread.active {
+  border-color: #b8cbee;
+  box-shadow: 0 0 0 2px #eaf0fc;
+}
+.thread-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 12px;
+  list-style: none;
+  cursor: pointer;
+}
+.thread-summary::-webkit-details-marker {
+  display: none;
+}
+.thread-summary:hover {
+  background: #f7f9f7;
+}
+.thread-number {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid #cfdbd1;
+  border-radius: 50%;
+  background: #edf3ec;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 650;
+}
+.comment-thread.active .thread-number {
+  border-color: #315fba;
+  background: #315fba;
+  color: #fff;
+}
+.thread-summary-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.thread-summary-copy strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+.thread-summary-copy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-chevron {
+  flex: none;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+.comment-thread[open] .thread-chevron {
+  transform: rotate(180deg);
+}
+.comment {
+  padding: 14px;
+  border-top: 1px solid var(--line);
   overflow-wrap: anywhere;
   outline: none;
   cursor: pointer;
 }
 .comment.active {
-  border-color: #b8cbee;
   background: #f5f8ff;
-  box-shadow: 0 0 0 2px #eaf0fc;
 }
 .comment:focus-visible {
   box-shadow: 0 0 0 2px #315fba;
@@ -917,7 +983,7 @@ textarea {
 }
 .thread-status {
   display: inline-flex;
-  margin-left: auto;
+  flex: none;
   font-size: 10px;
   padding: 2px 7px;
   border-radius: 999px;
@@ -927,12 +993,6 @@ textarea {
 .thread-status.resolved {
   background: #f0f0ef;
   color: #747774;
-}
-.comment-section > summary {
-  font-size: 12px;
-  color: var(--muted);
-  padding: 10px 0;
-  margin: 8px 0;
 }
 .anchor-warning {
   display: block;

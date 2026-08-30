@@ -6,7 +6,7 @@ import {
   reviewContext,
   selectionMessageFromEvent,
   selectionButtonPosition,
-  commentGroups,
+  commentThreads,
   annotationEventFromFrame,
 } from "./review-state.js";
 import { registerWebMCP } from "./webmcp.js";
@@ -705,15 +705,20 @@ function sendAnnotations(focus = null) {
     annotations?.revision !== frame.revision
   )
     return;
-  const groups = commentGroups(current.state.comments)
-    .map((group) => ({
-      id: group.id,
-      number: group.number,
-      resolved: !group.openCount,
-      anchors: group.comments.filter(located).map((c) => ({
-        type: c.target.selector.type,
-        ...annotations.anchors[c.id],
-      })),
+  const groups = commentThreads(current.state.comments)
+    .map((thread) => ({
+      id: thread.id,
+      element: thread.element,
+      number: thread.number,
+      resolved: thread.comment.status !== "open",
+      anchors: located(thread.comment)
+        ? [
+            {
+              type: thread.comment.target.selector.type,
+              ...annotations.anchors[thread.id],
+            },
+          ]
+        : [],
     }))
     .filter((group) => group.anchors.length);
   $("preview").contentWindow.postMessage(
@@ -747,7 +752,7 @@ async function syncAnnotations() {
     const pending = current?.state.comments.find(
       (comment) => comment.id === pendingCommentFocus,
     );
-    const focus = pending && located(pending) ? pending.target.element : null;
+    const focus = pending && located(pending) ? pending.id : null;
     pendingCommentFocus = null;
     comments();
     sendAnnotations(focus);
@@ -776,22 +781,17 @@ async function syncAnnotations() {
   }
 }
 function focusGroup(id, fromList = true) {
-  const group = commentGroups(current?.state.comments ?? []).find(
-    (g) => g.id === id,
-  );
-  if (!group || !group.comments.some(located)) return;
+  const comment = current?.state.comments.find((entry) => entry.id === id);
+  if (!comment || !located(comment)) return;
   setView("preview");
   activeGroup = id;
-  if (!group.comments.some((comment) => comment.id === activeCommentId)) {
-    const nextCommentId =
-      group.comments.find((comment) => comment.status === "open")?.id ??
-      group.comments[0].id;
+  if (activeCommentId !== id) {
     if (
       outgoingHandoff?.context.action.kind === "address-comment" &&
-      outgoingHandoff.context.action.commentId !== nextCommentId
+      outgoingHandoff.context.action.commentId !== id
     )
       safely(revokeOutgoingHandoff)();
-    activeCommentId = nextCommentId;
+    activeCommentId = id;
   }
   setPanel("comments-panel", true);
   updateReviewFocus();
@@ -807,6 +807,11 @@ function focusGroup(id, fromList = true) {
   sendAnnotations(fromList ? id : null);
 }
 function updateReviewFocus() {
+  document.querySelectorAll(".comment-thread").forEach((thread) => {
+    const active = thread.dataset.thread === activeCommentId;
+    thread.classList.toggle("active", active);
+    if (active) thread.open = true;
+  });
   document.querySelectorAll(".comment[data-comment]").forEach((article) => {
     const active = article.dataset.comment === activeCommentId;
     article.classList.toggle("active", active);
@@ -823,7 +828,7 @@ function focusComment(id, announce = true) {
   )
     safely(revokeOutgoingHandoff)();
   activeCommentId = id;
-  activeGroup = comment.target.element;
+  activeGroup = comment.id;
   setPanel("comments-panel", true);
   updateReviewFocus();
   sendAnnotations(announce && located(comment) ? activeGroup : null);
@@ -851,7 +856,7 @@ async function openCommentInDocument(id) {
     annotations?.revision === frame?.revision;
   if (ready && located(comment)) {
     pendingCommentFocus = null;
-    sendAnnotations(comment.target.element);
+    sendAnnotations(comment.id);
   }
   if (ready && !located(comment)) pendingCommentFocus = null;
   if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
@@ -949,9 +954,40 @@ function replyComposer(comment) {
   form.append(actions);
   return form;
 }
-function commentThread(c) {
-  const article = el("article", undefined, "comment"),
+function commentThread(thread, expanded = false) {
+  const c = thread.comment,
+    card = el("details", undefined, "comment-thread"),
+    article = el("article", undefined, "comment"),
     commentActor = actorCopy(c.author);
+  card.dataset.thread = c.id;
+  card.open = expanded;
+  card.classList.toggle("active", c.id === activeCommentId);
+  const summary = el("summary", undefined, "thread-summary"),
+    summaryCopy = el("span", undefined, "thread-summary-copy"),
+    preview = c.body.replace(/\s+/g, " ").trim();
+  summaryCopy.append(
+    el("strong", commentActor.name),
+    el("small", preview.length > 80 ? `${preview.slice(0, 80)}…` : preview),
+  );
+  summary.append(
+    el("span", thread.number, "thread-number"),
+    summaryCopy,
+    el(
+      "span",
+      c.status === "open" ? "Open" : "Resolved",
+      `thread-status ${c.status}`,
+    ),
+    el("span", "⌄", "thread-chevron"),
+  );
+  summary.setAttribute(
+    "aria-label",
+    `Thread ${thread.number}, ${c.status}, by ${commentActor.name}: ${preview.slice(0, 160)}`,
+  );
+  summary.onclick = (event) => {
+    event.preventDefault();
+    card.open = !card.open;
+    if (card.open) safely(() => openCommentInDocument(c.id))();
+  };
   article.dataset.comment = c.id;
   article.tabIndex = 0;
   article.classList.toggle("active", c.id === activeCommentId);
@@ -982,13 +1018,6 @@ function commentThread(c) {
   );
   if (commentActor.role)
     author.append(el("span", commentActor.role, "role-badge"));
-  author.append(
-    el(
-      "span",
-      c.status === "open" ? "Open" : "Resolved",
-      `thread-status ${c.status}`,
-    ),
-  );
   article.append(author);
   article.append(el("p", c.body));
   for (const r of c.replies) {
@@ -1072,34 +1101,34 @@ function commentThread(c) {
         "anchor-warning",
       ),
     );
-  return article;
+  card.append(summary, article);
+  return card;
 }
 function comments() {
   const list = current.state.comments,
-    openThreads = list.filter((c) => c.status === "open"),
-    resolvedThreads = list.filter((c) => c.status !== "open"),
-    open = openThreads.length;
+    threads = commentThreads(list),
+    open = list.filter((c) => c.status === "open").length;
   $("count").textContent = open;
   $("count").hidden = !open;
   $("comments-empty").hidden =
     !!list.length || !$("comment-form").hidden || !$("suggestion-form").hidden;
   $("comments-summary").textContent = list.length
-    ? `${open} open ${open === 1 ? "thread" : "threads"}`
+    ? `${open} open · ${list.length} ${list.length === 1 ? "thread" : "threads"}`
     : "Each comment starts a thread.";
-  const resolvedWasOpen = $("resolved-threads")?.open ?? false;
-  const resolved = el("details", undefined, "comment-section");
-  resolved.id = "resolved-threads";
+  const expanded = new Set(
+    [...$("comments").querySelectorAll(".comment-thread[open]")].map(
+      (thread) => thread.dataset.thread,
+    ),
+  );
   $("comments").replaceChildren();
-  $("comments").append(...openThreads.map(commentThread));
-  if (resolvedThreads.length) {
-    resolved.append(
-      el("summary", `Resolved · ${resolvedThreads.length}`),
-      ...resolvedThreads.map(commentThread),
-    );
-    resolved.open =
-      resolvedWasOpen || resolvedThreads.some((c) => c.id === activeCommentId);
-    $("comments").append(resolved);
-  }
+  $("comments").append(
+    ...threads.map((thread) =>
+      commentThread(
+        thread,
+        expanded.has(thread.id) || thread.id === activeCommentId,
+      ),
+    ),
+  );
 }
 function renderIdentity(publicSession) {
   const identity = publicSession?.identity;
@@ -1323,14 +1352,14 @@ $("comment-form").onsubmit = safely(async (event) => {
   $("cancel-comment").disabled = true;
   $("add-comment").textContent = "Posting…";
   try {
-    await api("comments", { target: submittedTarget, body });
+    const created = await api("comments", { target: submittedTarget, body });
     if (commentTarget === submittedTarget && $("body").value === body) {
       $("body").value = "";
       resetTarget();
     }
     note("Comment added");
     await refresh();
-    focusGroup(submittedTarget.element, false);
+    focusGroup(created.id, false);
   } finally {
     postingComment = false;
     $("add-comment").textContent = "Post comment";

@@ -400,7 +400,9 @@
     annotationRecords = [];
     activeAnnotation = typeof data.active === "string" ? data.active : null;
     for (const group of data.groups) {
-      const element = elements.get(group.id);
+      const element = elements.get(
+        typeof group.element === "string" ? group.element : group.id,
+      );
       if (
         !element ||
         !Number.isSafeInteger(group.number) ||
@@ -415,11 +417,8 @@
       button.type = "button";
       button.textContent = group.number;
       button.className = group.resolved ? "resolved" : "";
-      button.setAttribute(
-        "aria-label",
-        `Open comment location ${group.number}`,
-      );
-      button.title = `Comments ${group.number}${group.resolved ? " · Resolved" : ""}`;
+      button.setAttribute("aria-label", `Open comment thread ${group.number}`);
+      button.title = `Thread ${group.number}${group.resolved ? " · Resolved" : ""}`;
       button.onmousedown = (event) => {
         event.preventDefault();
         event.stopPropagation();

@@ -192,24 +192,15 @@ export function selectionButtonPosition(rect, frame, viewport, control = 38) {
   };
 }
 
-// State comments are append-only: keep location numbers stable when new threads
-// arrive or existing threads are resolved, including across preview versions.
-export function commentGroups(comments) {
-  const groups = new Map();
-  for (const comment of comments) {
-    const id = comment.target.element;
-    if (!groups.has(id))
-      groups.set(id, {
-        id,
-        number: groups.size + 1,
-        comments: [],
-        openCount: 0,
-      });
-    const group = groups.get(id);
-    group.comments.push(comment);
-    if (comment.status === "open") group.openCount++;
-  }
-  return [...groups.values()];
+// State comments are append-only, so list position is a stable thread number
+// even when the thread is resolved or later document versions are opened.
+export function commentThreads(comments) {
+  return comments.map((comment, index) => ({
+    id: comment.id,
+    element: comment.target.element,
+    number: index + 1,
+    comment,
+  }));
 }
 
 export function annotationEventFromFrame(event, source, frame, previewState) {
