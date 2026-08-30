@@ -7,6 +7,7 @@ import {
   selectionMessageFromEvent,
   selectionButtonPosition,
   commentThreads,
+  commentAppliesToVersion,
   annotationEventFromFrame,
 } from "./review-state.js";
 import { registerWebMCP } from "./webmcp.js";
@@ -59,8 +60,10 @@ let current,
   activeGroup = null,
   activeCommentId = null,
   commentFocusSerial = 0,
+  commentFilter = "open",
   pendingCommentFocus = null,
   annotations = null,
+  annotationState = "idle",
   annotationSerial = 0,
   showingBase = false,
   postingComment = false,
@@ -210,6 +213,20 @@ for (const [panel, tab] of [
             : "comments-panel";
     setPanel(next, true, true);
   };
+}
+for (const [button, filter] of [
+  ["filter-open", "open"],
+  ["filter-resolved", "resolved"],
+]) {
+  $(button).onclick = safely(async () => {
+    if (commentFilter === filter) return;
+    await revokeOutgoingHandoff();
+    commentFilter = filter;
+    activeCommentId = null;
+    activeGroup = null;
+    comments();
+    sendAnnotations();
+  });
 }
 setPanel(activeTab, document.documentElement.clientWidth > 1100);
 function describeTarget(selectedTarget, output) {
@@ -462,6 +479,7 @@ async function preview(id) {
   clearTimeout(previewTimer);
   previewState.reset();
   annotations = null;
+  annotationState = id ? "loading" : "idle";
   activeGroup = null;
   ++annotationSerial;
   $("accept").disabled = true;
@@ -738,6 +756,8 @@ async function syncAnnotations() {
   if (!frame || !selected || previewState.status !== "ready") return;
   const expected = frame,
     serial = ++annotationSerial;
+  annotationState = "loading";
+  comments();
   try {
     const result = await api(
       `annotations/${showingBase ? selected.parent : selected.id}`,
@@ -750,6 +770,7 @@ async function syncAnnotations() {
     )
       return;
     annotations = result;
+    annotationState = "ready";
     const pending = current?.state.comments.find(
       (comment) => comment.id === pendingCommentFocus,
     );
@@ -766,6 +787,7 @@ async function syncAnnotations() {
   } catch (error) {
     if (serial !== annotationSerial || frame !== expected) return;
     annotations = null;
+    annotationState = "failed";
     pendingCommentFocus = null;
     $("preview").contentWindow.postMessage(
       {
@@ -846,15 +868,10 @@ async function openCommentInDocument(id) {
   const comment = current?.state.comments.find((entry) => entry.id === id);
   if (!comment) return;
   const serial = ++commentFocusSerial;
-  const commentedVersion = current.state.proposals.find(
-    (proposal) => proposal.revision === comment.target.revision,
-  );
   pendingCommentFocus = id;
   activeCommentId = id;
   activeGroup = id;
   updateReviewFocus();
-  if (commentedVersion && selected?.revision !== comment.target.revision)
-    await select(commentedVersion.id);
   if (serial !== commentFocusSerial) return;
   focusComment(id, false);
   const ready =
@@ -1066,7 +1083,7 @@ function commentThread(thread, expanded = false) {
   }
   if (replyDraft?.commentId === c.id) article.append(replyComposer(c));
   const actions = el("div", undefined, "comment-actions");
-  if (session.can("reply")) {
+  if (c.status === "open" && session.can("reply")) {
     const reply = el("button", "Reply");
     reply.type = "button";
     reply.onclick = () => openReplyDraft(c);
@@ -1104,34 +1121,68 @@ function commentThread(thread, expanded = false) {
     });
     actions.append(resolve);
   }
-  const commentedVersion = current.state.proposals.find(
-    (proposal) => proposal.revision === c.target.revision,
-  );
   article.append(actions);
-  if (annotations && !located(c))
-    article.append(
-      el(
-        "small",
-        commentedVersion
-          ? "This comment belongs to another version."
-          : "This comment cannot be located in this version.",
-        "anchor-warning",
-      ),
-    );
   card.append(summary, article);
   return card;
 }
 function comments() {
   const list = current.state.comments,
-    threads = commentThreads(list),
-    open = list.filter((c) => c.status === "open").length;
+    viewedProposalId = showingBase ? selected?.parent : selected?.id,
+    ready =
+      annotationState === "ready" &&
+      annotations?.revision === frame?.revision &&
+      annotations?.stateId === current.stateId,
+    relevant = ready
+      ? list.filter((comment) =>
+          commentAppliesToVersion(
+            comment,
+            current.state.proposals,
+            viewedProposalId,
+            annotations.anchors,
+          ),
+        )
+      : [],
+    open = relevant.filter((comment) => comment.status === "open").length,
+    resolved = relevant.length - open,
+    visible = relevant.filter((comment) => comment.status === commentFilter),
+    threads = commentThreads(list).filter((thread) =>
+      visible.includes(thread.comment),
+    );
   $("count").textContent = open;
   $("count").hidden = !open;
-  $("comments-empty").hidden =
-    !!list.length || !$("comment-form").hidden || !$("suggestion-form").hidden;
-  $("comments-summary").textContent = list.length
-    ? `${open} open · ${list.length} ${list.length === 1 ? "thread" : "threads"}`
-    : "Each comment starts a thread.";
+  $("open-count").textContent = open;
+  $("resolved-count").textContent = resolved;
+  $("filter-open").setAttribute(
+    "aria-pressed",
+    String(commentFilter === "open"),
+  );
+  $("filter-resolved").setAttribute(
+    "aria-pressed",
+    String(commentFilter === "resolved"),
+  );
+  if (!ready) {
+    $("comments-summary").textContent =
+      annotationState === "failed"
+        ? "Comments are unavailable for this version."
+        : selected
+          ? "Loading comments for this version…"
+          : "Select a version to view its comments.";
+    $("comments-empty").hidden = true;
+  } else {
+    const label = commentFilter === "open" ? "open" : "resolved";
+    $("comments-summary").textContent =
+      `${visible.length} ${label} ${visible.length === 1 ? "thread" : "threads"} in this version`;
+    $("comments-empty-title").textContent =
+      commentFilter === "open" ? "Start a conversation" : "Nothing resolved";
+    $("comments-empty-copy").textContent =
+      commentFilter === "open"
+        ? "Select text in the document, then choose Comment or Suggest."
+        : "Resolved threads from this version will appear here.";
+    $("comments-empty").hidden =
+      !!visible.length ||
+      !$("comment-form").hidden ||
+      !$("suggestion-form").hidden;
+  }
   const expanded = $("comments").querySelector(".comment-thread[open]")?.dataset
     .thread;
   $("comments").replaceChildren();
@@ -1748,6 +1799,7 @@ function authorizationChanged(authorized) {
   clearTimeout(previewTimer);
   previewState.reset();
   annotations = null;
+  annotationState = "idle";
   activeGroup = null;
   activeCommentId = null;
   outgoingHandoff = null;

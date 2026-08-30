@@ -203,6 +203,30 @@ export function commentThreads(comments) {
   }));
 }
 
+export function commentAppliesToVersion(
+  comment,
+  proposals,
+  viewedProposalId,
+  anchors,
+) {
+  const resolution = anchors?.[comment.id];
+  if (!["exact", "recovered"].includes(resolution?.status)) return false;
+  const origins = new Set(
+      proposals
+        .filter((proposal) => proposal.revision === comment.target.revision)
+        .map((proposal) => proposal.id),
+    ),
+    byId = new Map(proposals.map((proposal) => [proposal.id, proposal])),
+    visited = new Set();
+  let cursor = viewedProposalId;
+  while (cursor && !visited.has(cursor)) {
+    if (origins.has(cursor)) return true;
+    visited.add(cursor);
+    cursor = byId.get(cursor)?.parent;
+  }
+  return false;
+}
+
 export function annotationEventFromFrame(event, source, frame, previewState) {
   if (
     !frame ||

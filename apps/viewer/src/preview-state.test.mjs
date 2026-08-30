@@ -9,6 +9,7 @@ import {
   selectionMessageFromEvent,
   selectionButtonPosition,
   commentThreads,
+  commentAppliesToVersion,
   annotationEventFromFrame,
 } from "../public/review-state.js";
 
@@ -184,6 +185,36 @@ it("numbers comment threads independently without renumbering resolved threads",
     ["c", "intro", 3],
     ["d", "footer", 4],
   ]);
+});
+
+it("shows comments only on their version or a located descendant", () => {
+  const proposals = [
+      { id: "v1", parent: null, revision: "rev-1" },
+      { id: "v2", parent: "v1", revision: "rev-2" },
+      { id: "declined", parent: "v1", revision: "rev-declined" },
+    ],
+    old = { id: "old", target: { revision: "rev-1" } },
+    declined = { id: "declined-comment", target: { revision: "rev-declined" } },
+    anchors = {
+      old: { status: "recovered" },
+      "declined-comment": { status: "exact" },
+    };
+  expect(commentAppliesToVersion(old, proposals, "v1", anchors)).toBe(true);
+  expect(commentAppliesToVersion(old, proposals, "v2", anchors)).toBe(true);
+  expect(commentAppliesToVersion(old, proposals, "declined", anchors)).toBe(
+    true,
+  );
+  expect(
+    commentAppliesToVersion(declined, proposals, "declined", anchors),
+  ).toBe(true);
+  expect(commentAppliesToVersion(declined, proposals, "v2", anchors)).toBe(
+    false,
+  );
+  expect(
+    commentAppliesToVersion(old, proposals, "v2", {
+      old: { status: "orphaned" },
+    }),
+  ).toBe(false);
 });
 
 it("accepts annotation navigation only from the ready exact preview", () => {

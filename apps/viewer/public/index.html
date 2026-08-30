@@ -233,6 +233,18 @@
           aria-labelledby="tab-comments"
           tabindex="0"
         >
+          <div
+            class="comment-filters"
+            role="group"
+            aria-label="Filter comment threads"
+          >
+            <button id="filter-open" type="button" aria-pressed="true">
+              Open <span id="open-count">0</span>
+            </button>
+            <button id="filter-resolved" type="button" aria-pressed="false">
+              Resolved <span id="resolved-count">0</span>
+            </button>
+          </div>
           <p id="comments-summary" class="panel-caption">
             Each comment starts a thread.
           </p>
@@ -292,8 +304,10 @@
               <path
                 d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5a10 10 0 0 1 20 0Z"
               /></svg
-            ><strong>Start a conversation</strong>
-            <p>Select text in the document, then choose Comment or Suggest.</p>
+            ><strong id="comments-empty-title">Start a conversation</strong>
+            <p id="comments-empty-copy">
+              Select text in the document, then choose Comment or Suggest.
+            </p>
           </div>
           <details class="comment-help">
             <summary>How to comment</summary>

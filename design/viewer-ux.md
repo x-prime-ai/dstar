@@ -68,6 +68,10 @@ Engine terminology do not change.
   receive a separate status from their thread. Thread summaries show only the
   stable number, author, time and status; one thread is expanded at a time, and
   its root comment and replies form one unindented chronological stream.
+- The Comments panel defaults to Open and offers an Open / Resolved filter with
+  counts. Each filter contains only threads that belong to the viewed version
+  or a located descendant; unresolved historical, declined or orphaned anchors
+  do not leak into the current-version list.
 - Agent work uses one local status region with `idle`, `waiting`, `returned` and
   `expired` states. Returned text is always an editable draft; it is never
   posted or accepted automatically.
