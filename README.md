@@ -40,9 +40,9 @@ reject, resolve and manage sharing. The Reviewer may read, comment, reply,
 suggest, create pending proposals and use agent handoff, but cannot decide or
 resolve. Open the appropriate complete URL. Use **Review changes** to inspect
 the initial suggestion and create the Current version. Select text, or Alt-click an
-element, to Comment or Suggest. **Versions** groups Suggested changes, Current
-version and Previous versions without requiring revision hashes. Hashes and
-storage facts remain under Technical details. Keep both role URLs
+element, to Comment or Suggest. **Versions** is one newest-first list with a
+plain status on each item; revision hashes and storage facts remain under
+Technical details. Keep both role URLs
 private. `examples/slides-first` is an alternative starting candidate; the same
 Viewer provides previous/next slide controls.
 

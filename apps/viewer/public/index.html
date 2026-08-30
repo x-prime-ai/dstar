@@ -314,13 +314,13 @@
           tabindex="0"
           hidden
         >
+          <p class="panel-caption">
+            Newest first. Select a version to open it.
+          </p>
+          <div id="versions" class="version-list"></div>
           <section id="version-detail" class="version-detail" hidden>
-            <p id="version-kind" class="eyebrow">CURRENT VERSION</p>
-            <strong id="version-request"></strong>
-            <p id="version-author" class="version-author"></p>
-            <p id="version-summary" class="hint"></p>
             <button id="inspect-changes" class="primary">
-              See exact changes <span aria-hidden="true">→</span>
+              View changes <span aria-hidden="true">→</span>
             </button>
             <div id="version-addresses" class="proposal-addresses"></div>
             <details class="version-technical">
@@ -328,22 +328,6 @@
               <p id="version-revision"></p>
             </details>
           </section>
-          <section class="version-list-group suggested-group">
-            <h3>Suggested changes</h3>
-            <div id="proposals"></div>
-          </section>
-          <section class="version-list-group current-group">
-            <h3>Current version</h3>
-            <div id="current-version"></div>
-          </section>
-          <details class="version-group" open>
-            <summary>Previous versions</summary>
-            <div id="history"></div>
-          </details>
-          <details class="version-group">
-            <summary>Declined suggestions</summary>
-            <div id="rejected"></div>
-          </details>
         </section>
       </aside>
     </main>

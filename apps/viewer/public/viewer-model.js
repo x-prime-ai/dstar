@@ -1,21 +1,15 @@
-const newestFirst = (items) => [...items].reverse();
-
-export function versionGroups(state) {
-  const proposals = state?.proposals ?? [];
-  return {
-    suggested: newestFirst(
-      proposals.filter((item) => item.status === "pending"),
-    ),
-    current: proposals.find((item) => item.id === state?.head) ?? null,
-    previous: newestFirst(
-      proposals.filter(
-        (item) => item.status === "accepted" && item.id !== state?.head,
-      ),
-    ),
-    declined: newestFirst(
-      proposals.filter((item) => item.status === "rejected"),
-    ),
-  };
+export function versionList(state) {
+  return (state?.proposals ?? [])
+    .map((item, index) => {
+      const parsed = Date.parse(item.createdAt ?? "");
+      return {
+        item,
+        index,
+        time: Number.isFinite(parsed) ? parsed : -Infinity,
+      };
+    })
+    .sort((left, right) => right.time - left.time || right.index - left.index)
+    .map(({ item }) => item);
 }
 
 export function versionKind(proposal, state) {

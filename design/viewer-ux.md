@@ -28,9 +28,8 @@ The interface has three user tasks:
 - **Read** the current document. This is always the default when a current
   version exists.
 - **Comments** to discuss or suggest changes at a precise selection.
-- **Versions** as one chronological model: Suggested changes, Current version,
-  Previous versions. Declined suggestions remain available as secondary
-  history.
+- **Versions** as one newest-first list. Each row identifies its status, author,
+  date and change size without splitting the history into separate sections.
 
 A pending item opens a contextual review of that version. Its header answers:
 what is proposed, who proposed it, how much changed and what to do next. The

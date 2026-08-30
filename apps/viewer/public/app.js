@@ -17,7 +17,7 @@ import {
   changeSummary,
   technicalVersion,
   versionCopy,
-  versionGroups,
+  versionList,
 } from "./viewer-model.js";
 
 const $ = (id) => document.getElementById(id);
@@ -522,13 +522,7 @@ async function select(id, { keepPreview = false } = {}) {
     selected?.status !== "pending" || selected.parent === current.state.head;
   if (selected) {
     const actor = actorCopy(selected.author);
-    $("version-request").textContent = selected.request;
-    $("version-kind").textContent = copy.badge.toUpperCase();
-    $("version-author").textContent =
-      `By ${actor.name}${actor.role ? ` · ${actor.role}` : ""}`;
-    $("version-summary").textContent = changeSummary(selected);
     $("version-revision").textContent = technicalVersion(selected);
-    $("inspect-changes").textContent = "See exact changes →";
     $("review-heading").textContent = selected.request;
     $("review-author").textContent = actor.name;
     $("review-change-summary").textContent = changeSummary(selected);
@@ -1163,22 +1157,32 @@ function renderWorkspaceManagement(url) {
   if (url) link.href = url;
   else link.removeAttribute("href");
 }
-function versionButton(proposal, kind) {
+function versionTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return "Date unavailable";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year:
+      date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+  }).format(date);
+}
+function versionButton(proposal) {
   const button = el("button"),
-    actor = actorCopy(proposal.author);
+    actor = actorCopy(proposal.author),
+    copy = versionCopy(proposal, current.state);
   button.dataset.proposal = proposal.id;
-  button.dataset.versionKind = kind;
-  button.append(
+  button.dataset.versionKind = copy.kind;
+  const heading = el("span", undefined, "version-item-heading");
+  heading.append(
     el("strong", proposal.request),
+    el("span", copy.badge, `version-badge ${copy.kind}`),
+  );
+  button.append(
+    heading,
     el(
       "small",
-      kind === "suggested"
-        ? `Suggested by ${actor.name} · ${changeSummary(proposal)}`
-        : kind === "current"
-          ? "The version everyone currently sees"
-          : kind === "previous"
-            ? `Previous · ${changeSummary(proposal)}`
-            : `Declined · ${changeSummary(proposal)}`,
+      `${actor.name} · ${versionTime(proposal.createdAt)} · ${changeSummary(proposal)}`,
     ),
   );
   if (proposal.motivatedBy?.length) {
@@ -1220,32 +1224,15 @@ async function refresh({ retryPreview = false } = {}) {
   $("proposal-count").hidden = !pending;
   $("tab-versions").title =
     `${pending} suggested ${pending === 1 ? "change" : "changes"} to review`;
-  const groups = versionGroups(current.state);
-  $("proposals").replaceChildren(
-    ...groups.suggested.map((item) => versionButton(item, "suggested")),
-  );
-  if (!groups.suggested.length)
-    $("proposals").append(
-      el("p", "No suggested changes. You’re all caught up.", "hint"),
-    );
-  $("current-version").replaceChildren();
-  if (groups.current)
-    $("current-version").append(versionButton(groups.current, "current"));
-  else $("current-version").append(el("p", "No current version yet.", "hint"));
-  $("history").replaceChildren(
-    ...groups.previous.map((item) => versionButton(item, "previous")),
-  );
-  if (!groups.previous.length)
-    $("history").append(el("p", "No previous versions yet.", "hint"));
-  $("rejected").replaceChildren(
-    ...groups.declined.map((item) => versionButton(item, "declined")),
-  );
-  if (!groups.declined.length)
-    $("rejected").append(el("p", "No declined suggestions.", "hint"));
+  const versions = versionList(current.state);
+  $("versions").replaceChildren(...versions.map(versionButton));
+  if (!versions.length)
+    $("versions").append(el("p", "No versions yet.", "hint"));
   comments();
   const id = current.state.proposals.some((item) => item.id === previousId)
     ? previousId
-    : (current.state.head ?? groups.suggested[0]?.id);
+    : (current.state.head ??
+      versions.find((item) => item.status === "pending")?.id);
   await select(id, { keepPreview: !!previousId && previousId === id });
   if (previewState.status === "ready") await syncAnnotations();
   if (retryPreview && previewState.status === "failed")

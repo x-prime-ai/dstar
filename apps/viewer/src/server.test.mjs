@@ -1677,11 +1677,9 @@ it("limits agent routes, authority, input shapes, byte sizes and capabilities", 
   for (const label of [
     "Comments",
     "Versions",
-    "See exact changes",
+    "View changes",
     "Back to document",
-    "Suggested changes",
-    "Current version",
-    "Previous versions",
+    "Newest first. Select a version to open it.",
     "Before",
     "After",
   ])
@@ -1690,6 +1688,8 @@ it("limits agent routes, authority, input shapes, byte sizes and capabilities", 
   expect(pageHtml).not.toContain('id="view-changes"');
   expect(pageHtml).not.toContain('id="toggle-review"');
   expect(pageHtml).not.toContain('id="review-changes-entry"');
+  expect(pageHtml).not.toContain('class="version-list-group');
+  expect(pageHtml).not.toContain('class="version-group');
   expect(pageHtml).not.toContain("Show base");
   for (const path of ["webmcp.js", "review-state.js", "viewer-model.js"])
     expect((await fetch(`${viewer.origin}/${path}`)).status).toBe(200);

@@ -4,7 +4,7 @@ import {
   changeSummary,
   technicalVersion,
   versionCopy,
-  versionGroups,
+  versionList,
   versionKind,
 } from "../public/viewer-model.js";
 
@@ -12,34 +12,46 @@ const accepted = {
     id: "accepted",
     status: "accepted",
     request: "Initial version",
+    createdAt: "2026-08-02T12:00:00.000Z",
     revision: `sha256:${"a".repeat(64)}`,
     base: null,
     diff: { files: [{ path: "document.html" }], elementChangeCount: 2 },
   },
-  earlier = { ...accepted, id: "earlier", request: "Earlier version" },
+  earlier = {
+    ...accepted,
+    id: "earlier",
+    request: "Earlier version",
+    createdAt: "2026-08-01T12:00:00.000Z",
+  },
   suggested = {
     ...accepted,
     id: "suggested",
     status: "pending",
     parent: "accepted",
     request: "Clarify the opening",
+    createdAt: "2026-08-03T12:00:00.000Z",
     revision: `sha256:${"b".repeat(64)}`,
     base: `sha256:${"a".repeat(64)}`,
   },
-  declined = { ...suggested, id: "declined", status: "rejected" },
+  declined = {
+    ...suggested,
+    id: "declined",
+    status: "rejected",
+    createdAt: "2026-08-04T12:00:00.000Z",
+  },
   state = {
     head: "accepted",
     proposals: [earlier, accepted, suggested, declined],
   };
 
 describe("viewer information architecture", () => {
-  it("groups the version model into user-facing sections", () => {
-    expect(versionGroups(state)).toEqual({
-      suggested: [suggested],
-      current: accepted,
-      previous: [earlier],
-      declined: [declined],
-    });
+  it("presents one chronological version list", () => {
+    expect(versionList(state)).toEqual([
+      declined,
+      suggested,
+      accepted,
+      earlier,
+    ]);
   });
 
   it("describes review state without exposing base or candidate terms", () => {
