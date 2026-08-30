@@ -192,13 +192,10 @@ export function selectionButtonPosition(rect, frame, viewport, control = 38) {
   };
 }
 
-// State comments are append-only, so list position is a stable thread number
-// even when the thread is resolved or later document versions are opened.
 export function commentThreads(comments) {
-  return comments.map((comment, index) => ({
+  return comments.map((comment) => ({
     id: comment.id,
     element: comment.target.element,
-    number: index + 1,
     comment,
   }));
 }

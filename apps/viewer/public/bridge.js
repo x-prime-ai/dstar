@@ -245,7 +245,7 @@
     });
   };
   // Review UI lives in a shadow overlay, never in canonical content or its text
-  // nodes. Numbers and resolved offsets are supplied by the authorized parent.
+  // nodes. Resolved offsets and display identities come from the authorized parent.
   let annotationLayer, markerLayer, highlightLayer;
   let annotationRecords = [],
     activeAnnotation = null,
@@ -260,7 +260,7 @@
     const style = document.createElement("style");
     style.textContent = `
       :host { color-scheme: light; }
-      button { position:absolute;box-sizing:border-box;width:28px;height:28px;padding:0;border:1px solid #cfdbd1;border-radius:50%;background:#fff;color:#28604b;font:600 12px/1 system-ui,sans-serif;box-shadow:0 2px 8px #24352b18;pointer-events:auto;cursor:pointer; }
+      button { position:absolute;box-sizing:border-box;width:28px;height:28px;padding:0;border:1px solid #cfdbd1;border-radius:50%;background:#fff;color:#28604b;box-shadow:0 2px 8px #24352b18;pointer-events:auto;cursor:pointer; }
       button:hover { background:#edf3ec;border-color:#8daa95; }
       button[aria-pressed="true"] { background:#315fba;border-color:#315fba;color:#fff;font-weight:700;box-shadow:0 0 0 3px #dce7ff,0 2px 8px #24352b18; }
       button:focus-visible { outline:2px solid #315fba;outline-offset:5px; }
@@ -269,6 +269,9 @@
       button[data-side="left"]::after { left:100%; }
       button[data-side="right"]::after { right:100%; }
       button[aria-pressed="true"]::after { border-color:#7296da; }
+      button > span { position:absolute;inset:0;display:block;color:inherit; }
+      button > span::before { content:"";position:absolute;top:6px;left:9px;width:7px;height:7px;box-sizing:border-box;border:1.5px solid currentColor;border-radius:50%; }
+      button > span::after { content:"";position:absolute;left:7px;bottom:5px;width:11px;height:6px;box-sizing:border-box;border:1.5px solid currentColor;border-radius:8px 8px 5px 5px; }
       button[hidden] { display:none; }
       .highlight { position:absolute;background:#315fba14;border-bottom:2px solid #7296da;box-sizing:border-box;border-radius:2px; }
     `;
@@ -405,8 +408,8 @@
       );
       if (
         !element ||
-        !Number.isSafeInteger(group.number) ||
-        group.number < 1 ||
+        typeof group.author !== "string" ||
+        !group.author.trim() ||
         !Array.isArray(group.anchors) ||
         !group.anchors.length
       )
@@ -415,10 +418,12 @@
         existing.get(group.id)?.button ?? document.createElement("button");
       existing.delete(group.id);
       button.type = "button";
-      button.textContent = group.number;
+      const userIcon = document.createElement("span");
+      userIcon.setAttribute("aria-hidden", "true");
+      button.replaceChildren(userIcon);
       button.className = group.resolved ? "resolved" : "";
-      button.setAttribute("aria-label", `Open comment thread ${group.number}`);
-      button.title = `Thread ${group.number}${group.resolved ? " · Resolved" : ""}`;
+      button.setAttribute("aria-label", `Open comment by ${group.author}`);
+      button.title = `${group.author}${group.resolved ? " · Resolved" : ""}`;
       button.onmousedown = (event) => {
         event.preventDefault();
         event.stopPropagation();

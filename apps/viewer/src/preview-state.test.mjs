@@ -149,7 +149,7 @@ it("does not accept iframe load events or untrusted/mismatched acknowledgements"
   ).toBe(false);
 });
 
-it("numbers comment threads independently without renumbering resolved threads", () => {
+it("keeps each root comment as an independent thread", () => {
   const a = {
     id: "a",
     status: "open",
@@ -167,9 +167,9 @@ it("numbers comment threads independently without renumbering resolved threads",
   };
   const initial = commentThreads([a, b, c]);
   expect(initial).toEqual([
-    { id: "a", element: "intro", number: 1, comment: a },
-    { id: "b", element: "heading", number: 2, comment: b },
-    { id: "c", element: "intro", number: 3, comment: c },
+    { id: "a", element: "intro", comment: a },
+    { id: "b", element: "heading", comment: b },
+    { id: "c", element: "intro", comment: c },
   ]);
   const next = commentThreads([
     { ...a, status: "resolved" },
@@ -177,13 +177,11 @@ it("numbers comment threads independently without renumbering resolved threads",
     c,
     { ...a, id: "d", target: { element: "footer" } },
   ]);
-  expect(
-    next.map((thread) => [thread.id, thread.element, thread.number]),
-  ).toEqual([
-    ["a", "intro", 1],
-    ["b", "heading", 2],
-    ["c", "intro", 3],
-    ["d", "footer", 4],
+  expect(next.map((thread) => [thread.id, thread.element])).toEqual([
+    ["a", "intro"],
+    ["b", "heading"],
+    ["c", "intro"],
+    ["d", "footer"],
   ]);
 });
 

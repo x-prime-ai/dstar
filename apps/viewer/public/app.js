@@ -728,7 +728,7 @@ function sendAnnotations(focus = null) {
     .map((thread) => ({
       id: thread.id,
       element: thread.element,
-      number: thread.number,
+      author: actorCopy(thread.comment.author).name,
       resolved: thread.comment.status !== "open",
       anchors: located(thread.comment)
         ? [
@@ -1002,7 +1002,7 @@ function commentThread(thread, expanded = false) {
     el("small", commentTime(c.createdAt)),
   );
   summary.append(
-    el("span", thread.number, "thread-number"),
+    el("span", undefined, "thread-user-icon"),
     summaryCopy,
     el(
       "span",
@@ -1013,7 +1013,7 @@ function commentThread(thread, expanded = false) {
   );
   summary.setAttribute(
     "aria-label",
-    `Thread ${thread.number}, ${c.status}, by ${commentActor.name}, ${commentTime(c.createdAt)}`,
+    `${c.status === "open" ? "Open" : "Resolved"} comment by ${commentActor.name}, ${commentTime(c.createdAt)}`,
   );
   summary.onclick = (event) => {
     event.preventDefault();

@@ -216,7 +216,7 @@ const annotationMessage = (page, extra = {}) => ({
       {
         id: "thread-1",
         element: "intro",
-        number: 2,
+        author: "Renée",
         anchors: [{ type: "text-range", start: 6, end: 7 }],
       },
     ],
@@ -232,7 +232,9 @@ it("renders accessible markers in an isolated overlay and maps code points to DO
     highlights = host.shadow.children[1],
     markers = host.shadow.children[2];
   const button = markers.children[0];
-  expect(button.attributes["aria-label"]).toBe("Open comment thread 2");
+  expect(button.attributes["aria-label"]).toBe("Open comment by Renée");
+  expect(button.children).toHaveLength(1);
+  expect(button.children[0].attributes["aria-hidden"]).toBe("true");
   expect(button.attributes["aria-pressed"]).toBe("true");
   expect(button.style.left).toBe("118px");
   expect(button.style.top).toBe("56px");
@@ -268,7 +270,7 @@ it("renders accessible markers in an isolated overlay and maps code points to DO
         {
           id: "thread-1",
           element: "intro",
-          number: 2,
+          author: "Renée",
           anchors: [
             {
               type: "text-ranges",
