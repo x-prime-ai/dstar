@@ -930,9 +930,15 @@ textarea {
   border-color: #b9ccbf;
 }
 .reply {
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf8;
+}
+.reply > small {
+  display: block;
+  margin-bottom: 4px;
 }
 .reply-composer {
   margin: 12px 0;
