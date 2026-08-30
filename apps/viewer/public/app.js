@@ -131,7 +131,19 @@ function applySession() {
   $("selection-comment").hidden = !session.can("comment");
   $("selection-suggest").hidden = !session.can("suggest");
 }
+function clearDocumentSelection() {
+  if (!frame) return;
+  $("preview").contentWindow.postMessage(
+    {
+      kind: "dstar-clear-selection",
+      capability: frame.capability,
+      revision: frame.revision,
+    },
+    "*",
+  );
+}
 function resetTarget() {
+  clearDocumentSelection();
   target = null;
   selectionAction = null;
   commentTarget = null;

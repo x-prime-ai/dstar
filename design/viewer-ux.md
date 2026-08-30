@@ -29,7 +29,8 @@ The interface has three user tasks:
   version exists.
 - **Comments** as independent, collapsible threads. Each root comment and its
   replies share one Open or Resolved state. The document uses quiet yellow
-  highlights without markers; user icons stay inside the thread list.
+  highlights without markers and a distinctly stronger amber treatment for
+  the selected thread; user icons stay inside the thread list.
 - **Versions** as one newest-first list. Each row identifies its status, author,
   date and change size without splitting the history into separate sections.
 
@@ -62,7 +63,8 @@ Engine terminology do not change.
   only two activity tabs: Comments and Versions. Their counts expose open work
   without a separate Review layer.
 - Selecting text exposes named Comment and Suggest actions. Whole-element
-  selection is described without exposing `data-dstar-id`.
+  selection is described without exposing `data-dstar-id`. Canceling either
+  composer clears its draft, target and native document selection.
 - Clicking a comment thread selects and reveals its anchor in the document.
   Thread cards do not repeat the selected document text, and replies never
   receive a separate status from their thread. Thread summaries show only a

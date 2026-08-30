@@ -343,6 +343,10 @@ function textSelection() {
     rangeCount: 1,
     isCollapsed: false,
     getRangeAt: () => range,
+    removeAllRanges() {
+      this.cleared = true;
+      this.isCollapsed = true;
+    },
   };
   return {
     element,
@@ -392,6 +396,32 @@ it("reports the selection rectangle and Unicode offsets without opening a compos
         },
       },
       rect: fixture.rect,
+    },
+  });
+});
+
+it("clears the native selection when the parent cancels a composer", async () => {
+  const fixture = textSelection(),
+    page = await run(fixture);
+  page.listeners.message({
+    source: page.parent,
+    origin: "http://host",
+    data: {
+      kind: "dstar-clear-selection",
+      capability: "cap",
+      revision: "rev",
+    },
+  });
+  expect(fixture.selection.cleared).toBe(true);
+  expect(page.messages.at(-1)).toEqual({
+    origin: "http://host",
+    data: {
+      kind: "dstar-selection",
+      capability: "cap",
+      revision: "rev",
+      target: null,
+      rect: null,
+      compose: false,
     },
   });
 });

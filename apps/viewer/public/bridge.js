@@ -211,6 +211,7 @@
   const clearSelection = () => {
     elementSelection = false;
     clearTimeout(selectionTimer);
+    getSelection()?.removeAllRanges?.();
     send(null);
   };
   document.addEventListener("mouseup", (event) => {
@@ -260,8 +261,8 @@
     const style = document.createElement("style");
     style.textContent = `
       :host { color-scheme: light; }
-      .highlight { position:absolute;box-sizing:border-box;border-radius:2px;background:#f2c94c42;border-bottom:2px solid #d0a51f; }
-      .highlight.active { background:#f2c94c70;border-bottom-color:#a97900;box-shadow:0 0 0 1px #f2c94c38; }
+      .highlight { position:absolute;box-sizing:border-box;border-radius:2px;background:#f7dc6f38;border-bottom:1px solid #d8b33f99; }
+      .highlight.active { background:#ffc928a8;border-bottom:3px solid #986000;box-shadow:0 0 0 1px #ffc92855; }
     `;
     highlightLayer = document.createElement("div");
     highlightLayer.setAttribute("aria-hidden", "true");
@@ -402,6 +403,13 @@
       event.data.revision === context.revision
     ) {
       renderAnnotations(event.data);
+      return;
+    }
+    if (
+      event.data.kind === "dstar-clear-selection" &&
+      event.data.revision === context.revision
+    ) {
+      clearSelection();
       return;
     }
     if (event.data.kind === "dstar-slide" && slides.length) {
