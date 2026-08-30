@@ -97,18 +97,8 @@ header {
 .header-actions {
   display: flex;
   align-items: center;
+  align-self: stretch;
   gap: 8px;
-}
-.header-actions > button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-color: transparent;
-  font-size: 12px;
-}
-.header-actions > button[aria-expanded="true"] {
-  background: #edf3ee;
-  color: var(--green);
 }
 .icon-button {
   display: inline-flex;
@@ -213,25 +203,16 @@ main {
   background: #fff;
   border-left: 1px solid var(--line);
 }
-.sidebar-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  min-height: 58px;
-  border-bottom: 1px solid var(--line);
-  gap: 8px;
-}
 .review-tabs {
   display: flex;
   align-self: stretch;
-  gap: 16px;
+  gap: 4px;
 }
 .review-tabs button {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 2px;
+  padding: 0 10px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -1215,16 +1196,9 @@ dialog p {
   .header-actions {
     gap: 2px;
   }
-  .header-actions > button {
-    padding: 7px;
-    gap: 5px;
-  }
-  .header-actions > button > span:not(.count) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
+  .review-tabs button {
+    padding-inline: 8px;
+    font-size: 12px;
   }
   .brand {
     font-size: 13px;
@@ -1287,20 +1261,6 @@ dialog p {
 .document-status[data-status="declined"] {
   background: #f0f1f0;
   color: var(--muted);
-}
-.review-entry {
-  align-items: center;
-  border-color: var(--green) !important;
-  background: var(--green) !important;
-  color: white;
-  font-weight: 650;
-}
-.review-entry:hover {
-  background: var(--green-strong) !important;
-}
-.review-entry .count {
-  background: #ffffff26;
-  color: white;
 }
 .viewer-identity {
   display: flex;
@@ -1603,12 +1563,6 @@ dialog p {
   }
   header {
     gap: 8px;
-  }
-  .review-entry {
-    padding-inline: 9px !important;
-  }
-  .review-entry .count {
-    display: none;
   }
   .before-after button {
     min-width: 52px;

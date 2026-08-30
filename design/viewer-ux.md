@@ -57,8 +57,9 @@ Engine terminology do not change.
 
 ## Interaction and feedback states
 
-- The header shows the document name, Current/Suggested/Previous status and a
-  direct Review suggestion action when work is waiting.
+- The header shows the document name, Current/Suggested/Previous status and the
+  only two activity tabs: Comments and Versions. Their counts expose open work
+  without a separate Review layer.
 - Selecting text exposes named Comment and Suggest actions. Whole-element
   selection is described without exposing `data-dstar-id`.
 - Comment focus remains explicit in both the rail and the sandboxed document.
@@ -72,13 +73,14 @@ Engine terminology do not change.
 
 ## Responsive and accessible behavior
 
-Desktop keeps the Comments / Versions rail alongside the document. These are
-the only top-level review tabs. Tablet and phone use an overlaid rail; phone
-uses the full available width. The document, contextual exact-diff view and
-decision bar remain in one reading order. Tab lists use roving focus and arrow
-keys, selection actions have visible names and accessible labels, status changes
-use live regions, modal decisions retain explicit confirmation, and focus
-returns to the invoking surface.
+Comments / Versions live in the top header and toggle the adjacent activity
+panel. Desktop keeps the open panel alongside the document. Tablet and phone
+overlay it; phone uses the full available width. Clicking the active tab again
+collapses the panel. The document, contextual exact-diff view and decision bar
+remain in one reading order. The tabs use roving focus and arrow keys,
+selection actions have visible names and accessible labels, status changes use
+live regions, modal decisions retain explicit confirmation, and focus returns
+to the invoking surface.
 
 The implemented flow was Browser-checked at 1440×900, 820×1024 and 390×844.
 

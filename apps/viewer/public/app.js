@@ -173,31 +173,28 @@ const suggestionReady = () =>
 function setPanel(panel, open, focus = false) {
   activeTab = panel;
   $("review-sidebar").hidden = !open;
-  $("toggle-review").setAttribute("aria-expanded", String(open));
   for (const [id, tab] of [
     ["comments-panel", "tab-comments"],
     ["navigation", "tab-versions"],
   ]) {
     $(id).hidden = id !== panel;
     $(tab).setAttribute("aria-selected", String(id === panel));
+    $(tab).setAttribute("aria-expanded", String(open && id === panel));
+    $(tab).title =
+      open && id === panel ? `Close ${$(tab).textContent.trim()}` : "";
     $(tab).tabIndex = id === panel ? 0 : -1;
   }
   $("selection-actions").hidden = true;
-  if (focus) {
-    if (open)
-      $(panel === "comments-panel" ? "tab-comments" : "tab-versions").focus();
-    else $("toggle-review").focus();
-  }
+  if (focus)
+    $(panel === "comments-panel" ? "tab-comments" : "tab-versions").focus();
   sendAnnotations();
 }
-$("toggle-review").onclick = () =>
-  setPanel(activeTab, $("review-sidebar").hidden, true);
-$("close-review").onclick = () => setPanel(activeTab, false, true);
 for (const [panel, tab] of [
   ["comments-panel", "tab-comments"],
   ["navigation", "tab-versions"],
 ]) {
-  $(tab).onclick = () => setPanel(panel, true);
+  $(tab).onclick = () =>
+    setPanel(panel, $("review-sidebar").hidden || activeTab !== panel);
   $(tab).onkeydown = (event) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -515,9 +512,6 @@ async function select(id, { keepPreview = false } = {}) {
     ? "Ready to decide?"
     : "Review this suggestion";
   $("decision-bar").querySelector(".decision-actions").hidden = !canDecide;
-  $("review-changes-entry").hidden =
-    reviewing ||
-    !current.state.proposals.some((item) => item.status === "pending");
   $("exit-review").hidden = !reviewing || !current.state.head;
   $("before-after").hidden = !reviewing || !selected?.parent;
   $("show-before").setAttribute("aria-pressed", String(showingBase));
@@ -1059,11 +1053,6 @@ function comments() {
   const open = list.filter((c) => c.status === "open").length;
   $("count").textContent = open;
   $("count").hidden = !open;
-  const pending = current.state.proposals.filter(
-    (p) => p.status === "pending",
-  ).length;
-  $("review-count").textContent = open + pending;
-  $("review-count").hidden = !open && !pending;
   $("comments-empty").hidden =
     !!list.length || !$("comment-form").hidden || !$("suggestion-form").hidden;
   $("comments-summary").textContent = groups.length
@@ -1229,8 +1218,6 @@ async function refresh({ retryPreview = false } = {}) {
   ).length;
   $("proposal-count").textContent = pending;
   $("proposal-count").hidden = !pending;
-  $("review-entry-count").textContent = pending;
-  $("review-changes-entry").hidden = !pending;
   $("tab-versions").title =
     `${pending} suggested ${pending === 1 ? "change" : "changes"} to review`;
   const groups = versionGroups(current.state);
@@ -1280,14 +1267,6 @@ async function showComparison(before) {
 }
 $("show-before").onclick = safely(() => showComparison(true));
 $("show-after").onclick = safely(() => showComparison(false));
-$("review-changes-entry").onclick = safely(async () => {
-  const next = versionGroups(current.state).suggested[0];
-  if (!next) return;
-  setView("preview");
-  await select(next.id);
-  setPanel(activeTab, false);
-  $("review-heading").focus({ preventScroll: true });
-});
 $("exit-review").onclick = safely(async () => {
   if (!current?.state.head) return;
   setView("preview");
@@ -1750,7 +1729,8 @@ function authorizationChanged(authorized) {
   $("viewer-controls").hidden = !authorized;
   $("copy-access-link").disabled = !authorized;
   $("refresh").disabled = !authorized;
-  $("toggle-review").disabled = !authorized;
+  $("tab-comments").disabled = !authorized;
+  $("tab-versions").disabled = !authorized;
   $("sync-status").textContent = authorized ? "Live" : "Authorization required";
   applySession();
   if (authorized) {

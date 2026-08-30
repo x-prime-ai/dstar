@@ -1675,7 +1675,6 @@ it("limits agent routes, authority, input shapes, byte sizes and capabilities", 
   const pageHtml = await page.text();
   expect(pageHtml).toContain("tools 'none'");
   for (const label of [
-    "Review suggestion",
     "Comments",
     "Versions",
     "See exact changes",
@@ -1689,6 +1688,8 @@ it("limits agent routes, authority, input shapes, byte sizes and capabilities", 
     expect(pageHtml).toContain(label);
   expect(pageHtml).not.toContain('id="view-preview"');
   expect(pageHtml).not.toContain('id="view-changes"');
+  expect(pageHtml).not.toContain('id="toggle-review"');
+  expect(pageHtml).not.toContain('id="review-changes-entry"');
   expect(pageHtml).not.toContain("Show base");
   for (const path of ["webmcp.js", "review-state.js", "viewer-model.js"])
     expect((await fetch(`${viewer.origin}/${path}`)).status).toBe(200);

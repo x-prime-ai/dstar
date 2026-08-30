@@ -42,24 +42,31 @@
           </div>
         </div>
       </div>
-      <nav class="header-actions" aria-label="Viewer panels">
-        <button id="review-changes-entry" class="primary review-entry" hidden>
-          Review suggestion <span id="review-entry-count" class="count"></span>
-        </button>
+      <nav class="header-actions" aria-label="Document activity">
+        <div class="review-tabs" role="tablist" aria-label="Document activity">
+          <button
+            id="tab-comments"
+            role="tab"
+            aria-controls="comments-panel"
+            aria-selected="true"
+            aria-expanded="true"
+            disabled
+          >
+            Comments <span id="count" class="count" hidden></span>
+          </button>
+          <button
+            id="tab-versions"
+            role="tab"
+            aria-controls="navigation"
+            aria-selected="false"
+            aria-expanded="false"
+            tabindex="-1"
+            disabled
+          >
+            Versions <span id="proposal-count" class="count" hidden></span>
+          </button>
+        </div>
         <div id="viewer-identity" class="viewer-identity" hidden></div>
-        <button
-          id="toggle-review"
-          aria-controls="review-sidebar"
-          aria-expanded="true"
-          disabled
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M15 4v16" />
-          </svg>
-          <span>Review</span
-          ><span id="review-count" class="count" hidden></span>
-        </button>
         <details id="viewer-menu" class="viewer-menu">
           <summary
             class="icon-button"
@@ -219,34 +226,6 @@
         class="review-sidebar"
         aria-label="Document review"
       >
-        <div class="sidebar-heading">
-          <div class="review-tabs" role="tablist" aria-label="Review panels">
-            <button
-              id="tab-comments"
-              role="tab"
-              aria-controls="comments-panel"
-              aria-selected="true"
-            >
-              Comments <span id="count" class="count" hidden></span>
-            </button>
-            <button
-              id="tab-versions"
-              role="tab"
-              aria-controls="navigation"
-              aria-selected="false"
-              tabindex="-1"
-            >
-              Versions <span id="proposal-count" class="count" hidden></span>
-            </button>
-          </div>
-          <button
-            id="close-review"
-            class="icon-button"
-            aria-label="Close review panel"
-          >
-            ×
-          </button>
-        </div>
         <section
           id="comments-panel"
           class="comments"
