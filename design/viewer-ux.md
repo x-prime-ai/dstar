@@ -18,8 +18,8 @@ a pending change. Four problems dominated:
    the reader's timeline.
 3. A pending change used `Proposed changes`, `pending`, `Changes`, and `Show
 base` at once. The user had to infer which document was on screen.
-4. On a phone, choosing a pending version closed the rail; opening Changes
-   required reopening it, and the Changes screen hid the decision actions.
+4. Preview and Changes appeared as global navigation even though Preview was
+   simply the document and a diff only belongs to one selected version.
 
 ## Primary information architecture
 
@@ -32,10 +32,11 @@ The interface has three user tasks:
   Previous versions. Declined suggestions remain available as secondary
   history.
 
-A pending item opens **Review changes**, a mode rather than another version
-concept. Its header answers: what is proposed, who proposed it, how much changed
-and what to do next. Preview and Changes are two views of the same review.
-Before / After replaces `Show base`; Accept / Reject stays visible in both views.
+A pending item opens a contextual review of that version. Its header answers:
+what is proposed, who proposed it, how much changed and what to do next. The
+document remains the default canvas; an exact diff is available only from the
+selected version's **See exact changes** action. Before / After replaces `Show
+base`; Accept / Reject stays visible in the document and exact-diff views.
 
 ## Terminology mapping
 
@@ -47,7 +48,7 @@ Before / After replaces `Show base`; Accept / Reject stays visible in both views
 | rejected proposal                  | Declined suggestion                                        |
 | base preview                       | Before                                                     |
 | candidate preview                  | After                                                      |
-| proposal diff                      | Changes / What changed                                     |
+| proposal diff                      | See exact changes / What changed                           |
 | stale base                         | Based on an earlier version; ask for an updated suggestion |
 | revision, base hash, storage delta | Technical details                                          |
 
@@ -57,7 +58,7 @@ Engine terminology do not change.
 ## Interaction and feedback states
 
 - The header shows the document name, Current/Suggested/Previous status and a
-  direct Review changes action when work is waiting.
+  direct Review suggestion action when work is waiting.
 - Selecting text exposes named Comment and Suggest actions. Whole-element
   selection is described without exposing `data-dstar-id`.
 - Comment focus remains explicit in both the rail and the sandboxed document.
@@ -71,12 +72,13 @@ Engine terminology do not change.
 
 ## Responsive and accessible behavior
 
-Desktop keeps the Comments / Versions rail alongside the document. Tablet and
-phone use an overlaid rail; phone uses the full available width. Review summary,
-Preview / Changes and the decision bar remain in one reading order. Tab lists
-use roving focus and arrow keys, selection actions have visible names and
-accessible labels, status changes use live regions, modal decisions retain
-explicit confirmation, and focus returns to the invoking surface.
+Desktop keeps the Comments / Versions rail alongside the document. These are
+the only top-level review tabs. Tablet and phone use an overlaid rail; phone
+uses the full available width. The document, contextual exact-diff view and
+decision bar remain in one reading order. Tab lists use roving focus and arrow
+keys, selection actions have visible names and accessible labels, status changes
+use live regions, modal decisions retain explicit confirmation, and focus
+returns to the invoking surface.
 
 The implemented flow was Browser-checked at 1440×900, 820×1024 and 390×844.
 

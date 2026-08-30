@@ -207,7 +207,7 @@ export function renderFileDiff(root, data) {
               pane.append(
                 node(
                   "small",
-                  "Text shortened. Check Source or Preview for the complete content.",
+                  "Text shortened. Check Source or return to the document for the complete content.",
                   "diff-notice",
                 ),
               );
@@ -233,7 +233,7 @@ export function renderFileDiff(root, data) {
       body.append(
         node(
           "p",
-          "This file exceeds the inline diff limit (512 KiB per side). Check the full Preview; no partial source diff is shown.",
+          "This file exceeds the inline diff limit (512 KiB per side). Return to the document for the complete version; no partial source diff is shown.",
           "diff-notice",
         ),
       );
@@ -309,7 +309,7 @@ export function renderFileDiff(root, data) {
       body.append(
         node(
           "p",
-          "Showing the first 2,500 diff rows. Use Preview to review the complete version.",
+          "Showing the first 2,500 diff rows. Return to the document to review the complete version.",
           "diff-notice",
         ),
       );

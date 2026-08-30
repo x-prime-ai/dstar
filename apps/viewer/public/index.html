@@ -14,26 +14,6 @@
         <span id="document-status" class="document-status" hidden></span>
       </div>
       <div id="viewer-controls" class="viewer-controls" hidden>
-        <div class="view-switch" role="tablist" aria-label="Document view">
-          <button
-            id="view-preview"
-            role="tab"
-            aria-selected="true"
-            aria-controls="preview-panel"
-          >
-            Preview
-          </button>
-          <button
-            id="view-changes"
-            role="tab"
-            aria-selected="false"
-            aria-controls="diff-panel"
-            tabindex="-1"
-            disabled
-          >
-            Changes <span id="change-count" class="count" hidden></span>
-          </button>
-        </div>
         <div id="preview-controls">
           <button
             id="previous-slide"
@@ -64,7 +44,7 @@
       </div>
       <nav class="header-actions" aria-label="Viewer panels">
         <button id="review-changes-entry" class="primary review-entry" hidden>
-          Review changes <span id="review-entry-count" class="count"></span>
+          Review suggestion <span id="review-entry-count" class="count"></span>
         </button>
         <div id="viewer-identity" class="viewer-identity" hidden></div>
         <button
@@ -106,7 +86,7 @@
             </button>
             <button id="refresh" disabled>Refresh document</button>
             <label class="menu-control" for="width">
-              <span>Preview width</span>
+              <span>Document width</span>
               <select id="width">
                 <option value="100%">Fit to view</option>
                 <option value="768px">Tablet · 768 px</option>
@@ -175,8 +155,8 @@
         <div
           class="canvas"
           id="preview-panel"
-          role="tabpanel"
-          aria-labelledby="view-preview"
+          role="region"
+          aria-label="Document"
         >
           <iframe
             id="preview"
@@ -185,16 +165,17 @@
             allow="tools 'none'"
             referrerpolicy="no-referrer"
           ></iframe>
-          <p id="empty">Select a suggested change to preview the document.</p>
+          <p id="empty">Select a version to view the document.</p>
         </div>
         <section
           id="diff-panel"
           class="changes-view"
-          role="tabpanel"
-          aria-labelledby="view-changes"
+          role="region"
+          aria-labelledby="diff-title"
           hidden
         >
           <div class="changes-heading">
+            <button id="close-changes">← Back to document</button>
             <p class="eyebrow">WHAT CHANGED</p>
             <h2 id="diff-title"></h2>
             <p id="diff-versions" class="diff-versions"></p>
@@ -360,7 +341,7 @@
             <p id="version-author" class="version-author"></p>
             <p id="version-summary" class="hint"></p>
             <button id="inspect-changes" class="primary">
-              Review changes <span aria-hidden="true">→</span>
+              See exact changes <span aria-hidden="true">→</span>
             </button>
             <div id="version-addresses" class="proposal-addresses"></div>
             <details class="version-technical">

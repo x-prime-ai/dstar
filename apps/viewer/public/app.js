@@ -491,7 +491,7 @@ async function preview(id) {
     if (serial !== previewSerial) return;
     previewState.fail();
     $("accept").disabled = true;
-    note("Preview did not finish loading. Refresh before accepting.");
+    note("The document did not finish loading. Refresh before accepting.");
   }, 20000);
   // iframe load also fires for HTTP error pages; it is never approval evidence.
   $("preview").src = frame.url;
@@ -523,9 +523,6 @@ async function select(id, { keepPreview = false } = {}) {
   $("show-before").setAttribute("aria-pressed", String(showingBase));
   $("show-after").setAttribute("aria-pressed", String(!showingBase));
   $("version-detail").hidden = !selected;
-  $("view-changes").disabled = !selected;
-  $("change-count").textContent = selected?.diff.files.length ?? 0;
-  $("change-count").hidden = !selected?.diff.files.length;
   $("accept").disabled = !canAccept();
   $("stale").hidden =
     selected?.status !== "pending" || selected.parent === current.state.head;
@@ -537,9 +534,7 @@ async function select(id, { keepPreview = false } = {}) {
       `By ${actor.name}${actor.role ? ` · ${actor.role}` : ""}`;
     $("version-summary").textContent = changeSummary(selected);
     $("version-revision").textContent = technicalVersion(selected);
-    $("inspect-changes").textContent = reviewing
-      ? "Review changes →"
-      : "View changes →";
+    $("inspect-changes").textContent = "See exact changes →";
     $("review-heading").textContent = selected.request;
     $("review-author").textContent = actor.name;
     $("review-change-summary").textContent = changeSummary(selected);
@@ -547,7 +542,7 @@ async function select(id, { keepPreview = false } = {}) {
     $("decision-hint").textContent = !canDecide
       ? "You can comment and suggest changes. Only the Owner can accept or reject."
       : viewMode === "changes"
-        ? "The exact After preview is ready; you can decide here or return to Preview."
+        ? "The exact suggested document is ready; you can decide here or return to the document."
         : "Review the After version and its changes before deciding.";
     renderProposalAddresses(selected, $("version-addresses"));
     const bytes = selected.changes.reduce(
@@ -582,14 +577,8 @@ async function select(id, { keepPreview = false } = {}) {
 function setView(mode) {
   if (mode === "changes" && !selected) return;
   viewMode = mode;
-  for (const [name, panel] of [
-    ["preview", "preview-panel"],
-    ["changes", "diff-panel"],
-  ]) {
-    $(`view-${name}`).setAttribute("aria-selected", String(mode === name));
-    $(`view-${name}`).tabIndex = mode === name ? 0 : -1;
-    $(panel).hidden = mode !== name;
-  }
+  $("preview-panel").hidden = mode !== "preview";
+  $("diff-panel").hidden = mode !== "changes";
   $("preview-controls").hidden = mode !== "preview";
   $("selection-actions").hidden = true;
   $("accept").disabled = !canAccept();
@@ -597,35 +586,18 @@ function setView(mode) {
     $("decision-hint").textContent = !allowed("decide")
       ? "You can comment and suggest changes. Only the Owner can accept or reject."
       : mode === "changes"
-        ? "The exact After preview is ready; you can decide here or return to Preview."
+        ? "The exact suggested document is ready; you can decide here or return to the document."
         : "Review the After version and its changes before deciding.";
   if (mode === "changes") {
     diffOverview();
     if (!diffFile) loadDiffFile(selected.diff.files[0]?.path);
   }
 }
-for (const mode of ["preview", "changes"]) {
-  $(`view-${mode}`).onclick = () => setView(mode);
-  $(`view-${mode}`).onkeydown = (event) => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    const next =
-      event.key === "Home"
-        ? "preview"
-        : event.key === "End"
-          ? "changes"
-          : mode === "preview"
-            ? "changes"
-            : "preview";
-    if ($(`view-${next}`).disabled) return;
-    setView(next);
-    $(`view-${next}`).focus();
-  };
-}
 $("inspect-changes").onclick = () => {
   setView("changes");
   if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
 };
+$("close-changes").onclick = () => setView("preview");
 function diffOverview() {
   if (!selected) return;
   $("diff-title").textContent = selected.request;
@@ -1366,7 +1338,7 @@ addEventListener("message", (event) => {
     $("next-slide").hidden = !slides;
     if (previewState.status === "ready") safely(syncAnnotations)();
     if (previewState.status === "failed")
-      note("Preview resources failed to load. Refresh before accepting.");
+      note("Document resources failed to load. Refresh before accepting.");
     return;
   }
   const annotation = annotationEventFromFrame(

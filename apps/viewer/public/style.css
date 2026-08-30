@@ -427,29 +427,6 @@ iframe {
 #decision-hint {
   margin: 0 0 12px;
 }
-.viewer-controls .view-switch {
-  display: flex;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  gap: 2px;
-  background: #ecefec;
-  flex-shrink: 0;
-}
-.viewer-controls .view-switch button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border: 0;
-  border-radius: 5px;
-}
-.viewer-controls .view-switch button[aria-selected="true"] {
-  background: white;
-  color: #34463b;
-  box-shadow: 0 1px 3px #21352912;
-}
 .changes-view {
   flex: 1;
   min-height: 240px;
@@ -464,6 +441,17 @@ iframe {
   font-weight: 550;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+#close-changes {
+  margin: 0 0 22px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-size: 12px;
+}
+#close-changes:hover {
+  text-decoration: underline;
 }
 .diff-versions {
   font-size: 11px;
@@ -777,9 +765,6 @@ iframe {
   .file-diff-toolbar {
     padding: 10px;
     flex-wrap: wrap;
-  }
-  .viewer-controls .view-switch button {
-    padding: 5px 9px;
   }
 }
 
@@ -1624,9 +1609,6 @@ dialog p {
   }
   .review-entry .count {
     display: none;
-  }
-  .viewer-controls .view-switch button {
-    padding-inline: 10px;
   }
   .before-after button {
     min-width: 52px;
