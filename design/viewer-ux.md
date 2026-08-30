@@ -29,8 +29,8 @@ The interface has three user tasks:
   version exists.
 - **Comments** as independent, collapsible threads. Each root comment and its
   replies share one Open or Resolved state. The document uses quiet yellow
-  highlights without markers and a distinctly stronger amber treatment for
-  the selected thread; user icons stay inside the thread list.
+  highlights without markers and a distinct soft-blue treatment for the
+  selected thread; user icons stay inside the thread list.
 - **Versions** as one newest-first list. Each row identifies its status, author,
   date and change size without splitting the history into separate sections.
 

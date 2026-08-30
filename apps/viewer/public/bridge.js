@@ -275,7 +275,7 @@
     style.textContent = `
       :host { color-scheme: light; }
       .highlight { position:absolute;box-sizing:border-box;border-radius:2px;background:#e6c85b38;border-bottom:1px solid #c3a03588; }
-      .highlight.active { background:#e6b93f66;border-bottom:2px solid #80611d;box-shadow:0 0 0 1px #d5a82f44; }
+      .highlight.active { background:#83aee85c;border-bottom:2px solid #315f9b;box-shadow:0 0 0 1px #5f8ecb3d; }
       .comment-jump { position:absolute;display:none;width:28px;height:28px;padding:0;border:1px solid #d2ddd4;border-radius:50%;background:#fff;color:#285743;box-shadow:0 3px 10px #203c3038;pointer-events:auto;cursor:pointer; }
       .comment-jump:hover,.comment-jump:focus-visible { background:#285743;color:#fff;outline:none; }
       .comment-jump::before { content:"";position:absolute;left:7px;top:6px;width:12px;height:10px;border:1.7px solid currentColor;border-radius:4px; }
