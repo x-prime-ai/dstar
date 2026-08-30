@@ -899,26 +899,6 @@ textarea {
 .comment:focus-visible {
   box-shadow: 0 0 0 2px #315fba;
 }
-.comment-author {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-}
-.comment-author strong {
-  font-weight: 550;
-}
-.avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  color: #667968;
-  background: #eff2ed;
-  font-size: 10px;
-}
 .comment small {
   font-size: 11px;
   color: var(--muted);

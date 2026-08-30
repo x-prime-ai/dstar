@@ -1034,15 +1034,6 @@ function commentThread(thread, expanded = false) {
     event.preventDefault();
     safely(() => openCommentInDocument(c.id))();
   };
-  const author = el("div", undefined, "comment-author");
-  author.append(
-    el("span", commentActor.name.slice(0, 1).toUpperCase(), "avatar"),
-    el("strong", commentActor.name),
-    el("small", commentTime(c.createdAt)),
-  );
-  if (commentActor.role)
-    author.append(el("span", commentActor.role, "role-badge"));
-  article.append(author);
   article.append(el("p", c.body));
   for (const r of c.replies) {
     const reply = el("div", undefined, "reply"),
