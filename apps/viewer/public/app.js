@@ -58,6 +58,7 @@ let current,
   diffController = null,
   activeGroup = null,
   activeCommentId = null,
+  commentFocusSerial = 0,
   pendingCommentFocus = null,
   annotations = null,
   annotationSerial = 0,
@@ -844,12 +845,17 @@ function focusComment(id, announce = true) {
 async function openCommentInDocument(id) {
   const comment = current?.state.comments.find((entry) => entry.id === id);
   if (!comment) return;
+  const serial = ++commentFocusSerial;
   const commentedVersion = current.state.proposals.find(
     (proposal) => proposal.revision === comment.target.revision,
   );
   pendingCommentFocus = id;
+  activeCommentId = id;
+  activeGroup = id;
+  updateReviewFocus();
   if (commentedVersion && selected?.revision !== comment.target.revision)
     await select(commentedVersion.id);
+  if (serial !== commentFocusSerial) return;
   focusComment(id, false);
   const ready =
     previewState.status === "ready" &&
@@ -867,6 +873,16 @@ async function openCommentInDocument(id) {
         ? "Thread selected in the document."
         : "This thread cannot be located in this version.",
   );
+}
+function commentTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return "Time unavailable";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 function openReplyDraft(comment, body = "") {
   if (replyDraft?.commentId === comment.id) {
@@ -963,11 +979,10 @@ function commentThread(thread, expanded = false) {
   card.open = expanded;
   card.classList.toggle("active", c.id === activeCommentId);
   const summary = el("summary", undefined, "thread-summary"),
-    summaryCopy = el("span", undefined, "thread-summary-copy"),
-    preview = c.body.replace(/\s+/g, " ").trim();
+    summaryCopy = el("span", undefined, "thread-summary-copy");
   summaryCopy.append(
     el("strong", commentActor.name),
-    el("small", preview.length > 80 ? `${preview.slice(0, 80)}…` : preview),
+    el("small", commentTime(c.createdAt)),
   );
   summary.append(
     el("span", thread.number, "thread-number"),
@@ -981,12 +996,20 @@ function commentThread(thread, expanded = false) {
   );
   summary.setAttribute(
     "aria-label",
-    `Thread ${thread.number}, ${c.status}, by ${commentActor.name}: ${preview.slice(0, 160)}`,
+    `Thread ${thread.number}, ${c.status}, by ${commentActor.name}, ${commentTime(c.createdAt)}`,
   );
   summary.onclick = (event) => {
     event.preventDefault();
-    card.open = !card.open;
-    if (card.open) safely(() => openCommentInDocument(c.id))();
+    const opening = !card.open;
+    document
+      .querySelectorAll(".comment-thread[open]")
+      .forEach((thread) => (thread.open = false));
+    card.open = opening;
+    if (opening) safely(() => openCommentInDocument(c.id))();
+    else {
+      ++commentFocusSerial;
+      pendingCommentFocus = null;
+    }
   };
   article.dataset.comment = c.id;
   article.tabIndex = 0;
@@ -1015,6 +1038,7 @@ function commentThread(thread, expanded = false) {
   author.append(
     el("span", commentActor.name.slice(0, 1).toUpperCase(), "avatar"),
     el("strong", commentActor.name),
+    el("small", commentTime(c.createdAt)),
   );
   if (commentActor.role)
     author.append(el("span", commentActor.role, "role-badge"));
@@ -1023,8 +1047,10 @@ function commentThread(thread, expanded = false) {
   for (const r of c.replies) {
     const reply = el("div", undefined, "reply"),
       replyActor = actorCopy(r.author),
-      replyBy = el("small", replyActor.name);
-    if (replyActor.role) replyBy.append(` · ${replyActor.role}`);
+      replyBy = el(
+        "small",
+        `${replyActor.name}${replyActor.role ? ` · ${replyActor.role}` : ""} · ${commentTime(r.createdAt)}`,
+      );
     reply.append(replyBy, el("p", r.body));
     article.append(reply);
   }
@@ -1115,19 +1141,11 @@ function comments() {
   $("comments-summary").textContent = list.length
     ? `${open} open · ${list.length} ${list.length === 1 ? "thread" : "threads"}`
     : "Each comment starts a thread.";
-  const expanded = new Set(
-    [...$("comments").querySelectorAll(".comment-thread[open]")].map(
-      (thread) => thread.dataset.thread,
-    ),
-  );
+  const expanded = $("comments").querySelector(".comment-thread[open]")?.dataset
+    .thread;
   $("comments").replaceChildren();
   $("comments").append(
-    ...threads.map((thread) =>
-      commentThread(
-        thread,
-        expanded.has(thread.id) || thread.id === activeCommentId,
-      ),
-    ),
+    ...threads.map((thread) => commentThread(thread, expanded === thread.id)),
   );
 }
 function renderIdentity(publicSession) {

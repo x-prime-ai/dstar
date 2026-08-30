@@ -65,7 +65,9 @@ Engine terminology do not change.
   selection is described without exposing `data-dstar-id`.
 - Clicking a comment thread selects and reveals its anchor in the document.
   Thread cards do not repeat the selected document text, and replies never
-  receive a separate status from their thread.
+  receive a separate status from their thread. Thread summaries show only the
+  stable number, author, time and status; one thread is expanded at a time, and
+  its root comment and replies form one unindented chronological stream.
 - Agent work uses one local status region with `idle`, `waiting`, `returned` and
   `expired` states. Returned text is always an editable draft; it is never
   posted or accepted automatically.
