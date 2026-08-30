@@ -397,7 +397,9 @@ export function workspaceStore(options) {
     };
   }
 
-  async function reset(id, ownerToken) {
+  async function reset(id, ownerToken, beforePublish = async () => {}) {
+    if (typeof beforePublish !== "function")
+      fail("beforePublish must be a function");
     return locked("catalog", () =>
       locked(`workspace-${id}`, async () => {
         const before = load(id);
@@ -424,6 +426,14 @@ export function workspaceStore(options) {
             expiresAt: new Date(now() + limits.ttlMs).toISOString(),
             seedDigest: seed.digest,
           };
+          const prepared = {
+            metadata: record,
+            credentials: session,
+            packageRoot: join(generationRoot, "package"),
+          };
+          // Keep the old metadata and credentials authoritative until the
+          // caller proves the new generation can be served.
+          await beforePublish(prepared);
           atomicJson(join(workspacePath(id), "metadata.json"), record);
           published = true;
         } finally {

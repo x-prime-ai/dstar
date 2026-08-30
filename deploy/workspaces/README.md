@@ -13,18 +13,18 @@ root. The creation credential belongs in a secret file outside both trees.
 Copy `runtime.env.example` outside the repository and set every deployment
 specific value. The important variables are:
 
-| Variable                         | Contract                                                                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `DSTAR_SEED_ROOT`                | Absolute, initialized, read-only seed package. Startup-only; clients cannot override it.                                        |
-| `DSTAR_WORKSPACE_ROOT`           | Absolute persistent volume for metadata, credentials and package generations.                                                   |
-| `DSTAR_EXTERNAL_ORIGIN`          | Exact canonical HTTPS control origin, with no path, query or fragment.                                                          |
-| `DSTAR_WORKSPACE_DOMAIN`         | Lowercase DNS suffix for `<32-hex-id>.<domain>` Viewer origins. No wildcard text.                                               |
-| `DSTAR_CREATION_TOKEN_FILE`      | Absolute regular secret file; preferred over `DSTAR_CREATION_TOKEN`.                                                            |
-| `DSTAR_MAX_WORKSPACES`           | Maximum live workspace directories; default 100.                                                                                |
-| `DSTAR_MAX_WORKSPACE_MIB`        | Maximum seed copy size; default 64 MiB.                                                                                         |
-| `DSTAR_MAX_TOTAL_MIB`            | Admission limit for stored workspace bytes; default 1024 MiB. Leave reset headroom because old/new generations briefly coexist. |
-| `DSTAR_WORKSPACE_TTL_SECONDS`    | Sliding TTL; default 86400 seconds.                                                                                             |
-| `DSTAR_CLEANUP_INTERVAL_SECONDS` | Expiry scan interval; default 60 seconds.                                                                                       |
+| Variable                         | Contract                                                                                                                               |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `DSTAR_SEED_ROOT`                | Absolute, initialized, read-only seed package. Startup-only; clients cannot override it.                                               |
+| `DSTAR_WORKSPACE_ROOT`           | Absolute persistent volume for metadata, credentials and package generations.                                                          |
+| `DSTAR_EXTERNAL_ORIGIN`          | Exact canonical HTTPS control origin, with no path, query or fragment. An explicit non-default port is also used by workspace origins. |
+| `DSTAR_WORKSPACE_DOMAIN`         | Lowercase DNS suffix for `<32-hex-id>.<domain>` Viewer origins. No wildcard text.                                                      |
+| `DSTAR_CREATION_TOKEN_FILE`      | Absolute regular secret file; preferred over `DSTAR_CREATION_TOKEN`.                                                                   |
+| `DSTAR_MAX_WORKSPACES`           | Maximum live workspace directories; default 100.                                                                                       |
+| `DSTAR_MAX_WORKSPACE_MIB`        | Maximum seed copy size; default 64 MiB.                                                                                                |
+| `DSTAR_MAX_TOTAL_MIB`            | Admission limit for stored workspace bytes; default 1024 MiB. Leave reset headroom because old/new generations briefly coexist.        |
+| `DSTAR_WORKSPACE_TTL_SECONDS`    | Sliding TTL; default 86400 seconds.                                                                                                    |
+| `DSTAR_CLEANUP_INTERVAL_SECONDS` | Expiry scan interval; default 60 seconds.                                                                                              |
 
 The returned control and Viewer URLs contain bearer fragments. Do not log URL
 fragments, Authorization headers, `/frame/` capability paths or API bodies.
@@ -37,7 +37,8 @@ then verify a workspace read and perform an intentional credential rotation.
 Provision one control DNS name and a wildcard covering the workspace domain,
 with certificates for both. Route both names to the same internal Node port.
 The service dispatches the exact control Host or a validated 32-hex workspace
-subdomain. Preserve `Host`, client `Origin`, Authorization and Content-Type;
+subdomain. Preserve the complete `Host` authority including any explicit port,
+client `Origin`, Authorization and Content-Type;
 remove every `Forwarded` and `X-Forwarded-*` header. The included Nginx fragment
 is illustrative and has no certificates.
 

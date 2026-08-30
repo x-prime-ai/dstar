@@ -102,9 +102,12 @@ Common errors use stable codes: `owner_required` (`401`), `invalid_origin` or
 - A workspace ID is random, immutable and never reused. Generation starts at
   1 and increments only after reset publishes a complete seed copy.
 - Reset first marks the Viewer unavailable, stops accepting new requests and
-  drains accepted requests. It then copies the seed, atomically switches
-  metadata, rotates the complete session configuration, starts a new Viewer and
-  deletes the old generation. Closing the old Viewer clears preview capabilities
+  drains accepted requests. It then copies the seed and starts a new Viewer
+  while the old generation and credentials remain authoritative. Only after
+  startup succeeds does it atomically switch metadata, rotate the complete
+  session configuration and delete the old generation. A startup failure removes
+  the unpublished generation, so the old owner link can reopen the workspace.
+  Closing the old Viewer clears preview capabilities
   and every process-local handoff record, including address-comment tokens,
   reply drafts and revoke capabilities. Workspace code does not duplicate those
   route semantics.

@@ -250,8 +250,11 @@ export async function startWorkspaceService(options) {
   let serviceOrigin;
   let closing = false;
 
+  const externalPort = externalOrigin ? new URL(externalOrigin).port : "";
+  const workspaceAuthority = (id) =>
+    `${id}.${workspaceDomain}${externalPort ? `:${externalPort}` : ""}`;
   const workspaceOrigin = (id) =>
-    externalOrigin ? `https://${id}.${workspaceDomain}` : undefined;
+    externalOrigin ? `https://${workspaceAuthority(id)}` : undefined;
   const manageUrl = (record, ownerToken) =>
     `${serviceOrigin}/workspaces/${record.id}#${ownerToken}`;
   const publicWorkspace = (record) => ({
@@ -261,33 +264,26 @@ export async function startWorkspaceService(options) {
     expiresAt: record.expiresAt,
   });
 
-  async function startRuntime(loaded) {
+  async function buildRuntime(loaded) {
     const id = loaded.metadata.id;
-    const existing = runtimes.get(id);
-    if (
-      existing?.generation === loaded.metadata.generation &&
-      existing.state === "ready"
-    )
-      return existing;
-    if (starts.has(id)) return starts.get(id);
-    const promise = (async () => {
-      const origin = workspaceOrigin(id);
-      const workspace = publicWorkspace(loaded.metadata);
-      const workspaceManagementUrl = manageUrl(
-        loaded.metadata,
-        loaded.credentials.ownerToken,
-      );
-      const viewerOptions = startOptions({
-        viewerOptions: loaded.credentials.viewerOptions,
-        workspace,
-        workspaceManagementUrl,
-      });
-      const viewer = await startViewer(loaded.packageRoot, 0, {
-        ...viewerOptions,
-        host: "127.0.0.1",
-        ...(origin ? { externalOrigin: origin } : {}),
-      });
-      const runtime = {
+    const origin = workspaceOrigin(id);
+    const workspace = publicWorkspace(loaded.metadata);
+    const workspaceManagementUrl = manageUrl(
+      loaded.metadata,
+      loaded.credentials.ownerToken,
+    );
+    const viewerOptions = startOptions({
+      viewerOptions: loaded.credentials.viewerOptions,
+      workspace,
+      workspaceManagementUrl,
+    });
+    const viewer = await startViewer(loaded.packageRoot, 0, {
+      ...viewerOptions,
+      host: "127.0.0.1",
+      ...(origin ? { externalOrigin: origin } : {}),
+    });
+    try {
+      return {
         id,
         generation: loaded.metadata.generation,
         state: "ready",
@@ -300,9 +296,25 @@ export async function startWorkspaceService(options) {
         }),
         lastTouch: Date.parse(loaded.metadata.lastAccessAt),
       };
+    } catch (error) {
+      await closeServer(viewer.server);
+      throw error;
+    }
+  }
+
+  async function startRuntime(loaded) {
+    const id = loaded.metadata.id;
+    const existing = runtimes.get(id);
+    if (
+      existing?.generation === loaded.metadata.generation &&
+      existing.state === "ready"
+    )
+      return existing;
+    if (starts.has(id)) return starts.get(id);
+    const promise = buildRuntime(loaded).then((runtime) => {
       runtimes.set(id, runtime);
       return runtime;
-    })();
+    });
     starts.set(id, promise);
     try {
       return await promise;
@@ -385,11 +397,13 @@ export async function startWorkspaceService(options) {
     }
     const runtime = await getRuntime(id);
     runtime.state = "resetting";
+    let next;
     try {
       await closeServer(runtime.viewer.server);
-      runtimes.delete(id);
-      const loaded = await store.reset(id, ownerToken);
-      const next = await startRuntime(loaded);
+      const loaded = await store.reset(id, ownerToken, async (prepared) => {
+        next = await buildRuntime(prepared);
+      });
+      runtimes.set(id, next);
       return {
         workspace: publicWorkspace(loaded.metadata),
         manageUrl: manageUrl(loaded.metadata, loaded.credentials.ownerToken),
@@ -397,6 +411,7 @@ export async function startWorkspaceService(options) {
       };
     } catch (error) {
       runtimes.delete(id);
+      if (next) await closeServer(next.viewer.server);
       throw error;
     }
   }
@@ -501,10 +516,13 @@ export async function startWorkspaceService(options) {
       const hostHeader = request.headers.host ?? "";
       const controlHost = new URL(serviceOrigin).host;
       if (externalOrigin && hostHeader !== controlHost) {
-        const suffix = `.${workspaceDomain}`;
+        const suffix = `.${workspaceDomain}${externalPort ? `:${externalPort}` : ""}`;
         if (hostHeader.endsWith(suffix)) {
           const id = hostHeader.slice(0, -suffix.length);
-          if (!WORKSPACE_ID.test(id) || !authority(request, `${id}${suffix}`))
+          if (
+            !WORKSPACE_ID.test(id) ||
+            !authority(request, workspaceAuthority(id))
+          )
             throw new WorkspaceHttpError(
               403,
               "invalid_authority",

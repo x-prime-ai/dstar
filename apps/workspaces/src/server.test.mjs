@@ -104,18 +104,16 @@ async function serviceFixture(extra = {}) {
   return { ...fixtureValue, service };
 }
 
-async function create(service) {
-  const response = await wire(
-    service,
-    "manage.review.test",
-    "/api/v1/workspaces",
-    {
-      method: "POST",
-      token: "c".repeat(64),
-      origin: "https://manage.review.test",
-      body: "{}",
-    },
-  );
+async function create(
+  service,
+  { host = "manage.review.test", origin = "https://manage.review.test" } = {},
+) {
+  const response = await wire(service, host, "/api/v1/workspaces", {
+    method: "POST",
+    token: "c".repeat(64),
+    origin,
+    body: "{}",
+  });
   expect(response.status, response.text).toBe(201);
   return response.json();
 }
@@ -551,6 +549,99 @@ describe("online workspace service", () => {
         )
       ).status,
     ).toBe(200);
+  });
+
+  it("keeps the current generation usable when the replacement Viewer cannot start", async () => {
+    let failReplacement = false;
+    const { service } = await serviceFixture({
+      sessionAdapter: {
+        start({ viewerOptions, workspace, workspaceManagementUrl }) {
+          if (failReplacement && workspace.generation === 2)
+            throw new Error("Injected replacement Viewer failure");
+          return { ...viewerOptions, workspaceManagementUrl };
+        },
+      },
+    });
+    const created = await create(service);
+    const owner = access(created);
+    failReplacement = true;
+    const failed = await wire(
+      service,
+      "manage.review.test",
+      `/api/v1/workspaces/${created.workspace.id}/reset`,
+      {
+        method: "POST",
+        token: owner.token,
+        origin: "https://manage.review.test",
+        body: "{}",
+      },
+    );
+    expect(failed.status).toBe(500);
+    const retained = service.store.load(created.workspace.id);
+    expect(retained.metadata.generation).toBe(1);
+    expect(retained.credentials.ownerToken).toBe(owner.token);
+
+    failReplacement = false;
+    const reopened = await wire(
+      service,
+      "manage.review.test",
+      `/api/v1/workspaces/${created.workspace.id}`,
+      { token: owner.token, origin: "https://manage.review.test" },
+    );
+    expect(reopened.status).toBe(200);
+    expect(reopened.json().workspace.generation).toBe(1);
+    expect(reopened.json().sessions.ownerUrl).toBe(created.sessions.ownerUrl);
+    const retried = await wire(
+      service,
+      "manage.review.test",
+      `/api/v1/workspaces/${created.workspace.id}/reset`,
+      {
+        method: "POST",
+        token: owner.token,
+        origin: "https://manage.review.test",
+        body: "{}",
+      },
+    );
+    expect(retried.status).toBe(200);
+    expect(retried.json().workspace.generation).toBe(2);
+  });
+
+  it("uses an explicit control HTTPS port for workspace origins and Host checks", async () => {
+    const fixtureValue = fixture();
+    const service = await startWorkspaceService({
+      root: join(fixtureValue.root, "runtime"),
+      seedRoot: fixtureValue.seedRoot,
+      externalOrigin: "https://manage.review.test:8443",
+      workspaceDomain: "review.test",
+      creationToken: "c".repeat(64),
+      cleanupIntervalMs: 60_000,
+    });
+    cleanup.push(service);
+    const created = await create(service, {
+      host: "manage.review.test:8443",
+      origin: "https://manage.review.test:8443",
+    });
+    const owner = access(created);
+    expect(owner.host).toBe(`${created.workspace.id}.review.test:8443`);
+    expect(owner.origin).toBe(
+      `https://${created.workspace.id}.review.test:8443`,
+    );
+    expect(
+      (await wire(service, owner.host, "/api/state", { token: owner.token }))
+        .status,
+    ).toBe(200);
+    expect(
+      (
+        await wire(
+          service,
+          `${created.workspace.id}.review.test`,
+          "/api/state",
+          {
+            token: owner.token,
+          },
+        )
+      ).status,
+    ).toBe(403);
   });
 
   it("survives restart with stable ids/links and rejects Host, Origin, and path selection", async () => {
