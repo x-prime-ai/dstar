@@ -68,7 +68,8 @@ Engine terminology do not change.
   receive a separate status from their thread. Thread summaries show only a
   user icon, author, time and status; each reply also has a user icon. One
   thread is expanded at a time, and its root comment and replies form one
-  unindented chronological stream.
+  unindented chronological stream. Replies use the same flat content format as
+  the root comment, separated only by a quiet divider rather than nested cards.
 - The Comments panel defaults to Open and offers an Open / Resolved filter with
   counts. Each filter contains only threads that belong to the viewed version
   or a located descendant; unresolved historical, declined or orphaned anchors

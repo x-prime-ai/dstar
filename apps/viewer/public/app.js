@@ -1064,13 +1064,13 @@ function commentThread(thread, expanded = false) {
   for (const r of c.replies) {
     const reply = el("div", undefined, "reply"),
       replyActor = actorCopy(r.author),
-      replyContent = el("div", undefined, "reply-content"),
+      replyHeader = el("div", undefined, "reply-header"),
       replyBy = el(
         "small",
         `${replyActor.name}${replyActor.role ? ` · ${replyActor.role}` : ""} · ${commentTime(r.createdAt)}`,
       );
-    replyContent.append(replyBy, el("p", r.body));
-    reply.append(el("span", undefined, "reply-user-icon"), replyContent);
+    replyHeader.append(el("span", undefined, "reply-user-icon"), replyBy);
+    reply.append(replyHeader, el("p", r.body));
     article.append(reply);
   }
   const linked = current.state.proposals.filter((proposal) =>

@@ -972,14 +972,14 @@ textarea {
   border-color: #b9ccbf;
 }
 .reply {
-  display: grid;
-  grid-template-columns: 23px minmax(0, 1fr);
-  gap: 9px;
-  margin: 10px 0 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #f8faf8;
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.reply-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .reply-user-icon {
   position: relative;
@@ -1010,12 +1010,8 @@ textarea {
   border: 1.5px solid currentColor;
   border-radius: 8px 8px 5px 5px;
 }
-.reply-content {
+.reply-header > small {
   min-width: 0;
-}
-.reply-content > small {
-  display: block;
-  margin-bottom: 4px;
 }
 .reply-composer {
   margin: 12px 0;
