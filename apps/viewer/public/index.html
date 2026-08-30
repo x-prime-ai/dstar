@@ -13,6 +13,55 @@
         <strong id="title">Opening document…</strong>
         <span id="document-status" class="document-status" hidden></span>
       </div>
+      <div id="viewer-controls" class="viewer-controls" hidden>
+        <div class="view-switch" role="tablist" aria-label="Document view">
+          <button
+            id="view-preview"
+            role="tab"
+            aria-selected="true"
+            aria-controls="preview-panel"
+          >
+            Preview
+          </button>
+          <button
+            id="view-changes"
+            role="tab"
+            aria-selected="false"
+            aria-controls="diff-panel"
+            tabindex="-1"
+            disabled
+          >
+            Changes <span id="change-count" class="count" hidden></span>
+          </button>
+        </div>
+        <div id="preview-controls">
+          <button
+            id="previous-slide"
+            title="Previous slide"
+            aria-label="Previous slide"
+            hidden
+          >
+            ←</button
+          ><button
+            id="next-slide"
+            title="Next slide"
+            aria-label="Next slide"
+            hidden
+          >
+            →
+          </button>
+          <div
+            id="before-after"
+            class="before-after"
+            role="group"
+            aria-label="Compare suggested change"
+            hidden
+          >
+            <button id="show-before" aria-pressed="false">Before</button
+            ><button id="show-after" aria-pressed="true">After</button>
+          </div>
+        </div>
+      </div>
       <nav class="header-actions" aria-label="Viewer panels">
         <button id="review-changes-entry" class="primary review-entry" hidden>
           Review changes <span id="review-entry-count" class="count"></span>
@@ -56,6 +105,14 @@
               Copy Owner access link
             </button>
             <button id="refresh" disabled>Refresh document</button>
+            <label class="menu-control" for="width">
+              <span>Preview width</span>
+              <select id="width">
+                <option value="100%">Fit to view</option>
+                <option value="768px">Tablet · 768 px</option>
+                <option value="390px">Mobile · 390 px</option>
+              </select>
+            </label>
             <div class="connection-details">
               <small id="revision"></small>
               <small id="sync-status" role="status"
@@ -115,63 +172,6 @@
           </div>
           <button id="exit-review">Back to current version</button>
         </section>
-        <div class="toolbar">
-          <div class="view-switch" role="tablist" aria-label="Document view">
-            <button
-              id="view-preview"
-              role="tab"
-              aria-selected="true"
-              aria-controls="preview-panel"
-            >
-              Preview
-            </button>
-            <button
-              id="view-changes"
-              role="tab"
-              aria-selected="false"
-              aria-controls="diff-panel"
-              tabindex="-1"
-              disabled
-            >
-              Changes <span id="change-count" class="count" hidden></span>
-            </button>
-          </div>
-          <span id="view-label">Current version</span>
-          <div id="preview-controls">
-            <label class="width-control"
-              ><span class="sr-only">Preview width</span>
-              <select id="width" title="Preview width">
-                <option value="100%">Fit to view</option>
-                <option value="768px">Tablet · 768 px</option>
-                <option value="390px">Mobile · 390 px</option>
-              </select></label
-            ><button
-              id="previous-slide"
-              title="Previous slide"
-              aria-label="Previous slide"
-              hidden
-            >
-              ←</button
-            ><button
-              id="next-slide"
-              title="Next slide"
-              aria-label="Next slide"
-              hidden
-            >
-              →
-            </button>
-            <div
-              id="before-after"
-              class="before-after"
-              role="group"
-              aria-label="Compare suggested change"
-              hidden
-            >
-              <button id="show-before" aria-pressed="false">Before</button
-              ><button id="show-after" aria-pressed="true">After</button>
-            </div>
-          </div>
-        </div>
         <div
           class="canvas"
           id="preview-panel"

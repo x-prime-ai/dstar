@@ -508,7 +508,6 @@ async function select(id, { keepPreview = false } = {}) {
   $("document-status").textContent = copy.badge;
   $("document-status").dataset.status = copy.kind;
   $("document-status").hidden = false;
-  $("view-label").textContent = copy.preview;
   $("review-summary").hidden = !reviewing;
   $("decision-bar").hidden = !reviewing;
   $("decision-bar").dataset.permission = canDecide ? "decide" : "review";
@@ -592,7 +591,6 @@ function setView(mode) {
     $(panel).hidden = mode !== name;
   }
   $("preview-controls").hidden = mode !== "preview";
-  $("view-label").hidden = mode !== "preview";
   $("selection-actions").hidden = true;
   $("accept").disabled = !canAccept();
   if (selected?.status === "pending")
@@ -826,6 +824,7 @@ function focusGroup(id, fromList = true) {
   updateReviewFocus();
   const card = $(`comment-group-${group.number}`);
   if (card) {
+    card.open = true;
     let ancestor = card.parentElement;
     while (ancestor && ancestor !== $("comments-panel")) {
       if (ancestor.tagName === "DETAILS") ancestor.open = true;
@@ -833,7 +832,7 @@ function focusGroup(id, fromList = true) {
     }
     if (!fromList) {
       card.scrollIntoView({ block: "nearest" });
-      card.querySelector(".group-location").focus({ preventScroll: true });
+      card.querySelector("summary").focus({ preventScroll: true });
     }
   }
   // On phones, leave the document visible after choosing a list location.
@@ -845,19 +844,12 @@ function updateReviewFocus() {
   document.querySelectorAll(".comment-group").forEach((card) => {
     const active = card.dataset.group === activeGroup;
     card.classList.toggle("active", active);
-    card
-      .querySelector(".group-location")
-      ?.setAttribute("aria-pressed", String(active));
+    if (active) card.open = true;
   });
   document.querySelectorAll(".comment[data-comment]").forEach((article) => {
     const active = article.dataset.comment === activeCommentId;
     article.classList.toggle("active", active);
     article.setAttribute("aria-current", String(active));
-    const select = article.querySelector(".comment-select");
-    if (select) {
-      select.textContent = active ? "Selected for agent" : "Select for agent";
-      select.setAttribute("aria-pressed", String(active));
-    }
   });
 }
 function focusComment(id, announce = true) {
@@ -1030,27 +1022,21 @@ function commentThread(c) {
   }
   if (replyDraft?.commentId === c.id) article.append(replyComposer(c));
   const actions = el("div", undefined, "comment-actions");
-  const selectComment = el(
-    "button",
-    c.id === activeCommentId ? "Selected for agent" : "Select for agent",
-    "comment-select",
-  );
-  selectComment.type = "button";
-  selectComment.setAttribute("aria-pressed", String(c.id === activeCommentId));
-  selectComment.onclick = () => focusComment(c.id);
-  actions.append(selectComment);
+  if (session.can("reply")) {
+    const reply = el("button", "Reply");
+    reply.type = "button";
+    reply.onclick = () => openReplyDraft(c);
+    actions.append(reply);
+  }
   if (
     c.status === "open" &&
     ["handoff", "read", "reply", "propose"].every((capability) =>
       session.can(capability),
     )
   ) {
-    const address = el(
-      "button",
-      "Ask agent to address",
-      "comment-address-agent",
-    );
+    const address = el("button", "Ask agent", "comment-address-agent");
     address.type = "button";
+    address.title = "Ask the agent to draft a reply or suggest a change";
     address.onclick = safely(async () => {
       if (replyDraft?.body)
         return note("Post or cancel your current reply draft first.");
@@ -1066,12 +1052,6 @@ function commentThread(c) {
     });
     actions.append(address);
   }
-  if (session.can("reply")) {
-    const reply = el("button", "Reply");
-    reply.type = "button";
-    reply.onclick = () => openReplyDraft(c);
-    actions.append(reply);
-  }
   if (c.status === "open" && session.can("resolve")) {
     const resolve = el("button", "Resolve");
     resolve.onclick = safely(async () => {
@@ -1080,19 +1060,24 @@ function commentThread(c) {
     });
     actions.append(resolve);
   }
-  const view = el("button", "View original");
-  view.onclick = safely(async () => {
-    const proposal = current.state.proposals.find(
-      (p) => p.revision === c.target.revision,
-    );
-    if (!proposal) return note("The original version is unavailable.");
-    await select(proposal.id);
-  });
-  actions.append(view);
+  const commentedVersion = current.state.proposals.find(
+    (proposal) => proposal.revision === c.target.revision,
+  );
+  if (commentedVersion && selected?.revision !== c.target.revision) {
+    const view = el("button", "View commented version", "view-commented");
+    view.onclick = safely(async () => select(commentedVersion.id));
+    actions.append(view);
+  }
   article.append(actions);
   if (annotations && !located(c))
     article.append(
-      el("small", "Not located in this version", "anchor-warning"),
+      el(
+        "small",
+        commentedVersion
+          ? "This comment belongs to another version."
+          : "This comment cannot be located in this version.",
+        "anchor-warning",
+      ),
     );
   return article;
 }
@@ -1117,27 +1102,16 @@ function comments() {
   );
   const resolved = el("details", undefined, "comment-section");
   resolved.id = "resolved-groups";
-  const elsewhere = el("details", undefined, "comment-section");
-  elsewhere.id = "unlocated-groups";
-  let resolvedCount = 0,
-    elsewhereCount = 0;
+  let resolvedCount = 0;
   $("comments").replaceChildren();
   for (const group of groups) {
-    const card = el("section", undefined, "comment-group");
+    const card = el("details", undefined, "comment-group");
     card.id = `comment-group-${group.number}`;
     card.dataset.group = group.id;
     card.classList.toggle("active", group.id === activeGroup);
     const available = group.comments.some(located);
-    const location = el("button", undefined, "group-location");
-    location.setAttribute(
-      "aria-label",
-      `Show comment location ${group.number} in document`,
-    );
-    location.setAttribute("aria-pressed", String(group.id === activeGroup));
-    location.disabled = !available;
-    location.title = available
-      ? "Show in document"
-      : "Location unavailable in this version";
+    const location = el("summary", undefined, "group-location");
+    location.setAttribute("aria-label", `Comment location ${group.number}`);
     const quoted = group.comments.find(
       (c) => c.target.selector.type !== "element",
     );
@@ -1147,20 +1121,36 @@ function comments() {
         ? quoted.target.selector.ranges[0]?.exact
         : quoted?.target.selector.exact) ||
       group.id.replace(/[-_]/g, " ");
-    location.append(
-      el("span", group.number, "location-number"),
-      el("span", label, "location-label"),
-    );
-    location.onclick = () => focusGroup(group.id);
-    card.append(location);
     const count = group.comments.length;
-    card.append(
+    const locationCopy = el("span", undefined, "location-copy");
+    locationCopy.append(
+      el("span", label, "location-label"),
       el(
-        "p",
+        "span",
         `${count} ${count === 1 ? "thread" : "threads"}${group.openCount ? ` · ${group.openCount} open` : " · Resolved"}`,
         "group-caption",
       ),
     );
+    location.append(
+      el("span", group.number, "location-number"),
+      locationCopy,
+      el("span", "⌄", "group-chevron"),
+    );
+    card.append(location);
+    if (available) {
+      const showLocation = el("button", "Show in document", "show-location");
+      showLocation.type = "button";
+      showLocation.onclick = () => focusGroup(group.id);
+      card.append(showLocation);
+    } else {
+      card.append(
+        el(
+          "small",
+          "Location unavailable in this version",
+          "group-unavailable",
+        ),
+      );
+    }
     const closed = el("details", undefined, "resolved-threads");
     closed.id = `resolved-threads-${group.number}`;
     const closedCount = count - group.openCount;
@@ -1176,10 +1166,7 @@ function comments() {
       else card.append(commentThread(c));
     }
     if (closedCount && group.openCount) card.append(closed);
-    if (annotations && !available) {
-      elsewhere.append(card);
-      elsewhereCount++;
-    } else if (!group.openCount) {
+    if (!group.openCount) {
       resolved.append(card);
       resolvedCount++;
     } else $("comments").append(card);
@@ -1188,14 +1175,13 @@ function comments() {
     resolved.prepend(el("summary", `Resolved locations · ${resolvedCount}`));
     $("comments").append(resolved);
   }
-  if (elsewhereCount) {
-    elsewhere.prepend(el("summary", `Not in this version · ${elsewhereCount}`));
-    $("comments").append(elsewhere);
-  }
   $("comments")
     .querySelectorAll("details")
     .forEach((d) => {
-      d.open = expanded.has(d.id) || !!d.querySelector(".comment-group.active");
+      d.open =
+        expanded.has(d.id) ||
+        d.classList.contains("active") ||
+        !!d.querySelector(".comment-group.active");
     });
 }
 function renderIdentity(publicSession) {
@@ -1206,7 +1192,7 @@ function renderIdentity(publicSession) {
   }
   const actor = actorCopy(identity);
   $("viewer-identity").replaceChildren(el("span", actor.name));
-  if (actor.role)
+  if (actor.role && actor.role.toLowerCase() !== actor.name.toLowerCase())
     $("viewer-identity").append(el("span", actor.role, "role-badge"));
   $("viewer-identity").hidden = false;
 }
@@ -1315,8 +1301,6 @@ async function showComparison(before) {
   if (!selected || selected.status !== "pending") return;
   await revokeOutgoingHandoff();
   showingBase = before && !!selected.parent;
-  const copy = versionCopy(selected, current.state, showingBase);
-  $("view-label").textContent = copy.preview;
   $("show-before").setAttribute("aria-pressed", String(showingBase));
   $("show-after").setAttribute("aria-pressed", String(!showingBase));
   $("accept").disabled = !canAccept();
@@ -1791,6 +1775,7 @@ addEventListener("pageshow", (event) => {
 function authorizationChanged(authorized) {
   $("authorization").hidden = authorized;
   $("review-app").hidden = !authorized;
+  $("viewer-controls").hidden = !authorized;
   $("copy-access-link").disabled = !authorized;
   $("refresh").disabled = !authorized;
   $("toggle-review").disabled = !authorized;

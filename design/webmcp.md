@@ -92,7 +92,7 @@ substitutes the latest head into an older target. A selection cannot be sent as
 ready while the preview is still loading or has failed.
 
 `action` is transient and null until the user explicitly chooses **Comment**,
-**Suggest**, or **Ask agent to address**. Selection actions are
+**Suggest**, or **Ask agent**. Selection actions are
 `{kind, target, draft?}`, where `kind` is `comment` or `suggest` and `target`
 must exactly equal `selection`. An optional
 `draft` captures the editable text at the moment the user asks for agent help.
@@ -100,7 +100,7 @@ The action records intent for the external browser agent; the user's instruction
 is still entered in the agent chat, not in the Viewer. WebMCP does not provide a
 generic page API that opens or prompts that chat.
 
-Clicking **Ask agent to draft** or **Ask agent to address** creates a random,
+Clicking **Ask agent to draft** or **Ask agent** creates a random,
 15-minute, in-memory handoff and copies a private URL whose fragment is the
 handoff credential, never the Owner/Reviewer session credential, selection text
 or draft. A different Codex task can open it. The server stores the exact
@@ -302,7 +302,7 @@ check schemas, execution signals, cleanup and unavailable-browser behavior;
 those tests are not evidence of native browser support.
 
 Current UI verification in Codex In-app Browser discovered all seven page
-tools. The existing-comment check clicked **Ask agent to address**, observed
+tools. The existing-comment check clicked **Ask agent**, observed
 `data-agent-state="waiting"`, read `focusedComment`, and called the page's actual
 `read_document` and `propose_revision` tools with the exact comment ID. The
 Viewer showed both “Addresses comment …” and reciprocal “Addressed by proposal

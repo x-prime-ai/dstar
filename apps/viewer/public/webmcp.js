@@ -127,7 +127,7 @@ export function createTools({
     {
       name: "draft_comment_reply",
       description:
-        "Return an editable reply draft for the exact focusedComment after the user chose Ask agent to address. The original Viewer shows it for explicit human submission; this never posts or resolves the comment.",
+        "Return an editable reply draft for the exact focusedComment after the user chose Ask agent. The original Viewer shows it for explicit human submission; this never posts or resolves the comment.",
       inputSchema: object({
         commentId: { type: "string", pattern: "^[a-f0-9-]{36}$" },
         body: { type: "string", minLength: 1, maxLength: 20000 },
@@ -150,7 +150,7 @@ export function createTools({
             ok: false,
             code: "invalid_input",
             error:
-              "Choose Ask agent to address on this exact focused comment before drafting a reply.",
+              "Choose Ask agent on this exact focused comment before drafting a reply.",
           };
         const viewerUpdated = await onDraftReply({
           commentId: args.commentId,

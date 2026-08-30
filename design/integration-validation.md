@@ -50,7 +50,7 @@ work, change main, deploy a service or create a demo. Its regression scope is:
 The focused Engine suite passed 35 tests and the Viewer suite passed 127 tests,
 including real loopback HTTP, process restart, handoff scope and WebMCP adapter
 coverage. A Codex In-app Browser check against a temporary local package found
-all seven page tools, exercised the visible **Ask agent to address** action,
+all seven page tools, exercised the visible **Ask agent** action,
 created a linked pending proposal through actual page WebMCP, displayed both
 directions of the comment/proposal relationship, explicitly accepted it, and
 confirmed the comment remained open. The reply composer retained editable text

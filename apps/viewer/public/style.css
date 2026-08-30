@@ -158,6 +158,20 @@ header {
   border: 0;
   font-size: 12px;
 }
+.menu-control {
+  display: block;
+  padding: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.menu-control span {
+  display: block;
+  margin-bottom: 5px;
+}
+.menu-control select {
+  width: 100%;
+  padding: 6px 8px;
+}
 .menu-content .menu-link {
   display: block;
   padding: 7px 8px;
@@ -324,36 +338,30 @@ h3 {
   flex-direction: column;
   overflow: auto;
 }
-.toolbar {
+.viewer-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-  gap: 12px;
-  min-height: 58px;
+  flex: none;
+  gap: 8px;
   font-size: 12px;
   color: var(--muted);
 }
-.toolbar > div {
+.viewer-controls > div,
+#preview-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
-.toolbar button,
-.toolbar select {
+.viewer-controls button,
+.viewer-controls select {
   font-size: 12px;
   padding: 5px 8px;
   background: transparent;
   border-color: transparent;
 }
-.toolbar button:hover,
-.toolbar select:hover {
+.viewer-controls button:hover,
+.viewer-controls select:hover {
   background: #eaf0ea;
-}
-#view-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .canvas {
   position: relative;
@@ -419,7 +427,7 @@ iframe {
 #decision-hint {
   margin: 0 0 12px;
 }
-.toolbar .view-switch {
+.viewer-controls .view-switch {
   display: flex;
   padding: 3px;
   border: 1px solid var(--line);
@@ -428,7 +436,7 @@ iframe {
   background: #ecefec;
   flex-shrink: 0;
 }
-.toolbar .view-switch button {
+.viewer-controls .view-switch button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -437,14 +445,10 @@ iframe {
   border: 0;
   border-radius: 5px;
 }
-.toolbar .view-switch button[aria-selected="true"] {
+.viewer-controls .view-switch button[aria-selected="true"] {
   background: white;
   color: #34463b;
   box-shadow: 0 1px 3px #21352912;
-}
-#view-label {
-  flex: 1;
-  font-size: 11px;
 }
 .changes-view {
   flex: 1;
@@ -746,13 +750,6 @@ iframe {
   .changes-view {
     padding: 20px;
   }
-  .toolbar {
-    flex-wrap: wrap;
-    padding: 8px 0;
-  }
-  #view-label {
-    display: none;
-  }
   .text-comparison {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -781,11 +778,8 @@ iframe {
     padding: 10px;
     flex-wrap: wrap;
   }
-  .toolbar .view-switch button {
+  .viewer-controls .view-switch button {
     padding: 5px 9px;
-  }
-  #preview-controls {
-    margin-left: auto;
   }
 }
 
@@ -884,31 +878,27 @@ textarea {
   overflow: hidden;
   background: #fff;
 }
+.comment-group > summary {
+  list-style: none;
+}
+.comment-group > summary::-webkit-details-marker {
+  display: none;
+}
 .comment-group.active {
   border-color: #b8cbee;
   box-shadow: 0 0 0 2px #eaf0fc;
 }
 .group-location {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   width: 100%;
   text-align: left;
-  border: 0;
-  border-radius: 0;
-  padding: 14px 14px 0;
+  padding: 12px 14px;
   background: #f8faf7;
 }
 .group-location:hover {
   background: #edf3ec;
-}
-.group-location:disabled {
-  opacity: 1;
-  cursor: default;
-}
-.group-location:disabled .location-number {
-  background: #edf0ec;
-  color: var(--muted);
 }
 .location-number {
   flex-shrink: 0;
@@ -924,7 +914,7 @@ textarea {
   font-size: 11px;
   font-weight: 600;
 }
-.group-location[aria-pressed="true"]:not(:disabled) .location-number {
+.comment-group.active .location-number {
   border-color: #315fba;
   background: #315fba;
   color: #fff;
@@ -934,6 +924,12 @@ textarea {
 .comment-group.active .group-location,
 .comment-group.active .group-caption {
   background: #f5f8ff;
+}
+.location-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
 }
 .location-label {
   font-size: 12px;
@@ -946,12 +942,35 @@ textarea {
   overflow-wrap: anywhere;
 }
 .group-caption {
+  display: block;
   font-size: 10px;
   color: var(--muted);
-  margin: 0;
-  padding: 6px 14px 12px 48px;
-  background: #f8faf7;
-  border-bottom: 1px solid var(--line);
+  margin-top: 2px;
+}
+.group-chevron {
+  flex: none;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+.comment-group[open] .group-chevron {
+  transform: rotate(180deg);
+}
+.show-location {
+  margin: 10px 14px 8px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-size: 11px;
+}
+.group-unavailable {
+  display: block;
+  margin: 10px 14px 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.comment-group > .comment {
+  border-top: 1px solid var(--line);
 }
 .comment {
   padding: 14px;
@@ -1010,21 +1029,22 @@ textarea {
 .comment-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
 }
 .comment-actions button {
   font-size: 11px;
-  padding: 2px 0;
-  border: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   color: var(--muted);
-  background: transparent;
+  background: #fff;
+  white-space: nowrap;
 }
 .comment-actions button:hover {
   color: var(--green);
-  text-decoration: underline;
-}
-.comment-actions button:last-child {
-  margin-left: auto;
+  border-color: #b9ccbf;
 }
 .reply {
   margin: 12px 0 0 4px;
@@ -1239,15 +1259,8 @@ dialog p {
   .workspace {
     padding: 0 12px 12px;
   }
-  .toolbar {
-    min-height: 50px;
-    gap: 4px;
-  }
-  .toolbar > div {
-    gap: 2px;
-  }
-  .toolbar select {
-    max-width: 112px;
+  .document {
+    display: none;
   }
   #authorization {
     margin: 24px 12px;
@@ -1354,10 +1367,6 @@ dialog p {
   flex: none;
   background: transparent;
 }
-body[data-viewer-mode="review"] .toolbar {
-  min-height: 54px;
-}
-
 .before-after {
   display: flex;
   padding: 3px;
@@ -1567,6 +1576,9 @@ body[data-viewer-mode="review"] .toolbar {
   .viewer-identity {
     display: none;
   }
+  .document {
+    display: none;
+  }
   .review-sidebar {
     width: 100%;
   }
@@ -1580,17 +1592,8 @@ body[data-viewer-mode="review"] .toolbar {
   #exit-review {
     margin-top: 12px;
   }
-  .toolbar {
-    align-items: center;
-  }
-  #view-label {
-    display: none;
-  }
   #preview-controls {
     width: auto;
-  }
-  .width-control {
-    display: none;
   }
   .decision-bar {
     display: block;
@@ -1622,7 +1625,7 @@ body[data-viewer-mode="review"] .toolbar {
   .review-entry .count {
     display: none;
   }
-  .toolbar .view-switch button {
+  .viewer-controls .view-switch button {
     padding-inline: 10px;
   }
   .before-after button {
