@@ -68,10 +68,15 @@ Engine terminology do not change.
 - Clicking a comment thread selects and reveals its anchor in the document.
   Thread cards do not repeat the selected document text, and replies never
   receive a separate status from their thread. Thread summaries show only a
-  user icon, author, time and status; each reply also has a user icon. One
-  thread is expanded at a time, and its root comment and replies form one
-  unindented chronological stream. Replies use the same flat content format as
-  the root comment, separated only by a quiet divider rather than nested cards.
+  user icon, author, time and status; the root and every reply use the same
+  identity header. One thread is expanded at a time, and its root comment and
+  replies form one unindented chronological stream without an active-message
+  background. Replies use the same flat content format as the root comment,
+  separated only by a quiet divider rather than nested cards.
+- Clicking elsewhere in the document clears the focused thread. Hovering a
+  comment highlight reveals a small comment control that opens the matching
+  thread. The focused highlight remains stronger than the others without
+  reducing text contrast.
 - The Comments panel defaults to Open and offers an Open / Resolved filter with
   counts. Each filter contains only threads that belong to the viewed version
   or a located descendant; unresolved historical, declined or orphaned anchors

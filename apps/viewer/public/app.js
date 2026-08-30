@@ -862,6 +862,14 @@ function updateReviewFocus() {
     article.setAttribute("aria-current", String(active));
   });
 }
+function clearCommentFocus() {
+  ++commentFocusSerial;
+  pendingCommentFocus = null;
+  activeCommentId = null;
+  activeGroup = null;
+  updateReviewFocus();
+  sendAnnotations();
+}
 function focusComment(id, announce = true) {
   const comment = current?.state.comments.find((entry) => entry.id === id);
   if (!comment) return;
@@ -921,6 +929,16 @@ function commentTime(value) {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
+}
+function messageHeader(actor, createdAt) {
+  const header = el("span", undefined, "message-header"),
+    byline = el("small", undefined, "message-byline");
+  byline.append(
+    el("strong", actor.name),
+    document.createTextNode(` · ${commentTime(createdAt)}`),
+  );
+  header.append(el("span", undefined, "message-user-icon"), byline);
+  return header;
 }
 function openReplyDraft(comment, body = "") {
   if (replyDraft?.commentId === comment.id) {
@@ -1016,15 +1034,9 @@ function commentThread(thread, expanded = false) {
   card.dataset.thread = c.id;
   card.open = expanded;
   card.classList.toggle("active", c.id === activeCommentId);
-  const summary = el("summary", undefined, "thread-summary"),
-    summaryCopy = el("span", undefined, "thread-summary-copy");
-  summaryCopy.append(
-    el("strong", commentActor.name),
-    el("small", commentTime(c.createdAt)),
-  );
+  const summary = el("summary", undefined, "thread-summary");
   summary.append(
-    el("span", undefined, "thread-user-icon"),
-    summaryCopy,
+    messageHeader(commentActor, c.createdAt),
     el(
       "span",
       c.status === "open" ? "Open" : "Resolved",
@@ -1075,14 +1087,8 @@ function commentThread(thread, expanded = false) {
   article.append(el("p", c.body));
   for (const r of c.replies) {
     const reply = el("div", undefined, "reply"),
-      replyActor = actorCopy(r.author),
-      replyHeader = el("div", undefined, "reply-header"),
-      replyBy = el(
-        "small",
-        `${replyActor.name}${replyActor.role ? ` · ${replyActor.role}` : ""} · ${commentTime(r.createdAt)}`,
-      );
-    replyHeader.append(el("span", undefined, "reply-user-icon"), replyBy);
-    reply.append(replyHeader, el("p", r.body));
+      replyActor = actorCopy(r.author);
+    reply.append(messageHeader(replyActor, r.createdAt), el("p", r.body));
     article.append(reply);
   }
   const linked = current.state.proposals.filter((proposal) =>
@@ -1390,6 +1396,7 @@ addEventListener("message", (event) => {
   if (annotation) {
     if (annotation.kind === "dstar-annotation-focus")
       focusGroup(annotation.group, false);
+    else clearCommentFocus();
     return;
   }
   const selection = selectionMessageFromEvent(

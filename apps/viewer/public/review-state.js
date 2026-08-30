@@ -232,8 +232,11 @@ export function annotationEventFromFrame(event, source, frame, previewState) {
     event.origin !== "null" ||
     event.data?.capability !== frame.capability ||
     event.data.revision !== frame.revision ||
-    event.data.kind !== "dstar-annotation-focus" ||
-    typeof event.data.group !== "string"
+    !["dstar-annotation-focus", "dstar-annotation-clear"].includes(
+      event.data.kind,
+    ) ||
+    (event.data.kind === "dstar-annotation-focus" &&
+      typeof event.data.group !== "string")
   )
     return null;
   return event.data;

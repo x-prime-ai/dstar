@@ -237,6 +237,13 @@ it("accepts annotation navigation only from the ready exact preview", () => {
   expect(
     annotationEventFromFrame(event, source, frame, { status: "loading" }),
   ).toBeNull();
+  const clear = {
+    ...event,
+    data: { kind: "dstar-annotation-clear", ...frame },
+  };
+  expect(annotationEventFromFrame(clear, source, frame, ready)).toBe(
+    clear.data,
+  );
 });
 it("fails closed after resource failure or timeout until a new preview begins", () => {
   for (const timeout of [false, true]) {

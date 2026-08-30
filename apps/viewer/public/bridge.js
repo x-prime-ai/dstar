@@ -101,6 +101,16 @@
       },
       context.origin,
     );
+  const sendAnnotation = (kind, group) =>
+    parent.postMessage(
+      {
+        kind,
+        capability: context.capability,
+        revision: context.revision,
+        ...(group ? { group } : {}),
+      },
+      context.origin,
+    );
   const stable = (node) =>
     (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest(
       "[data-dstar-id]",
@@ -112,9 +122,11 @@
   document.addEventListener(
     "click",
     (event) => {
+      if (event.composedPath?.().includes(annotationButton)) return;
       const link = event.target.closest("a");
       if (link && !link.getAttribute("href")?.startsWith("#"))
         event.preventDefault();
+      sendAnnotation("dstar-annotation-clear");
       if (!event.altKey) return;
       event.preventDefault();
       const element = stable(event.target);
@@ -247,8 +259,9 @@
   };
   // Review highlights live in a shadow overlay, never in canonical content or
   // its text nodes. Resolved offsets come from the authorized parent.
-  let annotationLayer, highlightLayer;
+  let annotationLayer, highlightLayer, annotationButton;
   let annotationRecords = [],
+    annotationHitboxes = [],
     activeAnnotation = null,
     annotationTimer;
   const ensureAnnotations = () => {
@@ -261,12 +274,28 @@
     const style = document.createElement("style");
     style.textContent = `
       :host { color-scheme: light; }
-      .highlight { position:absolute;box-sizing:border-box;border-radius:2px;background:#f7dc6f38;border-bottom:1px solid #d8b33f99; }
-      .highlight.active { background:#ffc928a8;border-bottom:3px solid #986000;box-shadow:0 0 0 1px #ffc92855; }
+      .highlight { position:absolute;box-sizing:border-box;border-radius:2px;background:#e6c85b38;border-bottom:1px solid #c3a03588; }
+      .highlight.active { background:#e6b93f66;border-bottom:2px solid #80611d;box-shadow:0 0 0 1px #d5a82f44; }
+      .comment-jump { position:absolute;display:none;width:28px;height:28px;padding:0;border:1px solid #d2ddd4;border-radius:50%;background:#fff;color:#285743;box-shadow:0 3px 10px #203c3038;pointer-events:auto;cursor:pointer; }
+      .comment-jump:hover,.comment-jump:focus-visible { background:#285743;color:#fff;outline:none; }
+      .comment-jump::before { content:"";position:absolute;left:7px;top:6px;width:12px;height:10px;border:1.7px solid currentColor;border-radius:4px; }
+      .comment-jump::after { content:"";position:absolute;left:9px;top:15px;width:5px;height:5px;border-left:1.7px solid currentColor;transform:skewY(-35deg);background:inherit; }
     `;
     highlightLayer = document.createElement("div");
     highlightLayer.setAttribute("aria-hidden", "true");
-    shadow.append(style, highlightLayer);
+    annotationButton = document.createElement("button");
+    annotationButton.className = "comment-jump";
+    annotationButton.type = "button";
+    annotationButton.setAttribute("aria-label", "Open comment thread");
+    annotationButton.onclick = (event) => {
+      event.stopPropagation?.();
+      if (annotationButton.annotationGroup)
+        sendAnnotation(
+          "dstar-annotation-focus",
+          annotationButton.annotationGroup,
+        );
+    };
+    shadow.append(style, highlightLayer, annotationButton);
     document.documentElement.append(annotationLayer);
   };
   const annotationRange = (element, anchor) => {
@@ -300,6 +329,9 @@
   const placeAnnotations = () => {
     if (!annotationLayer) return;
     highlightLayer.replaceChildren();
+    annotationHitboxes = [];
+    annotationButton.style.display = "none";
+    annotationButton.annotationGroup = null;
     const width = document.documentElement.clientWidth,
       height = document.documentElement.clientHeight;
     for (const record of annotationRecords) {
@@ -328,9 +360,39 @@
           group.id === activeAnnotation ? "highlight active" : "highlight";
         mark.style.cssText = `left:${highlight.left}px;top:${highlight.top}px;width:${highlight.width}px;height:${highlight.height}px;`;
         highlightLayer.append(mark);
+        annotationHitboxes.push({
+          group: group.id,
+          left: highlight.left,
+          top: highlight.top,
+          right: highlight.right,
+          bottom: highlight.bottom,
+        });
       }
     }
   };
+  document.addEventListener("mousemove", (event) => {
+    if (!annotationButton || event.composedPath?.().includes(annotationButton))
+      return;
+    const hit = annotationHitboxes.findLast(
+      (box) =>
+        event.clientX >= box.left &&
+        event.clientX <= box.right &&
+        event.clientY >= box.top &&
+        event.clientY <= box.bottom,
+    );
+    if (!hit) {
+      annotationButton.style.display = "none";
+      annotationButton.annotationGroup = null;
+      return;
+    }
+    annotationButton.annotationGroup = hit.group;
+    annotationButton.style.left = `${Math.max(
+      2,
+      Math.min(document.documentElement.clientWidth - 30, hit.right - 14),
+    )}px`;
+    annotationButton.style.top = `${Math.max(2, hit.top - 14)}px`;
+    annotationButton.style.display = "block";
+  });
   const scheduleAnnotations = () => {
     clearTimeout(annotationTimer);
     annotationTimer = setTimeout(placeAnnotations, 0);

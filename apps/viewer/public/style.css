@@ -866,7 +866,7 @@ textarea {
 .thread-summary:hover {
   background: #f7f9f7;
 }
-.thread-user-icon {
+.message-user-icon {
   position: relative;
   display: inline-flex;
   flex: none;
@@ -877,7 +877,7 @@ textarea {
   background: #edf3ec;
   color: var(--green);
 }
-.thread-user-icon::before {
+.message-user-icon::before {
   content: "";
   position: absolute;
   top: 5px;
@@ -887,7 +887,7 @@ textarea {
   border: 1.5px solid currentColor;
   border-radius: 50%;
 }
-.thread-user-icon::after {
+.message-user-icon::after {
   content: "";
   position: absolute;
   left: 6px;
@@ -897,28 +897,23 @@ textarea {
   border: 1.5px solid currentColor;
   border-radius: 8px 8px 5px 5px;
 }
-.comment-thread.active .thread-user-icon {
-  border-color: #315fba;
-  background: #315fba;
-  color: #fff;
-}
-.thread-summary-copy {
+.message-header {
   display: flex;
   flex: 1;
   min-width: 0;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  gap: 8px;
 }
-.thread-summary-copy strong {
-  font-size: 11px;
-  font-weight: 600;
-}
-.thread-summary-copy small {
+.message-byline {
   overflow: hidden;
   color: var(--muted);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.message-byline strong {
+  color: var(--text);
+  font-weight: 600;
 }
 .thread-chevron {
   flex: none;
@@ -936,7 +931,7 @@ textarea {
   cursor: pointer;
 }
 .comment.active {
-  background: #f5f8ff;
+  background: transparent;
 }
 .comment:focus-visible {
   box-shadow: 0 0 0 2px #315fba;
@@ -975,43 +970,6 @@ textarea {
   margin: 12px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--line);
-}
-.reply-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.reply-user-icon {
-  position: relative;
-  width: 23px;
-  height: 23px;
-  border: 1px solid #d6dfd7;
-  border-radius: 50%;
-  background: #fff;
-  color: var(--green);
-}
-.reply-user-icon::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  left: 7px;
-  width: 7px;
-  height: 7px;
-  border: 1.5px solid currentColor;
-  border-radius: 50%;
-}
-.reply-user-icon::after {
-  content: "";
-  position: absolute;
-  left: 5px;
-  bottom: 3px;
-  width: 11px;
-  height: 6px;
-  border: 1.5px solid currentColor;
-  border-radius: 8px 8px 5px 5px;
-}
-.reply-header > small {
-  min-width: 0;
 }
 .reply-composer {
   margin: 12px 0;

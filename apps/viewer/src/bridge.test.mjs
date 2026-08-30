@@ -228,8 +228,9 @@ it("renders persistent highlights without document markers and maps code points 
     page = await run(fixture);
   page.listeners.message(annotationMessage(page));
   const host = fixture.root.children[0],
-    highlights = host.shadow.children[1];
-  expect(host.shadow.children).toHaveLength(2);
+    highlights = host.shadow.children[1],
+    commentJump = host.shadow.children[2];
+  expect(host.shadow.children).toHaveLength(3);
   expect(fixture.ranges[0].start[1]).toBe(6);
   expect(fixture.ranges[0].end[1]).toBe(8);
   expect(highlights.children).toHaveLength(1);
@@ -266,6 +267,49 @@ it("renders persistent highlights without document markers and maps code points 
   expect(highlights.children).toHaveLength(2);
   page.listeners.message(annotationMessage(page, { groups: [] }));
   expect(highlights.children).toHaveLength(0);
+  expect(commentJump.style.display).toBe("none");
+});
+
+it("reveals a comment control over a highlight and opens its thread", async () => {
+  const fixture = annotationDocument(),
+    page = await run(fixture);
+  page.listeners.message(annotationMessage(page));
+  const commentJump = fixture.root.children[0].shadow.children[2];
+  page.documentListeners.mousemove({
+    clientX: 20,
+    clientY: 65,
+    composedPath: () => [],
+  });
+  expect(commentJump.style.display).toBe("block");
+  expect(commentJump.attributes["aria-label"]).toBe("Open comment thread");
+  commentJump.onclick({ stopPropagation() {} });
+  expect(page.messages.at(-1)).toEqual({
+    origin: "http://host",
+    data: {
+      kind: "dstar-annotation-focus",
+      capability: "cap",
+      revision: "rev",
+      group: "thread-1",
+    },
+  });
+});
+
+it("clears comment focus when the document is clicked away from a highlight control", async () => {
+  const fixture = annotationDocument(),
+    page = await run(fixture);
+  page.documentListeners.click({
+    altKey: false,
+    target: fixture.element,
+    composedPath: () => [],
+  });
+  expect(page.messages.at(-1)).toEqual({
+    origin: "http://host",
+    data: {
+      kind: "dstar-annotation-clear",
+      capability: "cap",
+      revision: "rev",
+    },
+  });
 });
 
 it("ignores annotation messages from another source, origin, capability or revision", async () => {
