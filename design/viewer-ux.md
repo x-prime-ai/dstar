@@ -28,8 +28,8 @@ The interface has three user tasks:
 - **Read** the current document. This is always the default when a current
   version exists.
 - **Comments** as independent, collapsible threads. Each root comment and its
-  replies share one Open or Resolved state. Document highlights and user icons
-  connect the content to its thread without exposing sequence numbers.
+  replies share one Open or Resolved state. The document uses quiet yellow
+  highlights without markers; user icons stay inside the thread list.
 - **Versions** as one newest-first list. Each row identifies its status, author,
   date and change size without splitting the history into separate sections.
 
@@ -66,8 +66,9 @@ Engine terminology do not change.
 - Clicking a comment thread selects and reveals its anchor in the document.
   Thread cards do not repeat the selected document text, and replies never
   receive a separate status from their thread. Thread summaries show only a
-  user icon, author, time and status; one thread is expanded at a time, and its
-  root comment and replies form one unindented chronological stream.
+  user icon, author, time and status; each reply also has a user icon. One
+  thread is expanded at a time, and its root comment and replies form one
+  unindented chronological stream.
 - The Comments panel defaults to Open and offers an Open / Resolved filter with
   counts. Each filter contains only threads that belong to the viewed version
   or a located descendant; unresolved historical, declined or orphaned anchors

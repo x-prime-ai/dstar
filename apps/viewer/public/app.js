@@ -724,22 +724,31 @@ function sendAnnotations(focus = null) {
     annotations?.revision !== frame.revision
   )
     return;
-  const groups = commentThreads(current.state.comments)
-    .map((thread) => ({
-      id: thread.id,
-      element: thread.element,
-      author: actorCopy(thread.comment.author).name,
-      resolved: thread.comment.status !== "open",
-      anchors: located(thread.comment)
-        ? [
-            {
-              type: thread.comment.target.selector.type,
-              ...annotations.anchors[thread.id],
-            },
-          ]
-        : [],
-    }))
-    .filter((group) => group.anchors.length);
+  const viewedProposalId = showingBase ? selected?.parent : selected?.id,
+    groups = commentThreads(current.state.comments)
+      .filter(
+        (thread) =>
+          thread.comment.status === commentFilter &&
+          commentAppliesToVersion(
+            thread.comment,
+            current.state.proposals,
+            viewedProposalId,
+            annotations.anchors,
+          ),
+      )
+      .map((thread) => ({
+        id: thread.id,
+        element: thread.element,
+        anchors: located(thread.comment)
+          ? [
+              {
+                type: thread.comment.target.selector.type,
+                ...annotations.anchors[thread.id],
+              },
+            ]
+          : [],
+      }))
+      .filter((group) => group.anchors.length);
   $("preview").contentWindow.postMessage(
     {
       kind: "dstar-annotations",
@@ -1055,11 +1064,13 @@ function commentThread(thread, expanded = false) {
   for (const r of c.replies) {
     const reply = el("div", undefined, "reply"),
       replyActor = actorCopy(r.author),
+      replyContent = el("div", undefined, "reply-content"),
       replyBy = el(
         "small",
         `${replyActor.name}${replyActor.role ? ` · ${replyActor.role}` : ""} · ${commentTime(r.createdAt)}`,
       );
-    reply.append(replyBy, el("p", r.body));
+    replyContent.append(replyBy, el("p", r.body));
+    reply.append(el("span", undefined, "reply-user-icon"), replyContent);
     article.append(reply);
   }
   const linked = current.state.proposals.filter((proposal) =>

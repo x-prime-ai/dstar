@@ -972,13 +972,48 @@ textarea {
   border-color: #b9ccbf;
 }
 .reply {
+  display: grid;
+  grid-template-columns: 23px minmax(0, 1fr);
+  gap: 9px;
   margin: 10px 0 0;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f8faf8;
 }
-.reply > small {
+.reply-user-icon {
+  position: relative;
+  width: 23px;
+  height: 23px;
+  border: 1px solid #d6dfd7;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--green);
+}
+.reply-user-icon::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 7px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+.reply-user-icon::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  bottom: 3px;
+  width: 11px;
+  height: 6px;
+  border: 1.5px solid currentColor;
+  border-radius: 8px 8px 5px 5px;
+}
+.reply-content {
+  min-width: 0;
+}
+.reply-content > small {
   display: block;
   margin-bottom: 4px;
 }

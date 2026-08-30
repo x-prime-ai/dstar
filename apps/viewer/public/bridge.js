@@ -244,9 +244,9 @@
       el.style.display = i === slide ? "" : "none";
     });
   };
-  // Review UI lives in a shadow overlay, never in canonical content or its text
-  // nodes. Resolved offsets and display identities come from the authorized parent.
-  let annotationLayer, markerLayer, highlightLayer;
+  // Review highlights live in a shadow overlay, never in canonical content or
+  // its text nodes. Resolved offsets come from the authorized parent.
+  let annotationLayer, highlightLayer;
   let annotationRecords = [],
     activeAnnotation = null,
     annotationTimer;
@@ -260,25 +260,12 @@
     const style = document.createElement("style");
     style.textContent = `
       :host { color-scheme: light; }
-      button { position:absolute;box-sizing:border-box;width:28px;height:28px;padding:0;border:1px solid #cfdbd1;border-radius:50%;background:#fff;color:#28604b;box-shadow:0 2px 8px #24352b18;pointer-events:auto;cursor:pointer; }
-      button:hover { background:#edf3ec;border-color:#8daa95; }
-      button[aria-pressed="true"] { background:#315fba;border-color:#315fba;color:#fff;font-weight:700;box-shadow:0 0 0 3px #dce7ff,0 2px 8px #24352b18; }
-      button:focus-visible { outline:2px solid #315fba;outline-offset:5px; }
-      button.resolved:not([aria-pressed="true"]) { color:#747e77;background:#f4f6f3;border-style:dashed; }
-      button::after { content:"";position:absolute;top:50%;width:7px;border-top:1px solid #b7c5ba; }
-      button[data-side="left"]::after { left:100%; }
-      button[data-side="right"]::after { right:100%; }
-      button[aria-pressed="true"]::after { border-color:#7296da; }
-      button > span { position:absolute;inset:0;display:block;color:inherit; }
-      button > span::before { content:"";position:absolute;top:6px;left:9px;width:7px;height:7px;box-sizing:border-box;border:1.5px solid currentColor;border-radius:50%; }
-      button > span::after { content:"";position:absolute;left:7px;bottom:5px;width:11px;height:6px;box-sizing:border-box;border:1.5px solid currentColor;border-radius:8px 8px 5px 5px; }
-      button[hidden] { display:none; }
-      .highlight { position:absolute;background:#315fba14;border-bottom:2px solid #7296da;box-sizing:border-box;border-radius:2px; }
+      .highlight { position:absolute;box-sizing:border-box;border-radius:2px;background:#f2c94c42;border-bottom:2px solid #d0a51f; }
+      .highlight.active { background:#f2c94c70;border-bottom-color:#a97900;box-shadow:0 0 0 1px #f2c94c38; }
     `;
     highlightLayer = document.createElement("div");
     highlightLayer.setAttribute("aria-hidden", "true");
-    markerLayer = document.createElement("div");
-    shadow.append(style, highlightLayer, markerLayer);
+    shadow.append(style, highlightLayer);
     document.documentElement.append(annotationLayer);
   };
   const annotationRange = (element, anchor) => {
@@ -314,9 +301,8 @@
     highlightLayer.replaceChildren();
     const width = document.documentElement.clientWidth,
       height = document.documentElement.clientHeight;
-    const placed = [];
     for (const record of annotationRecords) {
-      const { element, button, group, ranges } = record;
+      const { element, group, ranges } = record;
       const rect = element.getBoundingClientRect();
       const visible =
         element.getClientRects().length &&
@@ -324,49 +310,10 @@
         rect.top < height &&
         rect.right > 0 &&
         rect.left < width;
-      button.hidden = !visible;
-      button.setAttribute(
-        "aria-pressed",
-        String(group.id === activeAnnotation),
-      );
       if (!visible) continue;
       const rects = ranges.flatMap((range) =>
-          range ? [...range.getClientRects()] : [rect],
-        ),
-        anchor =
-          [...rects]
-            .reverse()
-            .find(
-              (candidate) =>
-                candidate.width &&
-                candidate.height &&
-                candidate.bottom > 0 &&
-                candidate.top < height,
-            ) ?? rect,
-        size = 28,
-        gap = 8,
-        leftGutter = rect.left - size - gap,
-        rightGutter = rect.right + gap,
-        side = leftGutter >= 6 ? "left" : "right";
-      let left = side === "left" ? leftGutter : rightGutter;
-      if (left + size > width - 6) left = Math.max(6, width - size - 6);
-      button.setAttribute("data-side", side);
-      let top = Math.max(
-        6,
-        Math.min(anchor.top + (anchor.height - size) / 2, height - size - 6),
+        range ? [...range.getClientRects()] : [rect],
       );
-      for (const previous of placed) {
-        if (
-          Math.abs(left - previous.left) < 32 &&
-          Math.abs(top - previous.top) < 32
-        )
-          top = previous.top + 32;
-      }
-      button.hidden = top > height - 28;
-      placed.push({ left, top });
-      button.style.left = `${left}px`;
-      button.style.top = `${top}px`;
-      if (group.id !== activeAnnotation) continue;
       for (const highlight of rects) {
         if (
           !highlight.width ||
@@ -376,7 +323,8 @@
         )
           continue;
         const mark = document.createElement("div");
-        mark.className = "highlight";
+        mark.className =
+          group.id === activeAnnotation ? "highlight active" : "highlight";
         mark.style.cssText = `left:${highlight.left}px;top:${highlight.top}px;width:${highlight.width}px;height:${highlight.height}px;`;
         highlightLayer.append(mark);
       }
@@ -397,9 +345,6 @@
         element,
       ]),
     );
-    const existing = new Map(
-      annotationRecords.map((record) => [record.group.id, record]),
-    );
     annotationRecords = [];
     activeAnnotation = typeof data.active === "string" ? data.active : null;
     for (const group of data.groups) {
@@ -408,46 +353,14 @@
       );
       if (
         !element ||
-        typeof group.author !== "string" ||
-        !group.author.trim() ||
+        typeof group.id !== "string" ||
         !Array.isArray(group.anchors) ||
         !group.anchors.length
       )
         continue;
-      const button =
-        existing.get(group.id)?.button ?? document.createElement("button");
-      existing.delete(group.id);
-      button.type = "button";
-      const userIcon = document.createElement("span");
-      userIcon.setAttribute("aria-hidden", "true");
-      button.replaceChildren(userIcon);
-      button.className = group.resolved ? "resolved" : "";
-      button.setAttribute("aria-label", `Open comment by ${group.author}`);
-      button.title = `${group.author}${group.resolved ? " · Resolved" : ""}`;
-      button.onmousedown = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      };
-      button.onclick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        activeAnnotation = group.id;
-        placeAnnotations();
-        parent.postMessage(
-          {
-            kind: "dstar-annotation-focus",
-            capability: context.capability,
-            revision: context.revision,
-            group: group.id,
-          },
-          context.origin,
-        );
-      };
-      markerLayer.append(button);
       annotationRecords.push({
         element,
         group,
-        button,
         ranges: group.anchors.flatMap((anchor) =>
           anchor.type === "text-ranges" && Array.isArray(anchor.ranges)
             ? anchor.ranges.map((part) =>
@@ -460,7 +373,6 @@
         ),
       });
     }
-    for (const record of existing.values()) record.button.remove();
     const focused = annotationRecords.find(
       (record) => record.group.id === data.focus,
     );

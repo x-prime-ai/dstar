@@ -216,7 +216,6 @@ const annotationMessage = (page, extra = {}) => ({
       {
         id: "thread-1",
         element: "intro",
-        author: "Renée",
         anchors: [{ type: "text-range", start: 6, end: 7 }],
       },
     ],
@@ -224,53 +223,33 @@ const annotationMessage = (page, extra = {}) => ({
   },
 });
 
-it("renders accessible markers in an isolated overlay and maps code points to DOM ranges", async () => {
+it("renders persistent highlights without document markers and maps code points to DOM ranges", async () => {
   const fixture = annotationDocument(),
     page = await run(fixture);
   page.listeners.message(annotationMessage(page));
   const host = fixture.root.children[0],
-    highlights = host.shadow.children[1],
-    markers = host.shadow.children[2];
-  const button = markers.children[0];
-  expect(button.attributes["aria-label"]).toBe("Open comment by Renée");
-  expect(button.children).toHaveLength(1);
-  expect(button.children[0].attributes["aria-hidden"]).toBe("true");
-  expect(button.attributes["aria-pressed"]).toBe("true");
-  expect(button.style.left).toBe("118px");
-  expect(button.style.top).toBe("56px");
-  expect(button.attributes["data-side"]).toBe("right");
-  expect(button.hidden).toBe(false);
+    highlights = host.shadow.children[1];
+  expect(host.shadow.children).toHaveLength(2);
   expect(fixture.ranges[0].start[1]).toBe(6);
   expect(fixture.ranges[0].end[1]).toBe(8);
   expect(highlights.children).toHaveLength(1);
+  expect(highlights.children[0].className).toBe("highlight active");
   fixture.rect.left = 100;
   fixture.rect.right = 200;
   page.listeners.scroll();
   page.flushTimers();
-  expect(button.style.left).toBe("64px");
-  expect(button.attributes["data-side"]).toBe("left");
-  page.listeners.message(annotationMessage(page, { active: null }));
-  expect(button.attributes["aria-pressed"]).toBe("false");
-  expect(highlights.children).toHaveLength(0);
-  button.onclick({ preventDefault() {}, stopPropagation() {} });
-  expect(button.attributes["aria-pressed"]).toBe("true");
   expect(highlights.children).toHaveLength(1);
-  expect(page.messages.at(-1).data).toEqual({
-    kind: "dstar-annotation-focus",
-    capability: "cap",
-    revision: "rev",
-    group: "thread-1",
-  });
+  page.listeners.message(annotationMessage(page, { active: null }));
+  expect(highlights.children).toHaveLength(1);
+  expect(highlights.children[0].className).toBe("highlight");
   page.listeners.message(annotationMessage(page, { focus: "thread-1" }));
   expect(fixture.scrolled).toEqual([{ block: "center", inline: "nearest" }]);
-  expect(markers.children).toHaveLength(1);
   page.listeners.message(
     annotationMessage(page, {
       groups: [
         {
           id: "thread-1",
           element: "intro",
-          author: "Renée",
           anchors: [
             {
               type: "text-ranges",
@@ -286,7 +265,7 @@ it("renders accessible markers in an isolated overlay and maps code points to DO
   );
   expect(highlights.children).toHaveLength(2);
   page.listeners.message(annotationMessage(page, { groups: [] }));
-  expect(markers.children).toHaveLength(0);
+  expect(highlights.children).toHaveLength(0);
 });
 
 it("ignores annotation messages from another source, origin, capability or revision", async () => {
@@ -303,7 +282,7 @@ it("ignores annotation messages from another source, origin, capability or revis
   expect(fixture.root.children).toHaveLength(0);
 });
 
-it("hides offscreen markers after scrolling and clears active highlights", async () => {
+it("hides offscreen highlights after scrolling", async () => {
   const fixture = annotationDocument(),
     page = await run(fixture);
   page.listeners.message(annotationMessage(page));
@@ -312,7 +291,6 @@ it("hides offscreen markers after scrolling and clears active highlights", async
   fixture.rect.bottom = 720;
   page.listeners.scroll();
   page.flushTimers();
-  expect(shadow.children[2].children[0].hidden).toBe(true);
   expect(shadow.children[1].children).toHaveLength(0);
 });
 
