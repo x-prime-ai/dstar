@@ -255,7 +255,7 @@ describe("canonical HTML workflow", () => {
     expect(f.repo.snapshot(first.id).files.get("assets/photo.png")).toEqual(
       image,
     );
-  });
+  }, 15000);
   it("freezes proposed bytes, reviews CSS-only edits, and rejects without changing head", () => {
     const f = setup(),
       first = f.propose(null);

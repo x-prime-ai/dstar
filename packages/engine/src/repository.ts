@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, join, sep } from "node:path";
+import { atomic, exists, read, safe, syncDirectory } from "./io.js";
+import { MetadataStore } from "./metadata.js";
 import {
   decodeFile,
   digest,
@@ -8,6 +10,7 @@ import {
   MAX_FILE,
   MAX_TOTAL,
   revision,
+  revisionFromEntries,
 } from "./delta.js";
 import { filePath, validateHtml, validateTarget, reviewDiff } from "./html.js";
 import type {
@@ -23,7 +26,6 @@ import type {
 
 const HASH = /^sha256:[a-f0-9]{64}$/;
 const UUID = /^[a-f0-9-]{36}$/;
-const STATE_LIMIT = 64 * 1024 * 1024;
 function actorField(value: Actor, name: string): void {
   if (typeof value === "string") {
     textField(value, name, 200);
@@ -42,71 +44,6 @@ function actorField(value: Actor, name: string): void {
     )
   )
     throw new Error(`Invalid ${name}`);
-}
-function exists(path: string): boolean {
-  try {
-    fs.lstatSync(path);
-    return true;
-  } catch (error) {
-    if (
-      ["ENOENT", "ENOTDIR"].includes(
-        (error as NodeJS.ErrnoException).code ?? "",
-      )
-    )
-      return false;
-    throw error;
-  }
-}
-/** Reject symlinks at every existing component, including the package's ancestors. */
-function safe(path: string): string {
-  const resolved = resolve(path);
-  // macOS exposes its OS-managed temp roots through these system aliases.
-  const absolute =
-    process.platform === "darwin"
-      ? resolved.replace(/^\/(tmp|var)(?=\/|$)/, "/private/$1")
-      : resolved;
-  let part = absolute;
-  while (true) {
-    if (exists(part) && fs.lstatSync(part).isSymbolicLink())
-      throw new Error(`Symlinks are not supported: ${part}`);
-    const parent = dirname(part);
-    if (parent === part) break;
-    part = parent;
-  }
-  return absolute;
-}
-function read(path: string, limit: number): Buffer {
-  safe(path);
-  const stat = fs.lstatSync(path);
-  if (!stat.isFile() || stat.size > limit)
-    throw new Error(`Invalid or oversized file: ${path}`);
-  return fs.readFileSync(path);
-}
-function syncDirectory(path: string): void {
-  const fd = fs.openSync(path, "r");
-  try {
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-function atomic(path: string, bytes: Buffer | string): void {
-  safe(path);
-  fs.mkdirSync(dirname(path), { recursive: true });
-  const temp = join(dirname(path), `.write-${randomUUID()}`);
-  const fd = fs.openSync(temp, "wx", 0o600);
-  try {
-    fs.writeFileSync(fd, bytes);
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  try {
-    fs.renameSync(temp, path);
-    syncDirectory(dirname(path));
-  } finally {
-    if (exists(temp)) fs.unlinkSync(temp);
-  }
 }
 function bounded(files: Files): Files {
   if (
@@ -181,6 +118,8 @@ function validateState(value: State): State {
     !value ||
     value.format !== "dstar-html-0.2-dev" ||
     !Number.isSafeInteger(value.generation) ||
+    value.generation < 0 ||
+    typeof value.id !== "string" ||
     !Array.isArray(value.proposals) ||
     !Array.isArray(value.comments) ||
     value.proposals.length > 10000 ||
@@ -188,15 +127,30 @@ function validateState(value: State): State {
   )
     throw new Error("Unsupported or corrupt DSTAR state");
   const ids = new Set<string>();
-  const commentIds = new Set(
-    value.comments.map((comment) => {
-      if (!comment || !UUID.test(comment.id))
-        throw new Error("Corrupt comment metadata");
-      return comment.id;
-    }),
-  );
-  if (commentIds.size !== value.comments.length)
-    throw new Error("Corrupt comment metadata");
+  const commentIds = new Set<string>();
+  for (const c of value.comments) {
+    if (
+      !c ||
+      !UUID.test(c.id) ||
+      commentIds.has(c.id) ||
+      !["open", "resolved"].includes(c.status) ||
+      !Array.isArray(c.replies) ||
+      typeof c.body !== "string" ||
+      !c.target ||
+      !HASH.test(c.target.revision)
+    )
+      throw new Error("Corrupt comment metadata");
+    actorField(c.author, "comment author");
+    for (const reply of c.replies) actorField(reply.author, "reply author");
+    if (c.status === "resolved" && (c.resolvedAt || c.resolvedBy)) {
+      if (!c.resolvedAt || !c.resolvedBy)
+        throw new Error("Resolved comment has incomplete attribution");
+      actorField(c.resolvedBy, "resolution actor");
+    } else if (c.resolvedAt !== undefined || c.resolvedBy !== undefined) {
+      throw new Error("Open comment has resolution attribution");
+    }
+    commentIds.add(c.id);
+  }
   for (const p of value.proposals) {
     if (
       !p ||
@@ -242,17 +196,6 @@ function validateState(value: State): State {
     )
       throw new Error("Corrupt checkpoint");
   }
-  for (const c of value.comments) {
-    actorField(c.author, "comment author");
-    for (const reply of c.replies) actorField(reply.author, "reply author");
-    if (c.status === "resolved" && (c.resolvedAt || c.resolvedBy)) {
-      if (!c.resolvedAt || !c.resolvedBy)
-        throw new Error("Resolved comment has incomplete attribution");
-      actorField(c.resolvedBy, "resolution actor");
-    } else if (c.resolvedAt !== undefined || c.resolvedBy !== undefined) {
-      throw new Error("Open comment has resolution attribution");
-    }
-  }
   if (
     value.head !== null &&
     !value.proposals.some((p) => p.id === value.head && p.status === "accepted")
@@ -263,9 +206,13 @@ function validateState(value: State): State {
 export class Repository {
   readonly root: string;
   readonly meta: string;
+  private readonly metadata: MetadataStore;
+  private verifiedHead:
+    { state: State; id: string | null; files: Files } | undefined;
   constructor(root: string) {
     this.root = safe(root);
     this.meta = join(this.root, ".dstar");
+    this.metadata = new MetadataStore(this.meta);
     if (
       !exists(join(this.meta, "state.json")) &&
       (exists(join(this.root, "manifest.json")) ||
@@ -302,21 +249,22 @@ export class Repository {
     );
   }
   load(): State {
-    return validateState(
-      JSON.parse(
-        read(join(this.meta, "state.json"), STATE_LIMIT).toString("utf8"),
-      ) as State,
-    );
+    return validateState(this.metadata.load());
   }
   save(state: State): void {
-    state.generation++;
-    const bytes = JSON.stringify(validateState(state));
-    if (Buffer.byteLength(bytes) > STATE_LIMIT)
-      throw new Error("Metadata size limit exceeded");
-    atomic(join(this.meta, "state.json"), bytes);
+    this.metadata.save(validateState(state));
   }
   materialize(state: State, id: string | null): Files {
     if (id === null) return new Map();
+    // Only reuse a head verified during this same locked operation. A fresh
+    // operation re-reads objects, so corruption is never hidden by a warm cache.
+    if (this.verifiedHead?.state === state && this.verifiedHead.id === id)
+      return new Map(
+        [...this.verifiedHead.files].map(([path, bytes]) => [
+          path,
+          Buffer.from(bytes),
+        ]),
+      );
     const byId = new Map(state.proposals.map((p) => [p.id, p]));
     const chain: Proposal[] = [],
       seen = new Set<string>();
@@ -332,6 +280,7 @@ export class Repository {
       next = p.parent;
     }
     const files: Files = new Map();
+    const entries = new Map<string, [string, string, number]>();
     for (const p of chain.reverse()) {
       if (p.checkpoint) {
         for (const c of p.checkpoint) {
@@ -339,29 +288,38 @@ export class Repository {
           if (files.has(c.path) || c.storage.encoding !== "gzip-blob")
             throw new Error("Invalid checkpoint entry");
           const bytes = this.decode(undefined, c.storage);
-          if (digest(bytes) !== c.digest || bytes.length !== c.size)
+          const hash = digest(bytes);
+          if (hash !== c.digest || bytes.length !== c.size)
             throw new Error("Corrupt checkpoint file");
           files.set(c.path, bytes);
+          entries.set(c.path, [c.path, hash, bytes.length]);
         }
       } else {
-        if ((files.size ? revision(files) : null) !== p.base)
+        if (
+          (files.size ? revisionFromEntries([...entries.values()]) : null) !==
+          p.base
+        )
           throw new Error("Revision base mismatch");
         for (const c of p.changes) {
           const base = files.get(c.path);
-          if ((base ? digest(base) : null) !== c.base)
+          if ((entries.get(c.path)?.[1] ?? null) !== c.base)
             throw new Error("File delta base mismatch");
-          if (c.result === null) files.delete(c.path);
-          else {
+          if (c.result === null) {
+            files.delete(c.path);
+            entries.delete(c.path);
+          } else {
             if (!c.storage) throw new Error("Missing file storage");
             const bytes = this.decode(base, c.storage);
-            if (digest(bytes) !== c.result || bytes.length !== c.resultSize)
+            const hash = digest(bytes);
+            if (hash !== c.result || bytes.length !== c.resultSize)
               throw new Error("File delta result mismatch");
             files.set(c.path, bytes);
+            entries.set(c.path, [c.path, hash, bytes.length]);
           }
         }
       }
       bounded(files);
-      if (revision(files) !== p.revision)
+      if (revisionFromEntries([...entries.values()]) !== p.revision)
         throw new Error("Candidate revision mismatch");
     }
     return files;
@@ -446,6 +404,7 @@ export class Repository {
         }),
       );
       fs.fsyncSync(fd);
+      this.metadata.recover();
       if (create && !exists(join(this.meta, "state.json")))
         this.save({
           format: "dstar-html-0.2-dev",
@@ -463,8 +422,10 @@ export class Repository {
         throw new Error(
           "Accepted checkout changed outside DSTAR; restore it or use a separate candidate directory",
         );
+      this.verifiedHead = { state, id: state.head, files: expected };
       return fn(state);
     } finally {
+      this.verifiedHead = undefined;
       fs.closeSync(fd);
       fs.unlinkSync(lock);
     }
@@ -686,7 +647,13 @@ export class Repository {
           size: bytes.length,
           storage: this.put(undefined, bytes),
         }));
-      const touched = [...new Set([...old.keys(), ...files.keys()])];
+      const touched = [...new Set([...old.keys(), ...files.keys()])].filter(
+        (path) => {
+          const before = old.get(path),
+            after = files.get(path);
+          return !before || !after || !before.equals(after);
+        },
+      );
       atomic(
         join(this.meta, "journal.json"),
         JSON.stringify({ paths: touched }),

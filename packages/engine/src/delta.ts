@@ -8,12 +8,19 @@ export function digest(bytes: Uint8Array | string): string {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 export function revision(files: Files): string {
+  return revisionFromEntries(
+    [...files].map(([path, bytes]) => [path, digest(bytes), bytes.length]),
+  );
+}
+
+/** Entries must contain hashes calculated from verified bytes, never unchecked metadata. */
+export function revisionFromEntries(
+  entries: [string, string, number][],
+): string {
   return digest(
     JSON.stringify([
       "dstar-static-v1",
-      [...files]
-        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .map(([path, bytes]) => [path, digest(bytes), bytes.length]),
+      entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
     ]),
   );
 }
