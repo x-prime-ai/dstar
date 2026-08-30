@@ -58,6 +58,7 @@ let current,
   diffController = null,
   activeGroup = null,
   activeCommentId = null,
+  pendingCommentFocus = null,
   annotations = null,
   annotationSerial = 0,
   showingBase = false,
@@ -743,11 +744,23 @@ async function syncAnnotations() {
     )
       return;
     annotations = result;
+    const pending = current?.state.comments.find(
+      (comment) => comment.id === pendingCommentFocus,
+    );
+    const focus = pending && located(pending) ? pending.target.element : null;
+    pendingCommentFocus = null;
     comments();
-    sendAnnotations();
+    sendAnnotations(focus);
+    if (pending)
+      note(
+        focus
+          ? "Thread selected in the document."
+          : "This thread cannot be located in this version.",
+      );
   } catch (error) {
     if (serial !== annotationSerial || frame !== expected) return;
     annotations = null;
+    pendingCommentFocus = null;
     $("preview").contentWindow.postMessage(
       {
         kind: "dstar-annotations",
@@ -782,30 +795,18 @@ function focusGroup(id, fromList = true) {
   }
   setPanel("comments-panel", true);
   updateReviewFocus();
-  const card = $(`comment-group-${group.number}`);
-  if (card) {
-    card.open = true;
-    let ancestor = card.parentElement;
-    while (ancestor && ancestor !== $("comments-panel")) {
-      if (ancestor.tagName === "DETAILS") ancestor.open = true;
-      ancestor = ancestor.parentElement;
-    }
-    if (!fromList) {
-      card.scrollIntoView({ block: "nearest" });
-      card.querySelector("summary").focus({ preventScroll: true });
-    }
+  const thread = document.querySelector(
+    `.comment[data-comment="${activeCommentId}"]`,
+  );
+  if (thread && !fromList) {
+    const resolved = thread.closest("details");
+    if (resolved) resolved.open = true;
+    thread.scrollIntoView({ block: "nearest" });
+    thread.focus({ preventScroll: true });
   }
-  // On phones, leave the document visible after choosing a list location.
-  if (fromList && document.documentElement.clientWidth <= 760)
-    setPanel(activeTab, false);
   sendAnnotations(fromList ? id : null);
 }
 function updateReviewFocus() {
-  document.querySelectorAll(".comment-group").forEach((card) => {
-    const active = card.dataset.group === activeGroup;
-    card.classList.toggle("active", active);
-    if (active) card.open = true;
-  });
   document.querySelectorAll(".comment[data-comment]").forEach((article) => {
     const active = article.dataset.comment === activeCommentId;
     article.classList.toggle("active", active);
@@ -815,6 +816,7 @@ function updateReviewFocus() {
 function focusComment(id, announce = true) {
   const comment = current?.state.comments.find((entry) => entry.id === id);
   if (!comment) return;
+  setView("preview");
   if (
     outgoingHandoff?.context.action.kind === "address-comment" &&
     outgoingHandoff.context.action.commentId !== id
@@ -824,8 +826,42 @@ function focusComment(id, announce = true) {
   activeGroup = comment.target.element;
   setPanel("comments-panel", true);
   updateReviewFocus();
-  sendAnnotations();
-  if (announce) note("Comment selected for agent context.");
+  sendAnnotations(announce && located(comment) ? activeGroup : null);
+  if (announce) {
+    if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
+    note(
+      located(comment)
+        ? "Thread selected in the document."
+        : "This thread cannot be located in the open version.",
+    );
+  }
+}
+async function openCommentInDocument(id) {
+  const comment = current?.state.comments.find((entry) => entry.id === id);
+  if (!comment) return;
+  const commentedVersion = current.state.proposals.find(
+    (proposal) => proposal.revision === comment.target.revision,
+  );
+  pendingCommentFocus = id;
+  if (commentedVersion && selected?.revision !== comment.target.revision)
+    await select(commentedVersion.id);
+  focusComment(id, false);
+  const ready =
+    previewState.status === "ready" &&
+    annotations?.revision === frame?.revision;
+  if (ready && located(comment)) {
+    pendingCommentFocus = null;
+    sendAnnotations(comment.target.element);
+  }
+  if (ready && !located(comment)) pendingCommentFocus = null;
+  if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
+  note(
+    !ready
+      ? "Opening thread in the document…"
+      : located(comment)
+        ? "Thread selected in the document."
+        : "This thread cannot be located in this version.",
+  );
 }
 function openReplyDraft(comment, body = "") {
   if (replyDraft?.commentId === comment.id) {
@@ -922,17 +958,22 @@ function commentThread(c) {
   article.setAttribute("aria-current", String(c.id === activeCommentId));
   article.setAttribute(
     "aria-label",
-    `Comment by ${commentActor.name}: ${c.body.slice(0, 160)}`,
+    `${c.status === "open" ? "Open" : "Resolved"} thread by ${commentActor.name}: ${c.body.slice(0, 160)}`,
   );
   const agentState = commentAgentStates.get(c.id) ?? "idle";
   article.dataset.agentState = agentState;
   article.onclick = (event) => {
-    if (!event.target.closest("button")) focusComment(c.id);
+    if (
+      !event.target.closest(
+        "button, a, textarea, input, form, details, summary",
+      )
+    )
+      safely(() => openCommentInDocument(c.id))();
   };
   article.onkeydown = (event) => {
     if (event.target !== article || !["Enter", " "].includes(event.key)) return;
     event.preventDefault();
-    focusComment(c.id);
+    safely(() => openCommentInDocument(c.id))();
   };
   const author = el("div", undefined, "comment-author");
   author.append(
@@ -941,17 +982,14 @@ function commentThread(c) {
   );
   if (commentActor.role)
     author.append(el("span", commentActor.role, "role-badge"));
-  if (c.status !== "open") author.append(el("span", "Resolved", "badge"));
+  author.append(
+    el(
+      "span",
+      c.status === "open" ? "Open" : "Resolved",
+      `thread-status ${c.status}`,
+    ),
+  );
   article.append(author);
-  if (c.target.selector.type !== "element")
-    article.append(
-      el(
-        "blockquote",
-        c.target.selector.type === "text-ranges"
-          ? c.target.selector.ranges.map((part) => part.exact).join(" … ")
-          : c.target.selector.exact,
-      ),
-    );
   article.append(el("p", c.body));
   for (const r of c.replies) {
     const reply = el("div", undefined, "reply"),
@@ -1023,11 +1061,6 @@ function commentThread(c) {
   const commentedVersion = current.state.proposals.find(
     (proposal) => proposal.revision === c.target.revision,
   );
-  if (commentedVersion && selected?.revision !== c.target.revision) {
-    const view = el("button", "View commented version", "view-commented");
-    view.onclick = safely(async () => select(commentedVersion.id));
-    actions.append(view);
-  }
   article.append(actions);
   if (annotations && !located(c))
     article.append(
@@ -1043,101 +1076,30 @@ function commentThread(c) {
 }
 function comments() {
   const list = current.state.comments,
-    groups = commentGroups(list);
-  const open = list.filter((c) => c.status === "open").length;
+    openThreads = list.filter((c) => c.status === "open"),
+    resolvedThreads = list.filter((c) => c.status !== "open"),
+    open = openThreads.length;
   $("count").textContent = open;
   $("count").hidden = !open;
   $("comments-empty").hidden =
     !!list.length || !$("comment-form").hidden || !$("suggestion-form").hidden;
-  $("comments-summary").textContent = groups.length
-    ? `${open} open · ${groups.length} ${groups.length === 1 ? "location" : "locations"}`
-    : "Comments are grouped by location.";
-  const expanded = new Set(
-    [...$("comments").querySelectorAll("details[open]")].map((d) => d.id),
-  );
+  $("comments-summary").textContent = list.length
+    ? `${open} open ${open === 1 ? "thread" : "threads"}`
+    : "Each comment starts a thread.";
+  const resolvedWasOpen = $("resolved-threads")?.open ?? false;
   const resolved = el("details", undefined, "comment-section");
-  resolved.id = "resolved-groups";
-  let resolvedCount = 0;
+  resolved.id = "resolved-threads";
   $("comments").replaceChildren();
-  for (const group of groups) {
-    const card = el("details", undefined, "comment-group");
-    card.id = `comment-group-${group.number}`;
-    card.dataset.group = group.id;
-    card.classList.toggle("active", group.id === activeGroup);
-    const available = group.comments.some(located);
-    const location = el("summary", undefined, "group-location");
-    location.setAttribute("aria-label", `Comment location ${group.number}`);
-    const quoted = group.comments.find(
-      (c) => c.target.selector.type !== "element",
+  $("comments").append(...openThreads.map(commentThread));
+  if (resolvedThreads.length) {
+    resolved.append(
+      el("summary", `Resolved · ${resolvedThreads.length}`),
+      ...resolvedThreads.map(commentThread),
     );
-    const label =
-      annotations?.labels[group.id] ||
-      (quoted?.target.selector.type === "text-ranges"
-        ? quoted.target.selector.ranges[0]?.exact
-        : quoted?.target.selector.exact) ||
-      group.id.replace(/[-_]/g, " ");
-    const count = group.comments.length;
-    const locationCopy = el("span", undefined, "location-copy");
-    locationCopy.append(
-      el("span", label, "location-label"),
-      el(
-        "span",
-        `${count} ${count === 1 ? "thread" : "threads"}${group.openCount ? ` · ${group.openCount} open` : " · Resolved"}`,
-        "group-caption",
-      ),
-    );
-    location.append(
-      el("span", group.number, "location-number"),
-      locationCopy,
-      el("span", "⌄", "group-chevron"),
-    );
-    card.append(location);
-    if (available) {
-      const showLocation = el("button", "Show in document", "show-location");
-      showLocation.type = "button";
-      showLocation.onclick = () => focusGroup(group.id);
-      card.append(showLocation);
-    } else {
-      card.append(
-        el(
-          "small",
-          "Location unavailable in this version",
-          "group-unavailable",
-        ),
-      );
-    }
-    const closed = el("details", undefined, "resolved-threads");
-    closed.id = `resolved-threads-${group.number}`;
-    const closedCount = count - group.openCount;
-    closed.append(
-      el(
-        "summary",
-        `${closedCount} resolved ${closedCount === 1 ? "thread" : "threads"}`,
-      ),
-    );
-    for (const c of group.comments) {
-      if (c.status !== "open" && group.openCount)
-        closed.append(commentThread(c));
-      else card.append(commentThread(c));
-    }
-    if (closedCount && group.openCount) card.append(closed);
-    if (!group.openCount) {
-      resolved.append(card);
-      resolvedCount++;
-    } else $("comments").append(card);
-  }
-  if (resolvedCount) {
-    resolved.prepend(el("summary", `Resolved locations · ${resolvedCount}`));
+    resolved.open =
+      resolvedWasOpen || resolvedThreads.some((c) => c.id === activeCommentId);
     $("comments").append(resolved);
   }
-  $("comments")
-    .querySelectorAll("details")
-    .forEach((d) => {
-      d.open =
-        expanded.has(d.id) ||
-        d.classList.contains("active") ||
-        !!d.querySelector(".comment-group.active");
-    });
 }
 function renderIdentity(publicSession) {
   const identity = publicSession?.identity;

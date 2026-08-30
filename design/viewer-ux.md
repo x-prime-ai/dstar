@@ -27,15 +27,16 @@ The interface has three user tasks:
 
 - **Read** the current document. This is always the default when a current
   version exists.
-- **Comments** to discuss or suggest changes at a precise selection.
+- **Comments** as independent threads. Each root comment and its replies share
+  one Open or Resolved state.
 - **Versions** as one newest-first list. Each row identifies its status, author,
   date and change size without splitting the history into separate sections.
 
 A pending item opens a contextual review of that version. Its header answers:
 what is proposed, who proposed it, how much changed and what to do next. The
-document remains the default canvas; an exact diff is available only from the
-selected version's **See exact changes** action. Before / After replaces `Show
-base`; Accept / Reject stays visible in the document and exact-diff views.
+document remains the default canvas; a diff is available only from the selected
+version's **View changes** action. Before / After replaces `Show base`; Accept /
+Reject stays visible in the document and diff views.
 
 ## Terminology mapping
 
@@ -47,7 +48,7 @@ base`; Accept / Reject stays visible in the document and exact-diff views.
 | rejected proposal                  | Declined suggestion                                        |
 | base preview                       | Before                                                     |
 | candidate preview                  | After                                                      |
-| proposal diff                      | See exact changes / What changed                           |
+| proposal diff                      | View changes / What changed                                |
 | stale base                         | Based on an earlier version; ask for an updated suggestion |
 | revision, base hash, storage delta | Technical details                                          |
 
@@ -61,14 +62,16 @@ Engine terminology do not change.
   without a separate Review layer.
 - Selecting text exposes named Comment and Suggest actions. Whole-element
   selection is described without exposing `data-dstar-id`.
-- Comment focus remains explicit in both the rail and the sandboxed document.
+- Clicking a comment thread selects and reveals its anchor in the document.
+  Thread cards do not repeat the selected document text, and replies never
+  receive a separate status from their thread.
 - Agent work uses one local status region with `idle`, `waiting`, `returned` and
   `expired` states. Returned text is always an editable draft; it is never
   posted or accepted automatically.
 - An exact ready After preview enables acceptance. Before disables acceptance.
   Stale suggestions remain inspectable and rejectable but cannot be accepted.
-- Empty states explain the next action: start a conversation, all caught up, no
-  current version, or no previous versions.
+- Empty states explain the next action: start a conversation or create the
+  first version.
 
 ## Responsive and accessible behavior
 
