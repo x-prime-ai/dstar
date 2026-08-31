@@ -6,10 +6,13 @@ subject while demonstrating different document forms.
 
 Open [`index.html`](index.html) through a local web server to browse the
 library. Every sample row opens the canonical document. **New document** creates
-an editable draft stored in the current browser's local storage; returning to
-the library shows it under **Your documents**. Browser-local drafts can be
-downloaded as standalone HTML, but they are not added to the repository or
-converted into a persistent DSTAR package automatically.
+a private 15-minute handoff for an external agent. The handoff page exposes
+`get_document_creation_request` and `submit_created_document` through WebMCP;
+the agent reads the exact brief and returns a complete self-contained HTML
+document. Only the returned result is stored in the browser and shown under
+**Your documents**. Generated documents can be downloaded as standalone HTML,
+but they are not added to the repository or converted into a persistent DSTAR
+package automatically.
 
 | Sample                                             | Purpose                        | Notable elements                                                                    |
 | -------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |

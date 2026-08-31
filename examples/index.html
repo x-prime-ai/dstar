@@ -10,7 +10,7 @@
   <body>
     <header class="topbar">
       <a class="brand" href="../">DSTAR</a>
-      <span>Sample library</span>
+      <span>Document library</span>
       <span class="count" id="document-count">4 documents</span>
     </header>
 
@@ -18,12 +18,12 @@
       <header class="page-heading">
         <div class="heading-copy">
           <p class="eyebrow">DOCUMENTS</p>
-          <h1>Choose a sample</h1>
+          <h1>Documents</h1>
         </div>
         <div class="heading-actions">
           <p class="intro">
-            Open an existing document or start a new browser-local draft. Every
-            document uses the same reviewable HTML foundation.
+            Open an existing document or hand a new brief to an external agent.
+            Every result uses the same reviewable HTML foundation.
           </p>
           <button class="new-document" id="new-document" type="button">
             <span aria-hidden="true">＋</span> New document
@@ -31,10 +31,22 @@
         </div>
       </header>
 
+      <section class="agent-task" id="agent-task" aria-live="polite" hidden>
+        <div class="agent-task-copy">
+          <p id="agent-task-label">WAITING FOR AGENT</p>
+          <strong id="agent-task-title"></strong>
+          <span id="agent-task-detail"></span>
+        </div>
+        <div class="agent-task-actions" id="agent-task-actions">
+          <button id="copy-handoff" type="button">Copy handoff again</button>
+          <button id="cancel-handoff" type="button">Cancel</button>
+        </div>
+      </section>
+
       <section class="library-section" id="your-documents" hidden>
         <header class="section-heading">
           <h2>Your documents</h2>
-          <span>Stored in this browser</span>
+          <span>Created by agents · Stored in this browser</span>
         </header>
         <div
           class="document-list"
@@ -218,13 +230,14 @@
         </label>
 
         <p class="dialog-note" id="create-status" role="status">
-          The draft is saved in this browser and can be downloaded as HTML.
+          Ask agent copies a private 15-minute handoff. Paste it into an
+          external agent chat; the finished document returns to this list.
         </p>
         <div class="dialog-actions">
           <button class="secondary" id="cancel-create" type="button">
             Cancel
           </button>
-          <button class="primary" type="submit">Create document</button>
+          <button class="primary" type="submit">Ask agent</button>
         </div>
       </form>
     </dialog>

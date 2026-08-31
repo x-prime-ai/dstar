@@ -108,6 +108,76 @@ h1 {
   outline-offset: 2px;
   transform: translateY(-1px);
 }
+.agent-task {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: -16px 0 52px;
+  padding: 18px 20px;
+  border: 1px solid #b8cabe;
+  border-radius: 10px;
+  background: #eaf2ed;
+}
+.agent-task[hidden] {
+  display: none;
+}
+.agent-task-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+.agent-task-copy p {
+  margin: 0;
+  color: #688071;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.agent-task-copy strong {
+  overflow: hidden;
+  color: #294638;
+  font-family: Georgia, serif;
+  font-size: 17px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-task-copy span {
+  color: #697970;
+  font-size: 9px;
+  line-height: 1.5;
+}
+.agent-task-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 7px;
+}
+.agent-task-actions[hidden] {
+  display: none;
+}
+.agent-task-actions button {
+  padding: 8px 11px;
+  border: 1px solid #c6d2ca;
+  border-radius: 6px;
+  color: #496354;
+  background: #f9fbf9;
+  font:
+    700 8px/1 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.agent-task-actions button:last-child {
+  color: #7d8982;
+  background: transparent;
+}
+.agent-task-actions button:hover,
+.agent-task-actions button:focus-visible {
+  border-color: #8eaa99;
+  outline: 2px solid #8eaa994d;
+  outline-offset: 1px;
+}
 .library-section + .library-section {
   margin-top: 54px;
 }
@@ -564,6 +634,10 @@ h1 {
   color: #fff;
   background: #285743;
 }
+.dialog-actions .primary:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
 .dialog-actions button:focus-visible {
   outline: 3px solid #8db49f4d;
   outline-offset: 2px;
@@ -604,6 +678,17 @@ footer a {
   }
   .heading-actions {
     gap: 18px;
+  }
+  .agent-task {
+    align-items: stretch;
+    flex-direction: column;
+    margin-top: -8px;
+  }
+  .agent-task-actions {
+    width: 100%;
+  }
+  .agent-task-actions button:first-child {
+    flex: 1;
   }
   .document-row {
     grid-template-columns: 26px 1fr 48px;

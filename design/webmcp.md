@@ -135,6 +135,31 @@ unchanged, and accepting or rejecting still happens in the Viewer. Structural,
 whole-element and multi-element changes use `propose_revision` with a complete
 candidate instead.
 
+### Document-library creation handoff
+
+The sample Documents library uses the same external-agent boundary for initial
+creation. **New document** collects only the title, format and starting brief,
+then copies a private 15-minute URL for the user to paste into an external agent
+chat. The page does not open a local editor or generate the document itself.
+
+A valid creation URL registers two page tools:
+
+- `get_document_creation_request` returns the exact user brief; and
+- `submit_created_document` accepts one complete self-contained HTML result and
+  adds it to **Your documents**.
+
+The returned HTML is size-bounded, rejects scripts, interactive embeds, event
+handlers and remote resources, and receives a restrictive CSP. It renders in a
+sandboxed iframe. Repeating an identical submission returns the same document;
+a changed result after completion fails. Cancelling or expiration invalidates
+future tool calls.
+
+This library is a browser-local prototype, not the persistent Viewer service.
+Its request and result storage is shared only by tabs using the same browser
+origin. It does not create a package root, bypass the genesis review decision,
+or claim cross-device durability. A deployed document library should move the
+same scoped request/result contract to authenticated server storage.
+
 Selections are transient, tab-local state. A comment persists the original
 target/revision in the Engine. Refresh and agent activity preserve selections;
 explicitly switching previews clears them. Page navigation does not persist

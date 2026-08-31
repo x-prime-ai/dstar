@@ -28,6 +28,7 @@ export default tseslint.config(
           "navigator",
           "URL",
           "Blob",
+          "DOMParser",
           "FormData",
           "crypto",
           "fetch",
