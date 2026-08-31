@@ -7,6 +7,9 @@ There is one canonical artifact: `document.html` + CSS + local assets.
 A simple document, a designed page and slides are different layouts, not
 different source schemas. There is no parallel source JSON.
 
+Four complete [sample documents](examples/README.md) demonstrate a conventional
+product brief, a rich HTML explainer, a slide deck, and a Viewer UI design spec.
+
 ## Working prototype
 
 The new HTML-first path consists of:

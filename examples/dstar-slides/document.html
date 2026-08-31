@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSTAR — Review the document, not the machinery</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-dstar-mode="slides">
+    <section
+      class="slide title-slide"
+      data-dstar-slide="1"
+      data-dstar-id="deck-slide-title"
+    >
+      <div class="slide-mark" aria-hidden="true"></div>
+      <p class="slide-label" data-dstar-id="deck-title-label">
+        DSTAR / PRODUCT STORY
+      </p>
+      <h1 data-dstar-id="deck-title">
+        Review the document.<br />Not the machinery.
+      </h1>
+      <p class="slide-lead" data-dstar-id="deck-title-lead">
+        A portable HTML artifact where agents propose and people decide.
+      </p>
+      <footer data-dstar-id="deck-title-footer">
+        <span>2026</span><span>01 / 06</span>
+      </footer>
+    </section>
+
+    <section
+      class="slide problem-slide"
+      data-dstar-slide="2"
+      data-dstar-id="deck-slide-problem"
+    >
+      <p class="slide-label" data-dstar-id="deck-problem-label">THE GAP</p>
+      <h2 data-dstar-id="deck-problem-title">
+        Agent output is easy.<br />Trustworthy review is not.
+      </h2>
+      <div class="problem-grid">
+        <article data-dstar-id="deck-problem-chat">
+          <span class="problem-number">01</span>
+          <h3>Chat loses place</h3>
+          <p>
+            Feedback drifts away from the exact sentence and version it
+            describes.
+          </p>
+        </article>
+        <article data-dstar-id="deck-problem-files">
+          <span class="problem-number">02</span>
+          <h3>Files lose intent</h3>
+          <p>
+            A final export rarely explains what changed, who requested it, or
+            why.
+          </p>
+        </article>
+        <article data-dstar-id="deck-problem-tools">
+          <span class="problem-number">03</span>
+          <h3>Developer tools add friction</h3>
+          <p>
+            Most reviewers should not need branches, diffs, or repository
+            concepts.
+          </p>
+        </article>
+      </div>
+      <footer data-dstar-id="deck-problem-footer">
+        <span>DSTAR</span><span>02 / 06</span>
+      </footer>
+    </section>
+
+    <section
+      class="slide model-slide"
+      data-dstar-slide="3"
+      data-dstar-id="deck-slide-model"
+    >
+      <div class="model-copy">
+        <p class="slide-label" data-dstar-id="deck-model-label">THE MODEL</p>
+        <h2 data-dstar-id="deck-model-title">
+          One artifact.<br />Four clear states.
+        </h2>
+        <p data-dstar-id="deck-model-copy">
+          The Viewer translates an exact version graph into language a reader
+          already understands.
+        </p>
+      </div>
+      <div class="state-stack" data-dstar-id="deck-state-stack">
+        <div class="state current">
+          <span>01</span><strong>Current</strong><small>what readers see</small>
+        </div>
+        <div class="state suggested">
+          <span>02</span><strong>Suggested</strong
+          ><small>waiting for review</small>
+        </div>
+        <div class="state previous">
+          <span>03</span><strong>Previous</strong
+          ><small>accepted history</small>
+        </div>
+        <div class="state declined">
+          <span>04</span><strong>Declined</strong
+          ><small>preserved, not applied</small>
+        </div>
+      </div>
+      <footer data-dstar-id="deck-model-footer">
+        <span>DSTAR</span><span>03 / 06</span>
+      </footer>
+    </section>
+
+    <section
+      class="slide loop-slide"
+      data-dstar-slide="4"
+      data-dstar-id="deck-slide-loop"
+    >
+      <p class="slide-label" data-dstar-id="deck-loop-label">THE REVIEW LOOP</p>
+      <h2 data-dstar-id="deck-loop-title">Context travels with the work.</h2>
+      <div class="loop" data-dstar-id="deck-loop-diagram">
+        <div class="loop-step">
+          <span>1</span><strong>Select</strong><small>exact text</small>
+        </div>
+        <div class="loop-link" aria-hidden="true">→</div>
+        <div class="loop-step">
+          <span>2</span><strong>Comment</strong><small>human intent</small>
+        </div>
+        <div class="loop-link" aria-hidden="true">→</div>
+        <div class="loop-step">
+          <span>3</span><strong>Propose</strong><small>complete revision</small>
+        </div>
+        <div class="loop-link" aria-hidden="true">→</div>
+        <div class="loop-step">
+          <span>4</span><strong>Decide</strong
+          ><small>explicit owner action</small>
+        </div>
+      </div>
+      <aside data-dstar-id="deck-loop-note">
+        Comments and proposals can link to each other, but neither silently
+        changes the other’s lifecycle.
+      </aside>
+      <footer data-dstar-id="deck-loop-footer">
+        <span>DSTAR</span><span>04 / 06</span>
+      </footer>
+    </section>
+
+    <section
+      class="slide webmcp-slide"
+      data-dstar-slide="5"
+      data-dstar-id="deck-slide-webmcp"
+    >
+      <div class="webmcp-card">
+        <p class="slide-label" data-dstar-id="deck-webmcp-label">WHY WEBMCP</p>
+        <h2 data-dstar-id="deck-webmcp-title">
+          The page knows what the person means now.
+        </h2>
+        <p data-dstar-id="deck-webmcp-copy">
+          Ordinary MCP can read a document. The live Viewer can also bind the
+          exact selection, focused comment, visible version, and requested
+          action to the agent handoff.
+        </p>
+      </div>
+      <dl class="live-context" data-dstar-id="deck-webmcp-context">
+        <div>
+          <dt>VERSION</dt>
+          <dd>current</dd>
+        </div>
+        <div>
+          <dt>SELECTION</dt>
+          <dd>“human decisions”</dd>
+        </div>
+        <div>
+          <dt>FOCUS</dt>
+          <dd>comment thread</dd>
+        </div>
+        <div>
+          <dt>INTENT</dt>
+          <dd>suggest revision</dd>
+        </div>
+      </dl>
+      <footer data-dstar-id="deck-webmcp-footer">
+        <span>DSTAR</span><span>05 / 06</span>
+      </footer>
+    </section>
+
+    <section
+      class="slide closing-slide"
+      data-dstar-slide="6"
+      data-dstar-id="deck-slide-closing"
+    >
+      <p class="slide-label" data-dstar-id="deck-closing-label">THE PROMISE</p>
+      <h2 data-dstar-id="deck-closing-title">
+        Expressive enough for agents.<br />Clear enough for everyone.
+      </h2>
+      <div class="closing-line" data-dstar-id="deck-closing-line">
+        <span>Canonical HTML</span><span>Exact review</span
+        ><span>Portable history</span><span>Human control</span>
+      </div>
+      <p class="closing-word" data-dstar-id="deck-closing-word">DSTAR</p>
+      <footer data-dstar-id="deck-closing-footer">
+        <span>END</span><span>06 / 06</span>
+      </footer>
+    </section>
+  </body>
+</html>

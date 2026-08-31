@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSTAR Viewer — UI Design Specification</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="spec">
+      <header class="spec-header">
+        <div>
+          <p class="spec-kicker" data-dstar-id="ui-kicker">
+            UI DESIGN SPECIFICATION · V1
+          </p>
+          <h1 data-dstar-id="ui-title">DSTAR Viewer</h1>
+          <p class="spec-lead" data-dstar-id="ui-lead">
+            A calm review surface that keeps the document primary and makes
+            comments, versions, and human decisions easy to understand.
+          </p>
+        </div>
+        <dl class="spec-meta" data-dstar-id="ui-meta">
+          <div>
+            <dt>Surface</dt>
+            <dd>Desktop · Tablet · Mobile</dd>
+          </div>
+          <div>
+            <dt>Primary user</dt>
+            <dd>Document reviewer</dd>
+          </div>
+          <div>
+            <dt>Design intent</dt>
+            <dd>Reading before machinery</dd>
+          </div>
+        </dl>
+      </header>
+
+      <section class="principle-section">
+        <div class="section-title">
+          <p data-dstar-id="ui-principles-label">01 / EXPERIENCE PRINCIPLES</p>
+          <h2 data-dstar-id="ui-principles-title">
+            The interface should disappear behind the document.
+          </h2>
+        </div>
+        <div class="principle-grid">
+          <article data-dstar-id="ui-principle-canvas">
+            <span>01</span>
+            <h3>Document first</h3>
+            <p>
+              The reading canvas owns the visual hierarchy. Review controls stay
+              quiet until needed.
+            </p>
+          </article>
+          <article data-dstar-id="ui-principle-language">
+            <span>02</span>
+            <h3>Reader language</h3>
+            <p>
+              Use Comments, Versions, Current, and Suggested instead of storage
+              or graph terminology.
+            </p>
+          </article>
+          <article data-dstar-id="ui-principle-explicit">
+            <span>03</span>
+            <h3>Explicit outcomes</h3>
+            <p>
+              Draft, post, resolve, accept, and decline remain separate, visible
+              actions.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen-section">
+        <div class="section-title compact">
+          <p data-dstar-id="ui-screen-label">02 / PRIMARY SCREEN</p>
+          <h2 data-dstar-id="ui-screen-title">Read and review in one place</h2>
+        </div>
+        <figure class="viewer-mock">
+          <div class="mock-window" data-dstar-id="ui-viewer-mock">
+            <header class="mock-header">
+              <strong class="mock-logo">DSTAR</strong>
+              <span class="mock-document-title">Product brief</span>
+              <span class="mock-status">Current version</span>
+              <nav>
+                <button type="button" class="active">Comments <b>2</b></button
+                ><button type="button">Versions</button>
+              </nav>
+              <span class="mock-role">Owner</span>
+            </header>
+            <div class="mock-body">
+              <article class="mock-canvas">
+                <p class="mock-eyebrow">PRODUCT BRIEF · 2026</p>
+                <h3>The document is<br />the interface.</h3>
+                <p class="mock-copy">
+                  DSTAR gives agents room to create and people a precise place
+                  to <mark>review the exact result</mark> before it becomes
+                  current.
+                </p>
+                <div class="mock-rule"></div>
+                <div class="mock-columns">
+                  <div>
+                    <span>01</span><strong>Propose</strong>
+                    <p>A complete candidate</p>
+                  </div>
+                  <div>
+                    <span>02</span><strong>Review</strong>
+                    <p>Comments in context</p>
+                  </div>
+                  <div>
+                    <span>03</span><strong>Decide</strong>
+                    <p>Explicit acceptance</p>
+                  </div>
+                </div>
+              </article>
+              <aside class="mock-comments">
+                <div class="mock-filter">
+                  <button type="button" class="active">Open 2</button
+                  ><button type="button">Resolved 1</button>
+                </div>
+                <p class="mock-summary">2 open threads in this version</p>
+                <details open>
+                  <summary>
+                    <span class="avatar"></span><b>Jamie</b
+                    ><small>Aug 30, 10:42 AM</small><em>Open</em>
+                  </summary>
+                  <div class="mock-thread">
+                    <p>Can we make the ownership boundary clearer here?</p>
+                    <div class="mock-reply">
+                      <span class="avatar"></span>
+                      <p>
+                        <b>Agent</b><small>Aug 30, 10:44 AM</small><br />I can
+                        draft a tighter explanation.
+                      </p>
+                    </div>
+                    <div class="mock-actions">
+                      <button type="button">Reply</button
+                      ><button type="button">Ask agent</button
+                      ><button type="button">Resolve</button>
+                    </div>
+                  </div>
+                </details>
+                <details>
+                  <summary>
+                    <span class="avatar"></span><b>Sam</b
+                    ><small>Aug 30, 9:18 AM</small><em>Open</em>
+                  </summary>
+                </details>
+              </aside>
+            </div>
+          </div>
+          <figcaption data-dstar-id="ui-viewer-caption">
+            The top bar contains document identity and two activity tabs. The
+            canvas remains stable while Comments or Versions occupy one adjacent
+            rail.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="anatomy-section">
+        <div class="section-title compact">
+          <p data-dstar-id="ui-anatomy-label">03 / COMPONENT ANATOMY</p>
+          <h2 data-dstar-id="ui-anatomy-title">
+            Comment threads behave like conversations
+          </h2>
+        </div>
+        <div class="anatomy-grid">
+          <article class="anatomy-card" data-dstar-id="ui-thread-collapsed">
+            <p class="component-label">COLLAPSED</p>
+            <div class="thread-sample collapsed">
+              <span class="avatar"></span>
+              <div><strong>Jamie</strong><small>Aug 30, 10:42 AM</small></div>
+              <em>Open</em><span class="chevron">⌄</span>
+            </div>
+            <p class="annotation">
+              Show identity, time, and thread state only. The document already
+              shows the anchored text.
+            </p>
+          </article>
+          <article class="anatomy-card" data-dstar-id="ui-thread-expanded">
+            <p class="component-label">EXPANDED</p>
+            <div class="thread-sample expanded">
+              <div class="thread-head">
+                <span class="avatar"></span><strong>Jamie</strong
+                ><small>Aug 30, 10:42 AM</small><em>Open</em>
+              </div>
+              <p>
+                Could the difference between a comment and proposal be clearer?
+              </p>
+              <div class="linear-reply">
+                <span class="avatar"></span>
+                <div>
+                  <strong>Agent</strong><small>Aug 30, 10:44 AM</small>
+                  <p>I can draft a revision linked to this thread.</p>
+                </div>
+              </div>
+            </div>
+            <p class="annotation">
+              Root and replies use the same identity style and one linear
+              reading order.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="states-section">
+        <div class="section-title compact">
+          <p data-dstar-id="ui-states-label">04 / DOCUMENT ANNOTATIONS</p>
+          <h2 data-dstar-id="ui-states-title">
+            Color distinguishes focus without obscuring content
+          </h2>
+        </div>
+        <div class="highlight-spec" data-dstar-id="ui-highlight-spec">
+          <article>
+            <span class="text-sample quiet">Unfocused comment</span
+            ><strong>Warm yellow</strong>
+            <p>Persistent location awareness</p>
+          </article>
+          <article>
+            <span class="text-sample focused">Focused comment</span
+            ><strong>Soft blue</strong>
+            <p>Current thread and keyboard focus</p>
+          </article>
+          <article>
+            <span class="comment-control"><i></i></span
+            ><strong>Hover control</strong>
+            <p>One fixed target per thread</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="tokens-section">
+        <div class="section-title compact">
+          <p data-dstar-id="ui-tokens-label">05 / VISUAL SYSTEM</p>
+          <h2 data-dstar-id="ui-tokens-title">
+            Quiet neutrals, purposeful color
+          </h2>
+        </div>
+        <div class="token-grid" data-dstar-id="ui-token-grid">
+          <div>
+            <span class="swatch ink"></span><strong>Ink</strong
+            ><small>#26352E</small>
+          </div>
+          <div>
+            <span class="swatch canvas"></span><strong>Canvas</strong
+            ><small>#FBFBF8</small>
+          </div>
+          <div>
+            <span class="swatch brand"></span><strong>Brand</strong
+            ><small>#285743</small>
+          </div>
+          <div>
+            <span class="swatch comment"></span><strong>Comment</strong
+            ><small>#E6C85B</small>
+          </div>
+          <div>
+            <span class="swatch focus"></span><strong>Focus</strong
+            ><small>#83AEE8</small>
+          </div>
+          <div>
+            <span class="swatch line"></span><strong>Line</strong
+            ><small>#DDE3DE</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="responsive-section">
+        <div class="section-title compact">
+          <p data-dstar-id="ui-responsive-label">06 / RESPONSIVE BEHAVIOR</p>
+          <h2 data-dstar-id="ui-responsive-title">
+            The document keeps its place
+          </h2>
+        </div>
+        <div class="device-grid">
+          <article data-dstar-id="ui-desktop">
+            <div class="device desktop"><span></span><i></i></div>
+            <h3>Desktop</h3>
+            <p>Activity rail sits beside the document and can collapse.</p>
+          </article>
+          <article data-dstar-id="ui-tablet">
+            <div class="device tablet"><span></span><i></i></div>
+            <h3>Tablet</h3>
+            <p>
+              Activity rail overlays the right edge without changing the canvas.
+            </p>
+          </article>
+          <article data-dstar-id="ui-mobile">
+            <div class="device mobile"><span></span><i></i></div>
+            <h3>Mobile</h3>
+            <p>
+              Comments use the available width and return directly to reading.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <footer class="spec-footer" data-dstar-id="ui-footer">
+        <strong>DSTAR Viewer</strong><span>UI design specification</span
+        ><span>Document first · Reader language · Explicit outcomes</span>
+      </footer>
+    </main>
+  </body>
+</html>

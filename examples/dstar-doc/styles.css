@@ -1,0 +1,246 @@
+:root {
+  color: #202724;
+  background: #ecefeb;
+  font-family: Georgia, "Times New Roman", serif;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 36px 18px;
+}
+.document {
+  width: min(850px, 100%);
+  margin: auto;
+  padding: 68px 78px 48px;
+  background: #ffffff;
+  box-shadow: 0 18px 60px #23312a1a;
+}
+.document-header {
+  padding-bottom: 30px;
+  border-bottom: 2px solid #263f34;
+}
+.kicker {
+  margin: 0 0 22px;
+  color: #607167;
+  font:
+    700 11px/1.4 system-ui,
+    sans-serif;
+  letter-spacing: 0.18em;
+}
+h1 {
+  margin: 0;
+  color: #19382b;
+  font-size: clamp(50px, 8vw, 76px);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+}
+.subtitle {
+  max-width: 590px;
+  margin: 20px 0 30px;
+  color: #45554d;
+  font-size: 21px;
+  line-height: 1.45;
+}
+.metadata {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
+.metadata div {
+  padding-top: 10px;
+  border-top: 1px solid #d9dfdb;
+}
+.metadata dt {
+  color: #7a867f;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.metadata dd {
+  margin: 5px 0 0;
+  color: #34453d;
+  font-size: 12px;
+}
+section {
+  margin: 42px 0;
+}
+.summary {
+  padding: 24px 26px;
+  border-left: 4px solid #5d8f72;
+  background: #f2f6f2;
+}
+h2 {
+  margin: 0 0 15px;
+  color: #243c31;
+  font-size: 23px;
+  font-weight: 500;
+}
+p,
+li,
+td,
+th,
+figcaption {
+  font-family: system-ui, sans-serif;
+}
+p {
+  margin: 0 0 14px;
+  color: #46544d;
+  font-size: 14px;
+  line-height: 1.8;
+}
+blockquote {
+  margin: 24px 0 0;
+  padding: 16px 22px;
+  border-top: 1px solid #8ca397;
+  border-bottom: 1px solid #8ca397;
+  color: #294638;
+  font-size: 20px;
+  font-style: italic;
+  line-height: 1.55;
+}
+.flow {
+  margin: 22px 0 0;
+}
+.flow-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.flow-step {
+  display: flex;
+  min-width: 112px;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px 12px;
+  border: 1px solid #ccd7d0;
+  border-radius: 5px;
+  background: #f8faf8;
+  text-align: center;
+  font-family: system-ui, sans-serif;
+}
+.flow-step strong {
+  color: #294638;
+  font-size: 13px;
+}
+.flow-step span {
+  color: #7b887f;
+  font-size: 10px;
+}
+.flow-arrow {
+  color: #7b9a88;
+  font-family: system-ui, sans-serif;
+}
+figcaption {
+  margin-top: 12px;
+  color: #78847d;
+  font-size: 11px;
+  line-height: 1.6;
+}
+table {
+  width: 100%;
+  margin-top: 20px;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.55;
+}
+caption {
+  padding-bottom: 10px;
+  color: #738078;
+  text-align: left;
+  font:
+    11px/1.5 system-ui,
+    sans-serif;
+}
+th,
+td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #dce2de;
+  text-align: left;
+  vertical-align: top;
+}
+thead th {
+  border-top: 1px solid #89998f;
+  border-bottom-color: #89998f;
+  color: #53645b;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+tbody th {
+  color: #284337;
+  white-space: nowrap;
+}
+.principles {
+  margin: 0;
+  padding-left: 24px;
+}
+.principles li {
+  padding: 8px 0 8px 6px;
+  color: #4b5851;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.principles strong {
+  color: #263f34;
+}
+.note {
+  margin-top: 22px;
+  padding: 16px 18px;
+  border: 1px solid #d9cfab;
+  border-radius: 4px;
+  background: #fbf8ed;
+  color: #5d563d;
+  font:
+    12px/1.7 system-ui,
+    sans-serif;
+}
+footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #bfc9c3;
+  color: #7e8982;
+  font:
+    9px/1.5 system-ui,
+    sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+@media (max-width: 700px) {
+  body {
+    padding: 0;
+  }
+  .document {
+    padding: 38px 24px;
+    box-shadow: none;
+  }
+  .metadata {
+    grid-template-columns: 1fr;
+  }
+  .flow-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .flow-arrow {
+    transform: rotate(90deg);
+    text-align: center;
+  }
+  table {
+    font-size: 11px;
+  }
+  th,
+  td {
+    padding: 9px 6px;
+  }
+  footer {
+    flex-direction: column;
+  }
+}

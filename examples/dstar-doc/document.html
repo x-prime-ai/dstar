@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSTAR Product Brief</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <article class="document">
+      <header class="document-header">
+        <p class="kicker" data-dstar-id="brief-kicker">PRODUCT BRIEF · 2026</p>
+        <h1 data-dstar-id="brief-title">DSTAR</h1>
+        <p class="subtitle" data-dstar-id="brief-subtitle">
+          A reviewable document format for people and agents
+        </p>
+        <dl class="metadata" data-dstar-id="brief-metadata">
+          <div>
+            <dt>Status</dt>
+            <dd>Working prototype</dd>
+          </div>
+          <div>
+            <dt>Audience</dt>
+            <dd>Product and engineering</dd>
+          </div>
+          <div>
+            <dt>Format</dt>
+            <dd>HTML, CSS, and local assets</dd>
+          </div>
+        </dl>
+      </header>
+
+      <section class="summary" data-dstar-id="brief-summary">
+        <h2>Executive summary</h2>
+        <p>
+          DSTAR turns a designed document into a durable review surface. A
+          person or agent can propose a complete revision, reviewers can attach
+          comments to exact text, and an owner explicitly decides which version
+          becomes current.
+        </p>
+        <p>
+          The canonical artifact stays simple: one HTML document, optional CSS,
+          and package-local assets. The Engine preserves history and validates
+          every candidate; the Viewer makes that model understandable without
+          exposing storage internals.
+        </p>
+      </section>
+
+      <section data-dstar-id="brief-problem">
+        <h2>1. The problem</h2>
+        <p>
+          Documents created with agents often lose the connection between the
+          rendered result, the feedback that shaped it, and the exact version a
+          person approved. Chat transcripts capture intent but are poor review
+          records. Source repositories capture bytes but ask every reviewer to
+          understand developer workflows.
+        </p>
+        <blockquote>
+          DSTAR keeps the document as the center of collaboration: agents
+          propose, people comment, and owners decide.
+        </blockquote>
+      </section>
+
+      <section data-dstar-id="brief-model">
+        <h2>2. Core model</h2>
+        <figure class="flow">
+          <div class="flow-row" data-dstar-id="brief-flow-row">
+            <div class="flow-step">
+              <strong>Current</strong><span>Read</span>
+            </div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-step">
+              <strong>Comment</strong><span>Discuss</span>
+            </div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-step">
+              <strong>Proposal</strong><span>Compare</span>
+            </div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-step">
+              <strong>Decision</strong><span>Accept or decline</span>
+            </div>
+          </div>
+          <figcaption data-dstar-id="brief-flow-caption">
+            The review loop keeps conversation and document versions related,
+            while preserving separate lifecycles for each.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section data-dstar-id="brief-responsibilities">
+        <h2>3. System responsibilities</h2>
+        <table>
+          <caption>
+            DSTAR components and their boundaries
+          </caption>
+          <thead>
+            <tr data-dstar-id="brief-table-head">
+              <th scope="col">Component</th>
+              <th scope="col">Responsibility</th>
+              <th scope="col">Trust boundary</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-dstar-id="brief-table-engine">
+              <th scope="row">Engine</th>
+              <td>Validate candidates, persist history, resolve anchors</td>
+              <td>No model and no browser UI</td>
+            </tr>
+            <tr data-dstar-id="brief-table-viewer">
+              <th scope="row">Viewer</th>
+              <td>Read, comment, compare, and make explicit decisions</td>
+              <td>Sandboxed canonical document</td>
+            </tr>
+            <tr data-dstar-id="brief-table-mcp">
+              <th scope="row">MCP</th>
+              <td>Expose scoped document operations to an agent</td>
+              <td>Exact principal and document scope</td>
+            </tr>
+            <tr data-dstar-id="brief-table-webmcp">
+              <th scope="row">WebMCP</th>
+              <td>Carry live page selection and review context</td>
+              <td>Active Viewer session only</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-dstar-id="brief-principles">
+        <h2>4. Product principles</h2>
+        <ol class="principles">
+          <li data-dstar-id="brief-principle-document">
+            <strong>The document is canonical.</strong> Review the same HTML and
+            CSS that will be reopened later.
+          </li>
+          <li data-dstar-id="brief-principle-human">
+            <strong>Human intent stays explicit.</strong> Drafting, posting,
+            resolving, and accepting are separate actions.
+          </li>
+          <li data-dstar-id="brief-principle-agent">
+            <strong>Agents receive exact context.</strong> A selected range or
+            focused comment is bound to one immutable revision.
+          </li>
+          <li data-dstar-id="brief-principle-portable">
+            <strong>History remains portable.</strong> The package reopens
+            without depending on a Git checkout or a hosted editor.
+          </li>
+        </ol>
+      </section>
+
+      <section data-dstar-id="brief-scenario">
+        <h2>5. Example review</h2>
+        <p>
+          A reviewer selects a sentence and leaves a question. An agent reads
+          that focused thread and returns either an editable reply draft or a
+          linked revision proposal. The reviewer can keep discussing while the
+          owner independently accepts or declines the proposed document.
+        </p>
+        <div class="note">
+          <strong>Key distinction:</strong> accepting a proposal does not
+          silently resolve its motivating comment. Conversation state and
+          version state remain legible.
+        </div>
+      </section>
+
+      <footer data-dstar-id="brief-footer">
+        <span>DSTAR Product Brief</span>
+        <span>Canonical HTML · Reviewable history · Human decisions</span>
+      </footer>
+    </article>
+  </body>
+</html>
