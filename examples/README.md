@@ -4,9 +4,17 @@ Each directory is a complete, validated DSTAR candidate with canonical
 `document.html` and `styles.css`. The four samples use DSTAR itself as their
 subject while demonstrating different document forms.
 
-Open [`index.html`](index.html) through a local web server to browse the
-library. Every sample row opens the canonical document. **New document** creates
-a private 15-minute handoff for an external agent. The handoff page exposes
+Start the Documents service and open the printed URL:
+
+```sh
+pnpm examples:start
+```
+
+The service opens every sample through its own DSTAR Viewer, so text selection,
+comments, suggestions and versions work from the library rows. Opening the raw
+`document.html` files is preview-only and does not provide review controls.
+
+**New document** creates a private 15-minute handoff for an external agent. The handoff page exposes
 `get_document_creation_request` and `submit_created_document` through WebMCP;
 the agent reads the exact brief and returns a complete self-contained HTML
 document. Only the returned result is stored in the browser and shown under

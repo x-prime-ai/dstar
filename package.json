@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dstar": "node scripts/dstar.mjs",
+    "examples:start": "node apps/example-library/src/start.mjs",
     "workspace:seed": "node scripts/create-workspace-seed.mjs",
     "workspaces:start": "node apps/workspaces/src/start.mjs",
     "build": "pnpm --recursive --if-present build",

@@ -171,6 +171,44 @@ function render() {
   renderTask();
 }
 
+async function configureSampleLinks() {
+  try {
+    const response = await fetch("/api/documents", {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) throw new Error("Viewer service unavailable");
+    const available = await response.json();
+    if (!Array.isArray(available)) throw new Error("Invalid document list");
+    for (const entry of available) {
+      if (
+        !entry ||
+        typeof entry.id !== "string" ||
+        typeof entry.viewerUrl !== "string"
+      )
+        continue;
+      const link = [...document.querySelectorAll("[data-sample-id]")].find(
+        (candidate) => candidate.dataset.sampleId === entry.id,
+      );
+      if (!link) continue;
+      link.href = entry.viewerUrl;
+      link.title = "Open in DSTAR Viewer";
+      const open = link.querySelector(".open");
+      if (open) {
+        open.replaceChildren("Review ", element("b", "", "↗"));
+      }
+    }
+  } catch {
+    for (const link of document.querySelectorAll("[data-sample-id]")) {
+      link.title = "Preview only — start the Documents service to review";
+      const open = link.querySelector(".open");
+      if (open) {
+        open.replaceChildren("Preview ", element("b", "", "↗"));
+      }
+    }
+  }
+}
+
 function openDialog() {
   form.reset();
   createStatus.textContent =
@@ -514,6 +552,7 @@ document.querySelector("#cancel-handoff").addEventListener("click", () => {
 addEventListener("storage", render);
 addEventListener("pageshow", render);
 render();
+configureSampleLinks();
 registerCreationTools().then((status) => {
   if (!handoffId) return;
   taskDetail.textContent =
