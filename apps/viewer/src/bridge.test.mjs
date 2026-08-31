@@ -280,8 +280,22 @@ it("reveals a comment control over a highlight and opens its thread", async () =
     clientY: 65,
     composedPath: () => [],
   });
-  expect(commentJump.style.display).toBe("block");
+  expect(commentJump.style.display).toBe("flex");
   expect(commentJump.attributes["aria-label"]).toBe("Open comment thread");
+  expect(commentJump.innerHTML).toContain("<svg");
+  page.documentListeners.mousemove({
+    clientX: 400,
+    clientY: 400,
+    composedPath: () => [],
+  });
+  expect(commentJump.style.display).toBe("flex");
+  page.flushTimers();
+  expect(commentJump.style.display).toBe("none");
+  page.documentListeners.mousemove({
+    clientX: 20,
+    clientY: 65,
+    composedPath: () => [],
+  });
   commentJump.onclick({ stopPropagation() {} });
   expect(page.messages.at(-1)).toEqual({
     origin: "http://host",

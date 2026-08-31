@@ -262,8 +262,10 @@
   let annotationLayer, highlightLayer, annotationButton;
   let annotationRecords = [],
     annotationHitboxes = [],
+    annotationAnchors = new Map(),
     activeAnnotation = null,
-    annotationTimer;
+    annotationTimer,
+    annotationHideTimer;
   const ensureAnnotations = () => {
     if (annotationLayer) return;
     annotationLayer = document.createElement("div");
@@ -276,10 +278,9 @@
       :host { color-scheme: light; }
       .highlight { position:absolute;box-sizing:border-box;border-radius:2px;background:#e6c85b38;border-bottom:1px solid #c3a03588; }
       .highlight.active { background:#83aee85c;border-bottom:2px solid #315f9b;box-shadow:0 0 0 1px #5f8ecb3d; }
-      .comment-jump { position:absolute;display:none;width:28px;height:28px;padding:0;border:1px solid #d2ddd4;border-radius:50%;background:#fff;color:#285743;box-shadow:0 3px 10px #203c3038;pointer-events:auto;cursor:pointer; }
+      .comment-jump { position:absolute;display:none;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:1px solid #c3d1c7;border-radius:50%;background:#fff;color:#285743;box-shadow:0 3px 12px #203c3042;pointer-events:auto;cursor:pointer; }
       .comment-jump:hover,.comment-jump:focus-visible { background:#285743;color:#fff;outline:none; }
-      .comment-jump::before { content:"";position:absolute;left:7px;top:6px;width:12px;height:10px;border:1.7px solid currentColor;border-radius:4px; }
-      .comment-jump::after { content:"";position:absolute;left:9px;top:15px;width:5px;height:5px;border-left:1.7px solid currentColor;transform:skewY(-35deg);background:inherit; }
+      .comment-jump svg { width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round; }
     `;
     highlightLayer = document.createElement("div");
     highlightLayer.setAttribute("aria-hidden", "true");
@@ -287,6 +288,10 @@
     annotationButton.className = "comment-jump";
     annotationButton.type = "button";
     annotationButton.setAttribute("aria-label", "Open comment thread");
+    annotationButton.innerHTML =
+      '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>';
+    annotationButton.onmouseenter = () => clearTimeout(annotationHideTimer);
+    annotationButton.onmouseleave = () => scheduleAnnotationHide();
     annotationButton.onclick = (event) => {
       event.stopPropagation?.();
       if (annotationButton.annotationGroup)
@@ -330,6 +335,8 @@
     if (!annotationLayer) return;
     highlightLayer.replaceChildren();
     annotationHitboxes = [];
+    annotationAnchors = new Map();
+    clearTimeout(annotationHideTimer);
     annotationButton.style.display = "none";
     annotationButton.annotationGroup = null;
     const width = document.documentElement.clientWidth,
@@ -367,8 +374,31 @@
           right: highlight.right,
           bottom: highlight.bottom,
         });
+        const anchor = annotationAnchors.get(group.id);
+        annotationAnchors.set(
+          group.id,
+          anchor
+            ? {
+                right: Math.max(anchor.right, highlight.right),
+                top: Math.min(anchor.top, highlight.top),
+                bottom: Math.max(anchor.bottom, highlight.bottom),
+              }
+            : {
+                right: highlight.right,
+                top: highlight.top,
+                bottom: highlight.bottom,
+              },
+        );
       }
     }
+  };
+  const hideAnnotationButton = () => {
+    annotationButton.style.display = "none";
+    annotationButton.annotationGroup = null;
+  };
+  const scheduleAnnotationHide = () => {
+    clearTimeout(annotationHideTimer);
+    annotationHideTimer = setTimeout(hideAnnotationButton, 300);
   };
   document.addEventListener("mousemove", (event) => {
     if (!annotationButton || event.composedPath?.().includes(annotationButton))
@@ -381,17 +411,22 @@
         event.clientY <= box.bottom,
     );
     if (!hit) {
-      annotationButton.style.display = "none";
-      annotationButton.annotationGroup = null;
+      scheduleAnnotationHide();
       return;
     }
+    clearTimeout(annotationHideTimer);
+    const anchor = annotationAnchors.get(hit.group);
+    if (!anchor) return;
     annotationButton.annotationGroup = hit.group;
     annotationButton.style.left = `${Math.max(
       2,
-      Math.min(document.documentElement.clientWidth - 30, hit.right - 14),
+      Math.min(document.documentElement.clientWidth - 34, anchor.right - 24),
     )}px`;
-    annotationButton.style.top = `${Math.max(2, hit.top - 14)}px`;
-    annotationButton.style.display = "block";
+    annotationButton.style.top = `${Math.max(
+      2,
+      (anchor.top + anchor.bottom) / 2 - 16,
+    )}px`;
+    annotationButton.style.display = "flex";
   });
   const scheduleAnnotations = () => {
     clearTimeout(annotationTimer);

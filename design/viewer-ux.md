@@ -74,9 +74,10 @@ Engine terminology do not change.
   background. Replies use the same flat content format as the root comment,
   separated only by a quiet divider rather than nested cards.
 - Clicking elsewhere in the document clears the focused thread. Hovering a
-  comment highlight reveals a small comment control that opens the matching
-  thread. The focused highlight remains stronger than the others without
-  reducing text contrast.
+  comment highlight reveals one fixed comment control for that thread; a short
+  dismissal delay leaves enough time to move onto it. The control opens the
+  matching thread. The focused highlight remains stronger than the others
+  without reducing text contrast.
 - The Comments panel defaults to Open and offers an Open / Resolved filter with
   counts. Each filter contains only threads that belong to the viewed version
   or a located descendant; unresolved historical, declined or orphaned anchors
