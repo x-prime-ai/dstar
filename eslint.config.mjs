@@ -12,7 +12,11 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["apps/viewer/public/*.js", "apps/workspaces/public/*.js"],
+    files: [
+      "apps/viewer/public/*.js",
+      "apps/workspaces/public/*.js",
+      "examples/*.js",
+    ],
     languageOptions: {
       globals: Object.fromEntries(
         [
@@ -20,11 +24,16 @@ export default tseslint.config(
           "location",
           "history",
           "sessionStorage",
+          "localStorage",
           "navigator",
           "URL",
+          "Blob",
+          "FormData",
+          "crypto",
           "fetch",
           "setTimeout",
           "clearTimeout",
+          "requestAnimationFrame",
           "prompt",
           "confirm",
           "addEventListener",

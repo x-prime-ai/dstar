@@ -5,119 +5,229 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DSTAR Documents</title>
     <link rel="stylesheet" href="index.css" />
+    <script type="module" src="index.js"></script>
   </head>
   <body>
     <header class="topbar">
       <a class="brand" href="../">DSTAR</a>
       <span>Sample library</span>
-      <span class="count">4 documents</span>
+      <span class="count" id="document-count">4 documents</span>
     </header>
 
     <main>
       <header class="page-heading">
-        <div>
+        <div class="heading-copy">
           <p class="eyebrow">DOCUMENTS</p>
           <h1>Choose a sample</h1>
         </div>
-        <p class="intro">
-          Four ways to use the same reviewable HTML format. Open any document
-          directly, or import its directory into the DSTAR Viewer.
-        </p>
+        <div class="heading-actions">
+          <p class="intro">
+            Open an existing document or start a new browser-local draft. Every
+            document uses the same reviewable HTML foundation.
+          </p>
+          <button class="new-document" id="new-document" type="button">
+            <span aria-hidden="true">＋</span> New document
+          </button>
+        </div>
       </header>
 
-      <section class="document-list" aria-label="Sample documents">
-        <a class="document-row doc-standard" href="dstar-doc/document.html">
-          <span class="number">01</span>
-          <span class="preview" aria-hidden="true">
-            <i class="preview-label"></i>
-            <i class="preview-title"></i>
-            <i class="preview-line wide"></i>
-            <i class="preview-line"></i>
-            <i class="preview-table"></i>
-          </span>
-          <span class="document-copy">
-            <span class="document-type">DOCUMENT · PRODUCT BRIEF</span>
-            <strong>DSTAR Product Brief</strong>
-            <span class="description">
-              A conventional reading document with long-form text, a process
-              diagram, table, principles, and callouts.
-            </span>
-          </span>
-          <span class="features"
-            ><span>Text</span><span>Diagram</span><span>Table</span></span
-          >
-          <span class="open">Open <b>↗</b></span>
-        </a>
+      <section class="library-section" id="your-documents" hidden>
+        <header class="section-heading">
+          <h2>Your documents</h2>
+          <span>Stored in this browser</span>
+        </header>
+        <div
+          class="document-list"
+          id="your-document-list"
+          aria-label="Your documents"
+        ></div>
+      </section>
 
-        <a class="document-row doc-rich" href="dstar-rich/document.html">
-          <span class="number">02</span>
-          <span class="preview" aria-hidden="true">
-            <i class="orbit one"></i>
-            <i class="orbit two"></i>
-            <i class="orbit core"></i>
-            <i class="rich-title">HTML</i>
-          </span>
-          <span class="document-copy">
-            <span class="document-type">RICH HTML · EXPLAINER</span>
-            <strong>The document is the interface</strong>
-            <span class="description">
-              An editorial experience with a system map, bento layout, journey,
-              live-context panel, and expandable details.
+      <section class="library-section">
+        <header class="section-heading">
+          <h2>Samples</h2>
+          <span>Four starting points</span>
+        </header>
+        <div class="document-list" aria-label="Sample documents">
+          <a class="document-row doc-standard" href="dstar-doc/document.html">
+            <span class="number">01</span>
+            <span class="preview" aria-hidden="true">
+              <i class="preview-label"></i>
+              <i class="preview-title"></i>
+              <i class="preview-line wide"></i>
+              <i class="preview-line"></i>
+              <i class="preview-table"></i>
             </span>
-          </span>
-          <span class="features"
-            ><span>Editorial</span><span>Bento</span><span>Details</span></span
-          >
-          <span class="open">Open <b>↗</b></span>
-        </a>
+            <span class="document-copy">
+              <span class="document-type">DOCUMENT · PRODUCT BRIEF</span>
+              <strong>DSTAR Product Brief</strong>
+              <span class="description">
+                A conventional reading document with long-form text, a process
+                diagram, table, principles, and callouts.
+              </span>
+            </span>
+            <span class="features"
+              ><span>Text</span><span>Diagram</span><span>Table</span></span
+            >
+            <span class="open">Open <b>↗</b></span>
+          </a>
 
-        <a class="document-row doc-slides" href="dstar-slides/document.html">
-          <span class="number">03</span>
-          <span class="preview" aria-hidden="true">
-            <i class="deck-label"></i>
-            <i class="deck-title"></i>
-            <i class="deck-title second"></i>
-            <i class="deck-ring"></i>
-            <i class="deck-page">01 / 06</i>
-          </span>
-          <span class="document-copy">
-            <span class="document-type">SLIDES · PRODUCT STORY</span>
-            <strong>Review the document</strong>
-            <span class="description">
-              A six-slide narrative covering the problem, model, review loop,
-              WebMCP context, and product promise.
+          <a class="document-row doc-rich" href="dstar-rich/document.html">
+            <span class="number">02</span>
+            <span class="preview" aria-hidden="true">
+              <i class="orbit one"></i>
+              <i class="orbit two"></i>
+              <i class="orbit core"></i>
+              <i class="rich-title">HTML</i>
             </span>
-          </span>
-          <span class="features"
-            ><span>6 slides</span><span>Story</span><span>16:9</span></span
-          >
-          <span class="open">Open <b>↗</b></span>
-        </a>
+            <span class="document-copy">
+              <span class="document-type">RICH HTML · EXPLAINER</span>
+              <strong>The document is the interface</strong>
+              <span class="description">
+                An editorial experience with a system map, bento layout,
+                journey, live-context panel, and expandable details.
+              </span>
+            </span>
+            <span class="features"
+              ><span>Editorial</span><span>Bento</span
+              ><span>Details</span></span
+            >
+            <span class="open">Open <b>↗</b></span>
+          </a>
 
-        <a class="document-row doc-ui" href="dstar-ui-design/document.html">
-          <span class="number">04</span>
-          <span class="preview" aria-hidden="true">
-            <i class="ui-top"></i>
-            <i class="ui-canvas"></i>
-            <i class="ui-sidebar"></i>
-            <i class="ui-comment first"></i>
-            <i class="ui-comment second"></i>
-          </span>
-          <span class="document-copy">
-            <span class="document-type">UI DESIGN · SPECIFICATION</span>
-            <strong>DSTAR Viewer UI</strong>
-            <span class="description">
-              A visual design document with a Viewer mockup, component anatomy,
-              annotation states, color tokens, and responsive behavior.
+          <a class="document-row doc-slides" href="dstar-slides/document.html">
+            <span class="number">03</span>
+            <span class="preview" aria-hidden="true">
+              <i class="deck-label"></i>
+              <i class="deck-title"></i>
+              <i class="deck-title second"></i>
+              <i class="deck-ring"></i>
+              <i class="deck-page">01 / 06</i>
             </span>
-          </span>
-          <span class="features"
-            ><span>Mockup</span><span>Tokens</span><span>Responsive</span></span
-          >
-          <span class="open">Open <b>↗</b></span>
-        </a>
+            <span class="document-copy">
+              <span class="document-type">SLIDES · PRODUCT STORY</span>
+              <strong>Review the document</strong>
+              <span class="description">
+                A six-slide narrative covering the problem, model, review loop,
+                WebMCP context, and product promise.
+              </span>
+            </span>
+            <span class="features"
+              ><span>6 slides</span><span>Story</span><span>16:9</span></span
+            >
+            <span class="open">Open <b>↗</b></span>
+          </a>
+
+          <a class="document-row doc-ui" href="dstar-ui-design/document.html">
+            <span class="number">04</span>
+            <span class="preview" aria-hidden="true">
+              <i class="ui-top"></i>
+              <i class="ui-canvas"></i>
+              <i class="ui-sidebar"></i>
+              <i class="ui-comment first"></i>
+              <i class="ui-comment second"></i>
+            </span>
+            <span class="document-copy">
+              <span class="document-type">UI DESIGN · SPECIFICATION</span>
+              <strong>DSTAR Viewer UI</strong>
+              <span class="description">
+                A visual design document with a Viewer mockup, component
+                anatomy, annotation states, color tokens, and responsive
+                behavior.
+              </span>
+            </span>
+            <span class="features"
+              ><span>Mockup</span><span>Tokens</span
+              ><span>Responsive</span></span
+            >
+            <span class="open">Open <b>↗</b></span>
+          </a>
+        </div>
       </section>
     </main>
+
+    <dialog class="create-dialog" id="create-dialog">
+      <form id="create-form">
+        <header class="dialog-heading">
+          <div>
+            <p class="eyebrow">NEW DOCUMENT</p>
+            <h2>Create a document</h2>
+          </div>
+          <button
+            class="close-dialog"
+            id="close-dialog"
+            type="button"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </header>
+
+        <label class="field">
+          <span>Title</span>
+          <input
+            id="document-title"
+            name="title"
+            type="text"
+            maxlength="120"
+            placeholder="Untitled document"
+            required
+          />
+        </label>
+
+        <fieldset class="format-field">
+          <legend>Format</legend>
+          <label>
+            <input type="radio" name="format" value="document" checked />
+            <span
+              ><b>Document</b><small>Briefs, specs, and reports</small></span
+            >
+          </label>
+          <label>
+            <input type="radio" name="format" value="html" />
+            <span
+              ><b>Rich HTML</b
+              ><small>Editorial and interactive layouts</small></span
+            >
+          </label>
+          <label>
+            <input type="radio" name="format" value="slides" />
+            <span
+              ><b>Slides</b
+              ><small>Presentations and product stories</small></span
+            >
+          </label>
+          <label>
+            <input type="radio" name="format" value="ui-design" />
+            <span
+              ><b>UI design</b
+              ><small>Flows, screens, and design specs</small></span
+            >
+          </label>
+        </fieldset>
+
+        <label class="field">
+          <span>Starting note <small>Optional</small></span>
+          <textarea
+            id="document-brief"
+            name="brief"
+            maxlength="600"
+            rows="3"
+            placeholder="What is this document about?"
+          ></textarea>
+        </label>
+
+        <p class="dialog-note" id="create-status" role="status">
+          The draft is saved in this browser and can be downloaded as HTML.
+        </p>
+        <div class="dialog-actions">
+          <button class="secondary" id="cancel-create" type="button">
+            Cancel
+          </button>
+          <button class="primary" type="submit">Create document</button>
+        </div>
+      </form>
+    </dialog>
 
     <footer>
       <span>Canonical HTML + CSS</span>

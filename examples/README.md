@@ -4,6 +4,13 @@ Each directory is a complete, validated DSTAR candidate with canonical
 `document.html` and `styles.css`. The four samples use DSTAR itself as their
 subject while demonstrating different document forms.
 
+Open [`index.html`](index.html) through a local web server to browse the
+library. Every sample row opens the canonical document. **New document** creates
+an editable draft stored in the current browser's local storage; returning to
+the library shows it under **Your documents**. Browser-local drafts can be
+downloaded as standalone HTML, but they are not added to the repository or
+converted into a persistent DSTAR package automatically.
+
 | Sample                                             | Purpose                        | Notable elements                                                                    |
 | -------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
 | [`dstar-doc`](dstar-doc/document.html)             | Conventional product brief     | Long-form text, metadata, a process diagram, table, ordered principles, callouts    |

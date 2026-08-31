@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>New DSTAR document</title>
+    <link rel="stylesheet" href="created.css" />
+    <script type="module" src="created.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="back" href="./"><span aria-hidden="true">←</span> Documents</a>
+      <span class="format" id="format-label">Draft</span>
+      <div class="actions">
+        <span class="save-status" id="save-status" role="status">Saved</span>
+        <button id="download" type="button">Download HTML</button>
+      </div>
+    </header>
+
+    <main>
+      <aside class="details">
+        <p class="eyebrow">BROWSER-LOCAL DRAFT</p>
+        <dl>
+          <div>
+            <dt>Created</dt>
+            <dd id="created-at">—</dd>
+          </div>
+          <div>
+            <dt>Updated</dt>
+            <dd id="updated-at">—</dd>
+          </div>
+        </dl>
+        <p class="hint">
+          Click the title or body to edit. Changes are saved in this browser.
+        </p>
+      </aside>
+
+      <article class="canvas" id="document-canvas" data-format="document">
+        <div class="canvas-chrome" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="document-content">
+          <p class="document-kicker" id="document-kicker">NEW DOCUMENT</p>
+          <h1
+            id="document-title"
+            contenteditable="true"
+            spellcheck="true"
+            data-placeholder="Untitled document"
+          ></h1>
+          <div class="title-rule" aria-hidden="true"></div>
+          <p class="section-label">Overview</p>
+          <div
+            class="document-body"
+            id="document-body"
+            contenteditable="true"
+            spellcheck="true"
+            data-placeholder="Start writing here."
+          ></div>
+          <div class="starter-grid" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </article>
+    </main>
+
+    <div class="missing" id="missing" hidden>
+      <p>This document is not available in this browser.</p>
+      <a href="./">Return to Documents</a>
+    </div>
+  </body>
+</html>
