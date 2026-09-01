@@ -26,8 +26,8 @@ main {
 .hero {
   min-height: 0;
   padding: 24px max(5vw, 24px) 48px;
-  color: #fffaf0;
-  background: var(--ink);
+  color: var(--ink);
+  background: var(--paper);
 }
 .hero-nav {
   display: flex;
@@ -35,17 +35,17 @@ main {
   justify-content: space-between;
   gap: 20px;
   padding-bottom: 20px;
-  border-bottom: 1px solid #ffffff26;
+  border-bottom: 1px solid #17211d2b;
   font-size: 10px;
   letter-spacing: 0.14em;
 }
 .hero-nav strong {
-  color: var(--lime);
+  color: var(--green);
   font-size: 15px;
   letter-spacing: 0.17em;
 }
 .hero-nav span {
-  color: #b4beb8;
+  color: #6d7771;
 }
 .hero-grid {
   display: grid;
@@ -81,7 +81,7 @@ h1 {
 .hero-intro {
   max-width: 570px;
   margin: 26px 0;
-  color: #bbc5bf;
+  color: #5f6b65;
   font-size: 17px;
   line-height: 1.7;
 }
@@ -93,22 +93,22 @@ h1 {
 }
 .hero-pills span {
   padding: 8px 12px;
-  border: 1px solid #ffffff30;
+  border: 1px solid #17211d30;
   border-radius: 7px;
-  color: #edf2ee;
+  color: #4f5b55;
   font-size: 10px;
 }
 .hero-pills span:nth-child(1) {
-  border-color: #d8ef7470;
-  color: var(--lime);
+  border-color: #7c9145;
+  color: #536727;
 }
 .hero-pills span:nth-child(2) {
-  border-color: #9fc7ff70;
-  color: var(--sky);
+  border-color: #6b91c4;
+  color: #315f9b;
 }
 .hero-pills span:nth-child(3) {
-  border-color: #f49a7870;
-  color: var(--coral);
+  border-color: #c97b60;
+  color: #9b4d34;
 }
 .system-map {
   margin: 0;
@@ -214,7 +214,7 @@ h1 {
   grid-template-columns: 180px 1fr;
   gap: 7vw;
   padding: 56px 0;
-  border-bottom: 1px solid #17211d38;
+  border: 0;
 }
 .manifesto .section-index,
 .section-heading .section-index,
@@ -338,7 +338,7 @@ h2 {
   font-size: 11px !important;
 }
 .journey {
-  border-top: 1px solid #17211d38;
+  border: 0;
 }
 .journey-track {
   display: grid;
@@ -401,8 +401,7 @@ h2 {
   margin-top: 20px;
   margin-bottom: 20px;
   padding: 54px 0;
-  border-top: 1px solid #17211d38;
-  border-bottom: 1px solid #17211d38;
+  border: 0;
   border-radius: 0;
   color: var(--ink);
   background: transparent;

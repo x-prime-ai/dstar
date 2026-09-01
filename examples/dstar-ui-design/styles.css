@@ -45,9 +45,9 @@ section,
   overflow: hidden;
   padding-top: 36px;
   padding-bottom: 32px;
-  border-bottom: 4px solid var(--blue);
+  border: 0;
   color: var(--ink);
-  background: #e8edf5;
+  background: var(--paper);
 }
 .spec-header::before {
   position: absolute;
@@ -59,7 +59,7 @@ section,
   border-radius: 50%;
   content: "";
   box-shadow:
-    0 0 0 22px #e8edf5,
+    0 0 0 22px var(--paper),
     0 0 0 23px #315f9b55;
 }
 .spec-header > * {
@@ -120,7 +120,7 @@ h1 {
 section {
   padding-top: 46px;
   padding-bottom: 46px;
-  border-bottom: 1px solid #17211d20;
+  border: 0;
 }
 .section-title {
   display: grid;
