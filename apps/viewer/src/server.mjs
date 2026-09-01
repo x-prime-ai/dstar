@@ -171,7 +171,19 @@ export async function startViewer(root, port = 0, options = {}) {
       const url = trustedRequestUrl(req, origin);
       if (!url)
         return json(403, { error: "Invalid request authority or target" });
-      const path = url.pathname;
+      if (
+        config.basePath &&
+        url.pathname !== config.basePath &&
+        !url.pathname.startsWith(`${config.basePath}/`)
+      )
+        return json(404, { error: "Unknown Viewer mount" });
+      if (config.basePath && url.pathname === config.basePath) {
+        res.writeHead(308, { Location: `${config.basePath}/${url.search}` });
+        return res.end();
+      }
+      const path = config.basePath
+        ? url.pathname.slice(config.basePath.length)
+        : url.pathname;
       if (
         req.method === "GET" &&
         [
@@ -200,7 +212,16 @@ export async function startViewer(root, port = 0, options = {}) {
                 ? "text/javascript; charset=utf-8"
                 : "text/css; charset=utf-8",
         });
-        return res.end(publicFile(path === "/" ? "index.html" : path.slice(1)));
+        const content = publicFile(path === "/" ? "index.html" : path.slice(1));
+        return res.end(
+          path === "/"
+            ? Buffer.from(
+                content
+                  .toString()
+                  .replace("__DSTAR_BASE_PATH__", config.basePath),
+              )
+            : content,
+        );
       }
       const frame = /^\/frame\/([a-f0-9]{48})\/(.+)$/.exec(path);
       if (req.method === "GET" && frame) {
@@ -389,7 +410,7 @@ export async function startViewer(root, port = 0, options = {}) {
           capability = secret();
         capabilities.set(capability, s);
         return json(200, {
-          url: `/frame/${capability}/document.html`,
+          url: `${config.basePath}/frame/${capability}/document.html`,
           capability,
           revision: s.revision,
         });
@@ -573,13 +594,15 @@ export async function startViewer(root, port = 0, options = {}) {
     server.listen(config.port, config.host, resolve);
   });
   origin = viewerOrigin(config, server.address().port);
-  const ownerUrl = `${origin}/#${config.token}`,
+  const baseUrl = `${origin}${config.basePath}`,
+    ownerUrl = `${baseUrl}/#${config.token}`,
     reviewerUrl = config.reviewerToken
-      ? `${origin}/#${config.reviewerToken}`
+      ? `${baseUrl}/#${config.reviewerToken}`
       : undefined;
   return {
     server,
     origin,
+    baseUrl,
     url: ownerUrl,
     ownerUrl,
     ...(reviewerUrl ? { reviewerUrl } : {}),

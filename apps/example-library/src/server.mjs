@@ -85,7 +85,7 @@ function proxyResponseHeaders(headers) {
   return safe;
 }
 
-function proxyViewer(request, response, viewer) {
+function proxyViewer(request, response, viewer, path) {
   const target = viewer.server.address(),
     authority = new URL(viewer.origin).host,
     headers = proxyHeaders(request, authority);
@@ -100,7 +100,7 @@ function proxyViewer(request, response, viewer) {
     host: target.address,
     port: target.port,
     method: request.method,
-    path: request.url,
+    path,
     headers,
   });
   upstream.on("response", (incoming) => {
@@ -209,13 +209,6 @@ export async function startExampleLibrary(options = {}) {
   const documents = [];
   let origin, controlAuthority;
   const server = createServer((request, response) => {
-    const document = documents.find(
-      ({ viewer }) => new URL(viewer.origin).host === request.headers.host,
-    );
-    if (document) {
-      proxyViewer(request, response, document.viewer);
-      return;
-    }
     if (request.headers.host !== controlAuthority) {
       json(response, 403, { error: "Unknown local site" });
       return;
@@ -225,6 +218,25 @@ export async function startExampleLibrary(options = {}) {
       url = new URL(request.url ?? "/", origin);
     } catch {
       json(response, 400, { error: "Invalid request target" });
+      return;
+    }
+    const mounted = /^\/documents\/([a-z0-9][a-z0-9-]{0,62})(\/.*)?$/.exec(
+      url.pathname,
+    );
+    if (mounted) {
+      const document = documents.find(({ id }) => id === mounted[1]);
+      if (!document) {
+        json(response, 404, { error: "Document not found" });
+        return;
+      }
+      if (!mounted[2]) {
+        response.writeHead(308, {
+          Location: `${url.pathname}/${url.search}`,
+        });
+        response.end();
+        return;
+      }
+      proxyViewer(request, response, document.viewer, request.url);
       return;
     }
     if (request.method === "GET" && url.pathname === "/api/documents") {
@@ -268,7 +280,8 @@ export async function startExampleLibrary(options = {}) {
       const packageRoot = join(runtimeRoot, `${sample.id}.dstar`);
       seedPackage(packageRoot, join(examplesRoot, sample.id));
       const viewer = await startViewer(packageRoot, 0, {
-        externalOrigin: `http://${sample.id}.localhost:${address.port}`,
+        externalOrigin: origin,
+        basePath: `/documents/${sample.id}`,
         ownerToken: randomBytes(32).toString("hex"),
         ownerDisplayName: "Example owner",
       });

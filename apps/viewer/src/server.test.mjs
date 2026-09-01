@@ -80,6 +80,39 @@ function wire(viewer, path, { headers = {}, method = "GET", body } = {}) {
   });
 }
 
+it("mounts a Viewer at a canonical document path", async () => {
+  const { root, proposal } = fixture(),
+    token = "p".repeat(64),
+    viewer = await start(root, 0, {
+      externalOrigin: "http://localhost:8765",
+      basePath: "/documents/dstar-doc",
+      ownerToken: token,
+    }),
+    headers = { Authorization: `Bearer ${token}` };
+  expect(viewer.baseUrl).toBe("http://localhost:8765/documents/dstar-doc");
+  expect(viewer.ownerUrl).toBe(`${viewer.baseUrl}/#${token}`);
+  expect((await wire(viewer, "/")).status).toBe(404);
+  expect((await wire(viewer, "/documents/dstar-doc")).status).toBe(308);
+  const page = await wire(viewer, "/documents/dstar-doc/");
+  expect(page.status).toBe(200);
+  expect(page.text).toContain(
+    'name="dstar-base-path" content="/documents/dstar-doc"',
+  );
+  expect((await wire(viewer, "/documents/dstar-doc/app.js")).status).toBe(200);
+  expect(
+    (await wire(viewer, "/documents/dstar-doc/api/state", { headers })).status,
+  ).toBe(200);
+  const preview = (
+    await wire(viewer, `/documents/dstar-doc/api/preview/${proposal.id}`, {
+      headers,
+    })
+  ).json();
+  expect(preview.url).toMatch(
+    /^\/documents\/dstar-doc\/frame\/[a-f0-9]{48}\/document\.html$/,
+  );
+  expect((await wire(viewer, preview.url)).status).toBe(200);
+});
+
 it("serves immutable isolated previews and requires session credentials for decisions", async () => {
   const { root, engine, proposal } = fixture();
   const viewer = await startViewer(root);

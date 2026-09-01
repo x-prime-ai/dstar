@@ -10,12 +10,11 @@ Start the Documents service and open the printed URL:
 pnpm examples:start
 ```
 
-The service uses one local site port. The library stays at `localhost` and each
-sample Viewer uses a matching `*.localhost` subdomain on that same port,
-mirroring the host-based production gateway without exposing its internal
-Viewer ports. Text selection, comments, Owner updates and versions work from
-the library rows. Opening the raw `document.html` files is preview-only and does
-not provide review controls.
+The service uses one local site port. The library stays at `/examples/` and each
+sample Viewer has a document resource URL such as `/documents/dstar-doc/`; its
+internal Viewer port is never exposed. Text selection, comments, Owner updates
+and versions work from the library rows. Opening the raw `document.html` files
+is preview-only and does not provide review controls.
 
 **New document** creates a private 15-minute handoff for an external agent. The handoff page exposes
 `get_document_creation_request` and `submit_created_document` through WebMCP;

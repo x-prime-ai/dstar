@@ -37,6 +37,7 @@ it("keeps programmatic local defaults independent of ambient service configurati
   expect(config.root).toBe(resolve("document.dstar"));
   expect(config.host).toBe("127.0.0.1");
   expect(config.port).toBe(0);
+  expect(config.basePath).toBe("");
   expect(config.token).not.toBe(token);
   expect(config.token).toMatch(/^[a-f0-9]{48}$/);
   expect(config.reviewerToken).toMatch(/^[a-f0-9]{48}$/);
@@ -72,6 +73,10 @@ it.each([
   ["fractional port", "/doc", 1.5, {}],
   ["string port", "/doc", "3000", {}],
   ["unknown option", "/doc", 0, { trustProxy: true }],
+  ["root base path", "/doc", 0, { basePath: "/" }],
+  ["trailing base slash", "/doc", 0, { basePath: "/documents/doc/" }],
+  ["encoded base path", "/doc", 0, { basePath: "/documents/%64oc" }],
+  ["uppercase base path", "/doc", 0, { basePath: "/documents/Doc" }],
   ["short token", "/doc", 0, { token: "secret" }],
   ["empty token", "/doc", 0, { token: "" }],
   ["null token", "/doc", 0, { token: null }],
@@ -107,7 +112,6 @@ it("accepts canonical HTTP only for a local single-port development gateway", ()
   for (const externalOrigin of [
     "http://127.0.0.1:8765",
     "http://localhost:8765",
-    "http://dstar-doc.localhost:8765",
   ])
     expect(
       resolveViewerConfig("/doc", 0, { externalOrigin, token }).externalOrigin,
@@ -119,6 +123,16 @@ it("accepts canonical HTTP only for a local single-port development gateway", ()
     expect(() =>
       resolveViewerConfig("/doc", 0, { externalOrigin, token }),
     ).toThrow();
+});
+
+it("accepts a canonical document mount path", () => {
+  expect(
+    resolveViewerConfig("/doc", 0, {
+      externalOrigin: "http://localhost:8765",
+      basePath: "/documents/dstar-doc",
+      token,
+    }).basePath,
+  ).toBe("/documents/dstar-doc");
 });
 
 it("loads exactly one explicit credential from env or an external regular file", () => {

@@ -10,8 +10,10 @@ const response = (status, data = { state: { generation: 1 } }) => ({
   status,
   json: async () => data,
 });
-function setup(saved) {
-  const values = new Map(saved ? [["dstar-token", saved]] : []);
+function setup(saved, baseUrl = origin) {
+  const pathname = new URL(baseUrl).pathname,
+    storageKey = pathname === "/" ? "dstar-token" : `dstar-token:${pathname}`;
+  const values = new Map(saved ? [[storageKey, saved]] : []);
   const storage = {
     getItem: (key) => values.get(key),
     setItem: (key, value) => values.set(key, value),
@@ -23,11 +25,20 @@ function setup(saved) {
     fetch,
     storage: () => storage,
     onAuthorization,
+    baseUrl,
   });
   const history = { replaceState: vi.fn() };
   const restore = (hash = "") =>
     session.restore({ origin, pathname: "/", search: "", hash }, history);
-  return { session, fetch, onAuthorization, values, history, restore };
+  return {
+    session,
+    fetch,
+    onAuthorization,
+    values,
+    history,
+    restore,
+    storageKey,
+  };
 }
 
 it("requires a credential in each browser and never sends a null Bearer token", async () => {
@@ -39,7 +50,7 @@ it("requires a credential in each browser and never sends a null Bearer token", 
   });
   expect(f.fetch).not.toHaveBeenCalled();
   expect(f.session.authorized).toBe(false);
-  expect(() => f.session.accessLink(origin)).toThrow(AUTH_MESSAGE);
+  expect(() => f.session.accessLink()).toThrow(AUTH_MESSAGE);
 });
 
 it("consumes a private link but marks authorization only after a successful state read", async () => {
@@ -50,14 +61,14 @@ it("consumes a private link but marks authorization only after a successful stat
   expect(f.onAuthorization).not.toHaveBeenCalled();
   expect(f.values.size).toBe(0);
   await f.session.request("state");
-  expect(f.fetch).toHaveBeenCalledWith("/api/state", {
+  expect(f.fetch).toHaveBeenCalledWith(`${origin}/api/state`, {
     signal: undefined,
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(f.fetch.mock.contexts[0]).toBeUndefined();
   expect(f.onAuthorization).toHaveBeenCalledExactlyOnceWith(true);
-  expect(f.values.get("dstar-token")).toBe(token);
-  expect(f.session.accessLink(origin)).toBe(`${origin}/#${token}`);
+  expect(f.values.get(f.storageKey)).toBe(token);
+  expect(f.session.accessLink()).toBe(`${origin}/#${token}`);
   await f.session.request("state");
   expect(f.onAuthorization).toHaveBeenCalledTimes(1);
   const anotherBrowser = setup();
@@ -91,10 +102,10 @@ it("supports a stored credential and recovers from expiry without leaking it to 
     code: "authorization_required",
   });
   expect(f.fetch).toHaveBeenCalledTimes(2);
-  f.session.replace(`${origin}/#${newer}`, origin);
+  f.session.replace(`${origin}/#${newer}`);
   await f.session.request("state");
   expect(f.session.authorized).toBe(true);
-  expect(f.values.get("dstar-token")).toBe(newer);
+  expect(f.values.get(f.storageKey)).toBe(newer);
 });
 
 it("rejects wrong-origin links and malformed tokens without changing a working session", async () => {
@@ -111,8 +122,8 @@ it("rejects wrong-origin links and malformed tokens without changing a working s
     "short-token",
     "<script>bad</script>",
   ]) {
-    expect(() => f.session.replace(invalid, origin)).toThrow();
-    expect(f.session.accessLink(origin)).toBe(`${origin}/#${token}`);
+    expect(() => f.session.replace(invalid)).toThrow();
+    expect(f.session.accessLink()).toBe(`${origin}/#${token}`);
   }
   expect(accessToken(` ${newer}\n`, origin)).toBe(newer);
   const corrupt = setup("invalid");
@@ -127,6 +138,7 @@ it("keeps login usable when session storage is unavailable", async () => {
       throw new Error("storage blocked");
     },
     onAuthorization: vi.fn(),
+    baseUrl: origin,
   });
   session.restore(
     { origin, pathname: "/", search: "", hash: `#${token}` },
@@ -158,7 +170,7 @@ it("caches public role capabilities and never lets a reviewer copy a share link"
   expect(f.session.can("propose")).toBe(false);
   expect(f.session.can("decide")).toBe(false);
   expect(f.session.session.identity.displayName).toBe("Ravi Reviewer");
-  expect(() => f.session.accessLink(origin)).toThrow(/Only the Owner/);
+  expect(() => f.session.accessLink()).toThrow(/Only the Owner/);
 });
 
 it.each([200, 401])(
@@ -171,12 +183,12 @@ it.each([200, 401])(
       () => new Promise((resolve) => (finish = resolve)),
     );
     const old = f.session.request("state");
-    f.session.replace(newer, origin);
+    f.session.replace(newer);
     await f.session.request("state");
     finish(response(status));
     await expect(old).rejects.toMatchObject({ code: "session_changed" });
     expect(f.session.authorized).toBe(true);
-    expect(f.session.accessLink(origin)).toBe(`${origin}/#${newer}`);
+    expect(f.session.accessLink()).toBe(`${origin}/#${newer}`);
   },
 );
 
@@ -191,7 +203,7 @@ it("does not authenticate network errors or forbidden origins, and propagates ab
   expect(f.onAuthorization).not.toHaveBeenCalled();
   const signal = new AbortController().signal;
   await f.session.request("agent/context", {}, signal);
-  expect(f.fetch).toHaveBeenLastCalledWith("/api/agent/context", {
+  expect(f.fetch).toHaveBeenLastCalledWith(`${origin}/api/agent/context`, {
     signal,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -201,4 +213,20 @@ it("does not authenticate network errors or forbidden origins, and propagates ab
     body: "{}",
   });
   expect(f.session.authorized).toBe(false);
+});
+
+it("scopes links, API calls and stored credentials to one document path", async () => {
+  const baseUrl = `${origin}/documents/dstar-doc`,
+    f = setup(undefined, baseUrl);
+  f.restore(`#${token}`);
+  await f.session.request("state");
+  expect(f.fetch).toHaveBeenCalledWith(`${baseUrl}/api/state`, {
+    signal: undefined,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(f.values.get("dstar-token:/documents/dstar-doc")).toBe(token);
+  expect(f.session.accessLink()).toBe(`${baseUrl}/#${token}`);
+  expect(() =>
+    f.session.replace(`${origin}/documents/dstar-rich/#${newer}`),
+  ).toThrow(/exact Viewer/);
 });

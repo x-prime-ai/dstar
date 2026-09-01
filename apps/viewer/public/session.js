@@ -4,20 +4,21 @@ export const AUTH_MESSAGE =
 const authError = () =>
   Object.assign(new Error(AUTH_MESSAGE), { code: "authorization_required" });
 
-export function accessToken(input, origin) {
+export function accessToken(input, baseUrl) {
   let value = input.trim();
   if (!/^[A-Za-z0-9_-]{48,256}$/.test(value)) {
-    let url;
+    let url, expected;
     try {
       url = new URL(value);
+      expected = new URL(`${baseUrl}/`);
     } catch {
       throw new Error(
         "Paste the complete Viewer access link or session token.",
       );
     }
     if (
-      url.origin !== origin ||
-      url.pathname !== "/" ||
+      url.origin !== expected.origin ||
+      url.pathname !== expected.pathname ||
       url.search ||
       url.username ||
       url.password
@@ -38,19 +39,25 @@ export function accessToken(input, origin) {
 export class ViewerSession {
   #token = "";
   #epoch = 0;
+  #baseUrl;
+  #storageKey;
   authorized = false;
   session = null;
 
-  constructor({ fetch, storage, onAuthorization }) {
+  constructor({ fetch, storage, onAuthorization, baseUrl }) {
     this.fetch = fetch;
     this.storage = storage;
     this.onAuthorization = onAuthorization;
+    this.#baseUrl = baseUrl;
+    const pathname = new URL(baseUrl).pathname;
+    this.#storageKey =
+      pathname === "/" ? "dstar-token" : `dstar-token:${pathname}`;
   }
 
   #save(value) {
     try {
-      if (value) this.storage().setItem("dstar-token", value);
-      else this.storage().removeItem("dstar-token");
+      if (value) this.storage().setItem(this.#storageKey, value);
+      else this.storage().removeItem(this.#storageKey);
     } catch {
       // Blocked browser storage must not prevent an in-memory session.
     }
@@ -63,20 +70,20 @@ export class ViewerSession {
       history.replaceState(null, "", location.pathname + location.search);
     } else {
       try {
-        value = this.storage().getItem("dstar-token") || "";
+        value = this.storage().getItem(this.#storageKey) || "";
       } catch {
         // The user can still authorize explicitly.
       }
     }
     try {
-      this.#token = accessToken(value, location.origin);
+      this.#token = accessToken(value, this.#baseUrl);
     } catch {
       this.#save("");
     }
   }
 
-  replace(input, origin) {
-    const token = accessToken(input, origin);
+  replace(input) {
+    const token = accessToken(input, this.#baseUrl);
     ++this.#epoch;
     this.#token = token;
     this.authorized = false;
@@ -85,14 +92,14 @@ export class ViewerSession {
     this.onAuthorization(false);
   }
 
-  accessLink(origin) {
+  accessLink() {
     if (!this.authorized) throw authError();
     if (!this.can("share"))
       throw Object.assign(
         new Error("Only the Owner can manage Viewer access links."),
         { code: "forbidden" },
       );
-    return `${origin}/#${this.#token}`;
+    return `${this.#baseUrl}/#${this.#token}`;
   }
 
   can(capability) {
@@ -103,7 +110,7 @@ export class ViewerSession {
     if (!this.#token) throw authError();
     const epoch = this.#epoch;
     const fetch = this.fetch;
-    const response = await fetch(`/api/${path}`, {
+    const response = await fetch(`${this.#baseUrl}/api/${path}`, {
       signal,
       headers: {
         Authorization: `Bearer ${this.#token}`,

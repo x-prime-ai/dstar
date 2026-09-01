@@ -19,8 +19,7 @@ import {
 
 const loopback = (host) =>
   host === "::1" || (isIP(host) === 4 && host.startsWith("127."));
-const localHostname = (host) =>
-  loopback(host) || host === "localhost" || host.endsWith(".localhost");
+const localHostname = (host) => loopback(host) || host === "localhost";
 const fail = (message) => {
   throw new Error(message);
 };
@@ -53,6 +52,20 @@ function externalOrigin(value) {
   )
     fail(
       "externalOrigin must have a literal IP or DNS hostname, without wildcards",
+    );
+  return value;
+}
+
+function basePath(value) {
+  if (value === undefined || value === "") return "";
+  if (
+    typeof value !== "string" ||
+    !/^\/[a-z0-9](?:[a-z0-9-]{0,62})(?:\/[a-z0-9](?:[a-z0-9-]{0,62}))*$/.test(
+      value,
+    )
+  )
+    fail(
+      "basePath must be a canonical absolute path of lowercase letters, numbers and hyphens",
     );
   return value;
 }
@@ -177,6 +190,7 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
       ![
         "host",
         "externalOrigin",
+        "basePath",
         "token",
         "tokenFile",
         "ownerToken",
@@ -197,6 +211,7 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
   if (!Number.isInteger(port) || port < 0 || port > 65535)
     fail("port must be an integer from 0 through 65535");
   const origin = externalOrigin(options.externalOrigin);
+  const mountPath = basePath(options.basePath);
   const managementUrl = workspaceManagementUrl(options.workspaceManagementUrl);
   if (!loopback(host) && !origin)
     fail(
@@ -255,6 +270,7 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
     host,
     port,
     externalOrigin: origin,
+    basePath: mountPath,
     ...(managementUrl ? { workspaceManagementUrl: managementUrl } : {}),
     token: ownerToken,
     reviewerToken,
@@ -280,6 +296,7 @@ export function viewerConfigFromEnv(env = process.env) {
     "DSTAR_BIND_HOST",
     "DSTAR_PORT",
     "DSTAR_EXTERNAL_ORIGIN",
+    "DSTAR_BASE_PATH",
     "DSTAR_VIEWER_TOKEN",
     "DSTAR_VIEWER_TOKEN_FILE",
     "DSTAR_OWNER_TOKEN",
@@ -315,6 +332,7 @@ export function viewerConfigFromEnv(env = process.env) {
   const options = {
     host: env.DSTAR_BIND_HOST,
     externalOrigin: env.DSTAR_EXTERNAL_ORIGIN,
+    basePath: env.DSTAR_BASE_PATH,
     token: env.DSTAR_VIEWER_TOKEN,
     tokenFile: env.DSTAR_VIEWER_TOKEN_FILE,
     ownerToken: env.DSTAR_OWNER_TOKEN,
@@ -332,6 +350,7 @@ export function viewerConfigFromEnv(env = process.env) {
     options: {
       host: config.host,
       externalOrigin: config.externalOrigin,
+      ...(config.basePath ? { basePath: config.basePath } : {}),
       ownerToken: config.token,
       reviewerToken: config.reviewerToken,
       ownerDisplayName: config.credentials.owner.identity.displayName,

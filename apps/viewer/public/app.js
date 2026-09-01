@@ -25,6 +25,10 @@ const $ = (id) => document.getElementById(id);
 const previewState = new PreviewState();
 const refreshGate = new RefreshGate();
 let previewTimer;
+const viewerBasePath = document.querySelector(
+    'meta[name="dstar-base-path"]',
+  ).content,
+  viewerBaseUrl = `${location.origin}${viewerBasePath}`;
 const allowed = (capability) =>
   typeof session.can !== "function" || session.can(capability);
 const canAccept = () =>
@@ -35,6 +39,7 @@ const session = new ViewerSession({
   fetch,
   storage: () => sessionStorage,
   onAuthorization: authorizationChanged,
+  baseUrl: viewerBaseUrl,
 });
 session.restore(location, history);
 const requestedHandoff = new document.defaultView.URLSearchParams(
@@ -431,7 +436,7 @@ async function createAgentHandoff(kind, context) {
   await revokeOutgoingHandoff();
   const id = document.defaultView.crypto.randomUUID(),
     accessToken = newHandoffToken(),
-    handoffUrl = new URL(location.origin);
+    handoffUrl = new URL(`${viewerBaseUrl}/`);
   handoffUrl.searchParams.set("handoff", id);
   handoffUrl.hash = accessToken;
   await api("handoffs", { id, accessToken, context });
@@ -1937,7 +1942,7 @@ $("authorize-form").onsubmit = async (event) => {
   $("authorize").disabled = true;
   $("authorization-error").textContent = "Checking authorization…";
   try {
-    session.replace(input, location.origin);
+    session.replace(input);
     await refresh();
   } catch (error) {
     $("authorization-error").textContent = error.message;
@@ -1947,7 +1952,7 @@ $("authorize-form").onsubmit = async (event) => {
 };
 $("copy-access-link").onclick = safely(async () => {
   try {
-    await navigator.clipboard.writeText(session.accessLink(location.origin));
+    await navigator.clipboard.writeText(session.accessLink());
   } catch {
     throw new Error(
       "Copy unavailable. Use the complete access link from the running terminal.",
@@ -1962,7 +1967,7 @@ addEventListener("hashchange", () => {
   const value = location.hash.slice(1);
   history.replaceState(null, "", location.pathname + location.search);
   safely(async () => {
-    session.replace(value, location.origin);
+    session.replace(value);
     await refresh();
   })();
 });

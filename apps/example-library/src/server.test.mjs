@@ -60,13 +60,17 @@ it("serves the library and opens every sample through an isolated Viewer", async
     const url = new URL(document.viewerUrl);
     expect(url.hash).toHaveLength(65);
     expect(url.port).toBe(new URL(service.origin).port);
-    expect(url.hostname).toBe(`${document.id}.localhost`);
+    expect(url.hostname).toBe("localhost");
+    expect(url.pathname).toBe(`/documents/${document.id}/`);
     const token = url.hash.slice(1);
     url.hash = "";
     const viewer = await gateway(url.pathname, { Host: url.host });
     expect(viewer.status).toBe(200);
     expect(viewer.body).toContain('id="selection-comment"');
-    const state = await gateway("/api/state", {
+    expect(viewer.body).toContain(
+      `name="dstar-base-path" content="/documents/${document.id}"`,
+    );
+    const state = await gateway(`${url.pathname}api/state`, {
       Authorization: `Bearer ${token}`,
       Host: url.host,
       Origin: url.origin,
@@ -84,6 +88,12 @@ it("serves the library and opens every sample through an isolated Viewer", async
   ).toContain("/api/documents");
   expect((await fetch(`${service.origin}/../package.json`)).status).toBe(404);
   expect(
+    (await fetch(`${service.origin}/documents/not-a-document/`)).status,
+  ).toBe(404);
+  expect((await fetch(`${service.origin}/documents/dstar-doc`)).url).toBe(
+    `${service.origin}/documents/dstar-doc/`,
+  );
+  expect(
     (
       await gateway("/", {
         Host: `unknown.localhost:${new URL(service.origin).port}`,
@@ -92,7 +102,7 @@ it("serves the library and opens every sample through an isolated Viewer", async
   ).toBe(403);
   expect(
     (
-      await gateway("/", {
+      await gateway(new URL(documents[0].viewerUrl).pathname, {
         Forwarded: "host=evil.example;proto=https",
         Host: new URL(documents[0].viewerUrl).host,
       })
