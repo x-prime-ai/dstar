@@ -129,11 +129,17 @@ const el = (tag, text, className) => {
 function setActiveSlide(index) {
   if (!Number.isInteger(index) || index < 0) return;
   activeSlide = index;
+  const rail = $("slide-rail");
+  const heading = rail.querySelector(".slide-rail-heading");
   for (const button of $("slide-list").querySelectorAll("button")) {
     const active = Number(button.dataset.slide) === index;
     if (active) {
       button.setAttribute("aria-current", "page");
-      button.scrollIntoView({ block: "nearest", inline: "nearest" });
+      const railRect = rail.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      const top = railRect.top + (heading?.offsetHeight ?? 0);
+      if (buttonRect.top < top || buttonRect.bottom > railRect.bottom)
+        button.scrollIntoView({ block: "nearest", inline: "nearest" });
     } else button.removeAttribute("aria-current");
   }
 }
@@ -158,13 +164,11 @@ function renderSlideRail(items = []) {
         `Open slide ${item.index + 1}: ${item.title}`,
       );
       const preview = el("span", undefined, "slide-rail-preview");
-      preview.append(el("b", item.title));
-      const copy = el("span", undefined, "slide-rail-copy");
-      copy.append(
-        el("b", String(item.index + 1).padStart(2, "0")),
-        document.createTextNode(item.title),
+      preview.append(
+        el("span", String(item.index + 1).padStart(2, "0")),
+        el("b", item.title),
       );
-      button.append(preview, copy);
+      button.append(preview);
       button.onclick = safely(async () => {
         await revokeOutgoingHandoff();
         if (!frame) return;
