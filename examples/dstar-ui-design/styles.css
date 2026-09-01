@@ -40,11 +40,11 @@ section,
 .spec-header {
   position: relative;
   display: grid;
-  grid-template-columns: 1.25fr 0.75fr;
-  gap: 8vw;
+  grid-template-columns: 1fr;
+  gap: 30px;
   overflow: hidden;
-  padding-top: 50px;
-  padding-bottom: 46px;
+  padding-top: 36px;
+  padding-bottom: 32px;
   border-bottom: 4px solid var(--blue);
   color: var(--ink);
   background: #e8edf5;
@@ -89,14 +89,17 @@ h1 {
   line-height: 0.92;
 }
 .spec-lead {
-  max-width: 660px;
-  margin: 24px 0 0;
+  max-width: 720px;
+  margin: 18px 0 0;
   color: #53615a;
   font-size: 14px;
   line-height: 1.7;
 }
 .spec-meta {
-  align-self: end;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  align-self: auto;
   margin: 0;
 }
 .spec-meta div {
@@ -115,15 +118,15 @@ h1 {
   font-size: 11px;
 }
 section {
-  padding-top: 62px;
-  padding-bottom: 62px;
+  padding-top: 46px;
+  padding-bottom: 46px;
   border-bottom: 1px solid #17211d20;
 }
 .section-title {
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: 4vw;
-  margin-bottom: 34px;
+  margin-bottom: 26px;
 }
 .section-title > p {
   color: var(--blue);
@@ -179,7 +182,7 @@ section {
   line-height: 1.7;
 }
 .screen-section {
-  background: #e8edf5;
+  background: var(--paper);
 }
 .viewer-mock {
   margin: 0;
@@ -521,7 +524,7 @@ section {
   margin-top: 16px;
 }
 .states-section {
-  background: #fff;
+  background: var(--paper);
 }
 .highlight-spec {
   display: grid;
@@ -624,7 +627,7 @@ section {
   font-size: 8px;
 }
 .responsive-section {
-  background: #e8edf5;
+  background: var(--paper);
 }
 .device-grid {
   display: grid;
@@ -695,10 +698,6 @@ section {
   color: var(--blue);
 }
 @media (max-width: 900px) {
-  .spec-header {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
   .section-title {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -728,16 +727,54 @@ section {
     border-radius: 0;
   }
   .spec-header {
-    padding-top: 42px;
-    padding-bottom: 38px;
+    gap: 24px;
+    padding-top: 30px;
+    padding-bottom: 28px;
   }
   section {
-    padding-top: 52px;
-    padding-bottom: 52px;
+    padding-top: 38px;
+    padding-bottom: 38px;
   }
   .spec-header::before {
     width: 230px;
     height: 230px;
+  }
+  .spec-meta {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .spec-meta div {
+    padding: 10px 0;
+  }
+  .spec-meta dt {
+    font-size: 7px;
+  }
+  .spec-meta dd {
+    font-size: 9px;
+  }
+  .section-title h2,
+  .section-title.compact h2 {
+    font-size: 30px;
+    line-height: 1.05;
+  }
+  .principle-grid {
+    gap: 0;
+  }
+  .principle-grid article {
+    min-height: 0;
+    padding: 22px 0;
+    border: 0;
+    border-top: 1px solid #17211d2b;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .principle-grid article:nth-child(2),
+  .principle-grid article:nth-child(3) {
+    box-shadow: none;
+  }
+  .principle-grid h3 {
+    margin: 16px 0 8px;
   }
   .mock-header {
     flex-wrap: wrap;
@@ -764,6 +801,13 @@ section {
   .highlight-spec,
   .device-grid {
     grid-template-columns: 1fr;
+  }
+  .anatomy-card {
+    padding: 20px 0;
+    border: 0;
+    border-top: 1px solid #17211d2b;
+    border-radius: 0;
+    background: transparent;
   }
   .token-grid {
     grid-template-columns: repeat(2, 1fr);
