@@ -10,6 +10,22 @@
         slides:
           document.body.dataset.dstarMode === "slides" &&
           document.querySelectorAll("[data-dstar-slide]").length > 1,
+        slideItems:
+          document.body.dataset.dstarMode === "slides"
+            ? [...document.querySelectorAll("[data-dstar-slide]")].map(
+                (slideElement, index) => {
+                  const heading = slideElement.querySelector?.("h1,h2,h3");
+                  return {
+                    index,
+                    title:
+                      (heading?.innerText || heading?.textContent || "")
+                        .replace(/\s+/g, " ")
+                        .trim()
+                        .slice(0, 100) || `Slide ${index + 1}`,
+                  };
+                },
+              )
+            : [],
       },
       context.origin,
     );
@@ -226,6 +242,7 @@
     getSelection()?.removeAllRanges?.();
     send(null);
   };
+  let moveSlide = () => false;
   document.addEventListener("mouseup", (event) => {
     clearTimeout(selectionTimer);
     if (!event.altKey) reportSelection();
@@ -237,6 +254,20 @@
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") clearSelection();
+    if (
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key) &&
+      !event.target?.isContentEditable &&
+      !event.target?.closest?.(
+        'input,textarea,select,button,[contenteditable="true"]',
+      )
+    ) {
+      const direction = ["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1;
+      if (moveSlide(direction)) event.preventDefault();
+    }
     if (
       (event.ctrlKey || event.metaKey) &&
       event.altKey &&
@@ -274,7 +305,27 @@
       if (!target) continue;
       if (target === slides[slide]) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
+      if (target === slides[slide])
+        link.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     }
+    parent.postMessage(
+      {
+        kind: "dstar-slide-state",
+        capability: context.capability,
+        revision: context.revision,
+        index: slide,
+      },
+      context.origin,
+    );
+  };
+  moveSlide = (direction) => {
+    if (document.body.dataset.dstarMode !== "slides" || slides.length < 2)
+      return false;
+    clearSelection();
+    slide = (slide + direction + slides.length) % slides.length;
+    showSlide();
+    placeAnnotations();
+    return true;
   };
   if (document.body.dataset.dstarMode === "slides") {
     document.addEventListener("click", (event) => {
@@ -539,13 +590,21 @@
       clearSelection();
       return;
     }
-    if (event.data.kind === "dstar-slide" && slides.length) {
+    if (
+      event.data.kind === "dstar-slide" &&
+      slides.length &&
+      Number.isInteger(event.data.index) &&
+      event.data.index >= 0 &&
+      event.data.index < slides.length
+    ) {
       clearSelection();
-      slide =
-        (slide + (event.data.direction === -1 ? -1 : 1) + slides.length) %
-        slides.length;
+      slide = event.data.index;
       showSlide();
       placeAnnotations();
+      return;
+    }
+    if (event.data.kind === "dstar-slide" && slides.length) {
+      moveSlide(event.data.direction === -1 ? -1 : 1);
     }
   });
 })();

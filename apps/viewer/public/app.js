@@ -75,6 +75,7 @@ let current,
   outgoingHandoff = null,
   outgoingDraftId = null,
   commentAgentStates = new Map(),
+  activeSlide = 0,
   messageTimer;
 let previewSerial = 0;
 function ask(title, detail, reply = false) {
@@ -125,6 +126,66 @@ const el = (tag, text, className) => {
   if (className) node.className = className;
   return node;
 };
+function setActiveSlide(index) {
+  if (!Number.isInteger(index) || index < 0) return;
+  activeSlide = index;
+  for (const button of $("slide-list").querySelectorAll("button")) {
+    const active = Number(button.dataset.slide) === index;
+    if (active) {
+      button.setAttribute("aria-current", "page");
+      button.scrollIntoView({ block: "nearest", inline: "nearest" });
+    } else button.removeAttribute("aria-current");
+  }
+}
+function renderSlideRail(items = []) {
+  const safe = Array.isArray(items)
+    ? items
+        .filter(
+          (item, index) =>
+            item?.index === index &&
+            typeof item.title === "string" &&
+            item.title.trim(),
+        )
+        .slice(0, 200)
+    : [];
+  $("slide-list").replaceChildren(
+    ...safe.map((item) => {
+      const button = el("button");
+      button.type = "button";
+      button.dataset.slide = String(item.index);
+      button.setAttribute(
+        "aria-label",
+        `Open slide ${item.index + 1}: ${item.title}`,
+      );
+      const preview = el("span", undefined, "slide-rail-preview");
+      preview.append(el("b", item.title));
+      const copy = el("span", undefined, "slide-rail-copy");
+      copy.append(
+        el("b", String(item.index + 1).padStart(2, "0")),
+        document.createTextNode(item.title),
+      );
+      button.append(preview, copy);
+      button.onclick = safely(async () => {
+        await revokeOutgoingHandoff();
+        if (!frame) return;
+        setActiveSlide(item.index);
+        $("preview").contentWindow.postMessage(
+          {
+            kind: "dstar-slide",
+            index: item.index,
+            capability: frame.capability,
+          },
+          "*",
+        );
+      });
+      const itemNode = el("li");
+      itemNode.append(button);
+      return itemNode;
+    }),
+  );
+  $("slide-rail").hidden = safe.length < 2;
+  setActiveSlide(Math.min(activeSlide, Math.max(0, safe.length - 1)));
+}
 function applySession() {
   $("copy-access-link").hidden = !session.can("share");
   $("copy-access-link").disabled = !session.can("share");
@@ -478,6 +539,21 @@ document.addEventListener("keydown", (event) => {
     $("viewer-menu").open = false;
     if (!$("review-sidebar").hidden) setPanel(activeTab, false, true);
   }
+  if (
+    !$("slide-rail").hidden &&
+    frame &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key) &&
+    !event.target?.isContentEditable &&
+    !event.target?.closest?.('input,textarea,select,[contenteditable="true"]')
+  ) {
+    event.preventDefault();
+    const direction = ["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1;
+    safely(() => navigateSlide(direction))();
+  }
 });
 document.addEventListener("click", (event) => {
   if (!$("viewer-menu").contains(event.target)) $("viewer-menu").open = false;
@@ -495,6 +571,8 @@ async function preview(id) {
   if (current) comments();
   $("previous-slide").hidden = true;
   $("next-slide").hidden = true;
+  activeSlide = 0;
+  renderSlideRail();
   frame = null;
   $("preview").hidden = !id;
   $("empty").hidden = !!id;
@@ -1358,19 +1436,32 @@ for (const action of ["accept", "reject"])
     note(action === "accept" ? "Change accepted" : "Suggestion rejected");
     await refresh();
   });
+async function navigateSlide(direction) {
+  await revokeOutgoingHandoff();
+  if (frame)
+    $("preview").contentWindow.postMessage(
+      { kind: "dstar-slide", direction, capability: frame.capability },
+      "*",
+    );
+}
 for (const [button, direction] of [
   ["previous-slide", -1],
   ["next-slide", 1],
 ])
-  $(button).onclick = safely(async () => {
-    await revokeOutgoingHandoff();
-    if (frame)
-      $("preview").contentWindow.postMessage(
-        { kind: "dstar-slide", direction, capability: frame.capability },
-        "*",
-      );
-  });
+  $(button).onclick = safely(() => navigateSlide(direction));
 addEventListener("message", (event) => {
+  if (
+    frame &&
+    event.source === $("preview").contentWindow &&
+    event.origin === "null" &&
+    event.data?.kind === "dstar-slide-state" &&
+    event.data.capability === frame.capability &&
+    event.data.revision === frame.revision &&
+    Number.isInteger(event.data.index)
+  ) {
+    setActiveSlide(event.data.index);
+    return;
+  }
   if (previewState.receive(event, $("preview").contentWindow)) {
     clearTimeout(previewTimer);
     $("accept").disabled = !canAccept();
@@ -1378,6 +1469,7 @@ addEventListener("message", (event) => {
       previewState.status === "ready" && event.data.slides === true;
     $("previous-slide").hidden = !slides;
     $("next-slide").hidden = !slides;
+    renderSlideRail(slides ? event.data.slideItems : []);
     if (previewState.status === "ready") safely(syncAnnotations)();
     if (previewState.status === "failed")
       note("Document resources failed to load. Refresh before accepting.");

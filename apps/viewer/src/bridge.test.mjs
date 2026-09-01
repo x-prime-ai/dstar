@@ -136,6 +136,7 @@ it("acknowledges the exact revision only after load and all asset checks", async
         revision: "rev",
         status: "ready",
         slides: false,
+        slideItems: [],
       },
     },
   ]);
@@ -402,6 +403,57 @@ it("opens the matching slide when its canonical thumbnail link is clicked", asyn
   expect(slides[1].style.display).toBe("");
   expect(links[0].attributes["aria-current"]).toBeUndefined();
   expect(links[1].attributes["aria-current"]).toBe("page");
+});
+it("uses all four arrow keys to move between slides and sync thumbnails", async () => {
+  const slides = [
+    { id: "slide-1", style: {}, contains: () => false },
+    { id: "slide-2", style: {}, contains: () => false },
+  ];
+  const links = slides.map((slide) => ({
+    attributes: { href: `#${slide.id}` },
+    getAttribute(name) {
+      return this.attributes[name];
+    },
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    removeAttribute(name) {
+      delete this.attributes[name];
+    },
+  }));
+  const page = await run({
+    documentOverrides: {
+      body: { dataset: { dstarMode: "slides" } },
+      querySelectorAll: (selector) =>
+        selector === "[data-dstar-slide]" ? slides : links,
+      getElementById: (id) => slides.find((slide) => slide.id === id),
+    },
+  });
+  const key = (value) => {
+    const event = {
+      key: value,
+      target: {},
+      preventDefault() {
+        this.prevented = true;
+      },
+    };
+    page.documentListeners.keydown(event);
+    expect(event.prevented).toBe(true);
+  };
+
+  for (const next of ["ArrowRight", "ArrowDown"]) {
+    key(next);
+    expect(slides[1].style.display).toBe("");
+    expect(links[1].attributes["aria-current"]).toBe("page");
+    key(next);
+    expect(slides[0].style.display).toBe("");
+  }
+  for (const previous of ["ArrowLeft", "ArrowUp"]) {
+    key(previous);
+    expect(slides[1].style.display).toBe("");
+    key(previous);
+    expect(slides[0].style.display).toBe("");
+  }
 });
 it.each([
   { sheet: false },

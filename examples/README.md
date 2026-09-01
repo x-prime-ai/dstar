@@ -48,5 +48,7 @@ pnpm dstar serve ./sample.dstar
 
 The slide sample uses the same canonical format with
 `body[data-dstar-mode="slides"]` and one `data-dstar-slide` section per slide.
-The trusted Viewer bridge supplies slide navigation; the candidate itself
-contains no script.
+The trusted Viewer applies the reusable slide shell: a light thumbnail rail,
+click navigation, previous/next buttons, and Left/Up or Right/Down arrow-key
+navigation. The candidate contains only slide content and CSS, with no script or
+duplicated navigation UI.

@@ -5,7 +5,8 @@
 Create a complete staged directory separate from the target package.
 Choose layout based on the request; do not create a source JSON tree.
 The examples in `examples/html-first` and `examples/slides-first` are optional
-starting points, not mandatory designs.
+starting points, not mandatory designs. Slide candidates provide only their
+content and CSS; the Viewer supplies the reusable navigation shell.
 
 ```sh
 pnpm dstar validate /absolute/path/candidate

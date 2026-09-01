@@ -160,20 +160,23 @@
           </div>
           <button id="exit-review">Back to current version</button>
         </section>
-        <div
-          class="canvas"
-          id="preview-panel"
-          role="region"
-          aria-label="Document"
-        >
-          <iframe
-            id="preview"
-            title="Document preview"
-            sandbox="allow-scripts"
-            allow="tools 'none'"
-            referrerpolicy="no-referrer"
-          ></iframe>
-          <p id="empty">Select a version to view the document.</p>
+        <div id="preview-panel" class="preview-layout">
+          <nav id="slide-rail" class="slide-rail" aria-label="Slides" hidden>
+            <div class="slide-rail-heading">
+              <strong>Slides</strong><small>← ↑ &nbsp; ↓ →</small>
+            </div>
+            <ol id="slide-list"></ol>
+          </nav>
+          <div class="canvas" role="region" aria-label="Document">
+            <iframe
+              id="preview"
+              title="Document preview"
+              sandbox="allow-scripts"
+              allow="tools 'none'"
+              referrerpolicy="no-referrer"
+            ></iframe>
+            <p id="empty">Select a version to view the document.</p>
+          </div>
         </div>
         <section
           id="diff-panel"

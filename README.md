@@ -47,7 +47,8 @@ Alt-click an element, to Comment. **Versions** is one newest-first list with a
 plain status on each item; revision hashes and storage facts remain under
 Technical details. Keep both role URLs
 private. `examples/slides-first` is an alternative starting candidate; the same
-Viewer provides previous/next slide controls.
+Viewer applies the reusable slide shell with thumbnail navigation, buttons, and
+all four arrow keys.
 
 The local command uses an automatically assigned free port by default. To keep
 the same port between restarts, choose one explicitly:
