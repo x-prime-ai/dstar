@@ -62,9 +62,10 @@ Engine terminology do not change.
 - The header shows the document name, Current/Suggested/Previous status and the
   only two activity tabs: Comments and Versions. Their counts expose open work
   without a separate Review layer.
-- Selecting text exposes named Comment and Suggest actions. Whole-element
-  selection is described without exposing `data-dstar-id`. Canceling either
-  composer clears its draft, target and native document selection.
+- Selecting text exposes the named Comment action. Whole-element selection is
+  described without exposing `data-dstar-id`. Canceling the composer clears its
+  draft, target and native document selection. Document updates are Owner-only
+  complete proposals rather than inline suggestions.
 - Clicking a comment thread selects and reveals its anchor in the document.
   Thread cards do not repeat the selected document text, and replies never
   receive a separate status from their thread. Thread summaries show only a

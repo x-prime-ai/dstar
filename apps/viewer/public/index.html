@@ -123,8 +123,9 @@
       <p>
         Or use <strong>Copy access link</strong> in an already authorized Viewer
         and paste it below. Keep each role-specific link private: Owner can
-        decide and resolve; Reviewer can contribute comments and proposals but
-        cannot decide. WebMCP tools connect only after authorization succeeds.
+        update, decide and resolve; Reviewer can contribute comments and replies
+        but cannot update the document. WebMCP tools connect only after
+        authorization succeeds.
       </p>
       <form id="authorize-form">
         <label for="access-link">Private access link or session token</label>
@@ -306,16 +307,15 @@
               /></svg
             ><strong id="comments-empty-title">Start a conversation</strong>
             <p id="comments-empty-copy">
-              Select text in the document, then choose Comment or Suggest.
+              Select text in the document, then choose Comment.
             </p>
           </div>
           <details class="comment-help">
             <summary>How to comment</summary>
             <p>
-              Select text within one element, then choose Comment or Suggest.
-              Suggestions appear in Versions for review. For an image or a whole
-              element, use Alt-click. Keyboard: select text, then press
-              Ctrl+Alt+M (⌘⌥M on Mac) to comment.
+              Select text within one element, then choose Comment. For an image
+              or a whole element, use Alt-click. Keyboard: select text, then
+              press Ctrl+Alt+M (⌘⌥M on Mac) to comment.
             </p>
           </details>
           <div id="comments"></div>
@@ -367,6 +367,7 @@
       </button>
       <button
         id="selection-suggest"
+        hidden
         aria-label="Suggest a change to selection"
         title="Suggest"
       >

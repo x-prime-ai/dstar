@@ -16,21 +16,14 @@ const principal = (role) => ({
   capabilities: capabilitiesForRole(role),
 });
 
-it("keeps decision, resolution and sharing owner-only", () => {
+it("keeps document updates, decisions, resolution and sharing owner-only", () => {
   const owner = principal("owner"),
     reviewer = principal("reviewer");
-  for (const capability of ["decide", "resolve", "share"])
+  for (const capability of ["propose", "decide", "resolve", "share"])
     expect(hasCapability(owner, capability)).toBe(true);
-  for (const capability of [
-    "read",
-    "comment",
-    "suggest",
-    "propose",
-    "handoff",
-    "reply",
-  ])
+  for (const capability of ["read", "comment", "handoff", "reply"])
     expect(hasCapability(reviewer, capability)).toBe(true);
-  for (const capability of ["decide", "resolve", "share"]) {
+  for (const capability of ["propose", "decide", "resolve", "share"]) {
     expect(hasCapability(reviewer, capability)).toBe(false);
     expect(() => requireCapability(reviewer, capability)).toThrow();
   }
@@ -72,11 +65,11 @@ it("intersects handoff authority and exposes no credentials", () => {
       CAPABILITIES.PROPOSE,
       CAPABILITIES.DECIDE,
     ]);
-  expect(handoff.capabilities).toEqual(["read", "propose"]);
+  expect(handoff.capabilities).toEqual(["read"]);
   expect(publicPrincipal(handoff)).toEqual({
     role: "reviewer",
     identity: creator.identity,
-    capabilities: ["read", "propose"],
+    capabilities: ["read"],
   });
   expect(JSON.stringify(publicPrincipal(handoff))).not.toMatch(
     /token|credential/i,

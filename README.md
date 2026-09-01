@@ -1,7 +1,7 @@
 # DSTAR
 
-HTML documents that an agent can create, a person can comment on, and both can
-revise without losing history.
+HTML documents that an agent can create, reviewers can comment on, and an Owner
+can revise without losing history.
 
 There is one canonical artifact: `document.html` + CSS + local assets.
 A simple document, a designed page and slides are different layouts, not
@@ -19,7 +19,7 @@ The new HTML-first path consists of:
   compact history and exact-base proposals.
 - [CLI](scripts/dstar.mjs): the agent-facing entrypoint.
 - [Viewer](apps/viewer/src/server.mjs): current-document reading, precise
-  comments/suggestions, a simple version timeline, Before/After review,
+  comments, a simple version timeline, Before/After review,
   role-bound identity and explicit human decisions.
 
 The Engine creates the candidate revision, review summary and storage delta
@@ -39,11 +39,11 @@ pnpm dstar serve ./my-document.dstar
 ```
 
 `serve` prints separate private Owner and Reviewer URLs. The Owner may accept,
-reject, resolve and manage sharing. The Reviewer may read, comment, reply,
-suggest, create pending proposals and use agent handoff, but cannot decide or
-resolve. Open the appropriate complete URL. Use **Review changes** to inspect
-the initial suggestion and create the Current version. Select text, or Alt-click an
-element, to Comment or Suggest. **Versions** is one newest-first list with a
+reject, resolve, manage sharing and submit document updates. The Reviewer may
+read, comment, reply and use agent handoff for reply drafts, but cannot update,
+decide or resolve. Open the appropriate complete URL. Use **Review changes** to
+inspect the initial proposal and create the Current version. Select text, or
+Alt-click an element, to Comment. **Versions** is one newest-first list with a
 plain status on each item; revision hashes and storage facts remain under
 Technical details. Keep both role URLs
 private. `examples/slides-first` is an alternative starting candidate; the same
@@ -82,11 +82,11 @@ accepted document. The agent CLI intentionally has no accept/reject/resolve
 commands. See the [skill workflow](skills/dstar-documents/references/authoring.md)
 and [comment commands](skills/dstar-documents/references/comments.md).
 
-When the browser supports WebMCP, the top-level Viewer registers seven
-document/review tools for browser agents. They can read exact versions, propose
-complete HTML/CSS/assets, prepare editable comment, suggestion and reply drafts,
-and post an explicit keyed agent reply. Acceptance, human reply posting,
-suggestion submission and resolution remain explicit Viewer actions. **Ask
+When the browser supports WebMCP, the top-level Viewer registers role-scoped
+document/review tools for browser agents. Both roles can read exact versions,
+prepare editable comment/reply drafts and post an explicit keyed agent reply;
+only the Owner receives the tool that proposes complete HTML/CSS/assets.
+Acceptance, human reply posting and resolution remain explicit Viewer actions. **Ask
 agent** copies a private, short-lived scoped handoff URL that contains no
 Owner/Reviewer session credential but does contain its own bearer credential;
 another Codex task can open it and return a draft. See

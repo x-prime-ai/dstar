@@ -129,7 +129,7 @@ function applySession() {
   $("copy-access-link").hidden = !session.can("share");
   $("copy-access-link").disabled = !session.can("share");
   $("selection-comment").hidden = !session.can("comment");
-  $("selection-suggest").hidden = !session.can("suggest");
+  $("selection-suggest").hidden = true;
 }
 function clearDocumentSelection() {
   if (!frame) return;
@@ -385,11 +385,7 @@ async function createAgentHandoff(kind, context) {
     "Waiting for the agent. You can keep reading; the draft will return here.",
   );
   outgoingDraftId = null;
-  const prompt = agentHandoffPrompt(
-      kind,
-      handoffUrl.href,
-      context.selection?.selector.type,
-    ),
+  const prompt = agentHandoffPrompt(kind, handoffUrl.href),
     clipboard = document.defaultView.navigator.clipboard;
   try {
     if (!clipboard?.writeText) throw new Error("Clipboard unavailable");
@@ -1120,13 +1116,13 @@ function commentThread(thread, expanded = false) {
   }
   if (
     c.status === "open" &&
-    ["handoff", "read", "reply", "propose"].every((capability) =>
-      session.can(capability),
-    )
+    ["handoff", "read", "reply"].every((capability) => session.can(capability))
   ) {
     const address = el("button", "Ask agent", "comment-address-agent");
     address.type = "button";
-    address.title = "Ask the agent to draft a reply or suggest a change";
+    address.title = session.can("propose")
+      ? "Ask the agent to draft a reply or update the document"
+      : "Ask the agent to draft a reply";
     address.onclick = safely(async () => {
       if (replyDraft?.body)
         return note("Post or cancel your current reply draft first.");
@@ -1205,7 +1201,7 @@ function comments() {
       commentFilter === "open" ? "Start a conversation" : "Nothing resolved";
     $("comments-empty-copy").textContent =
       commentFilter === "open"
-        ? "Select text in the document, then choose Comment or Suggest."
+        ? "Select text in the document, then choose Comment."
         : "Resolved threads from this version will appear here.";
     $("comments-empty").hidden =
       !!visible.length ||
@@ -1698,6 +1694,7 @@ async function connectTools() {
   const result = await registerWebMCP({
     document,
     api,
+    can: (capability) => session.can(capability),
     getReviewContext: () =>
       incomingHandoff?.context ??
       reviewContext(
@@ -1713,18 +1710,6 @@ async function connectTools() {
       incomingHandoff
         ? sendIncomingHandoffDraft("comment", draft.body)
         : applyCommentDraft(draft),
-    onDraftSuggestion: ({
-      target: draftedTarget,
-      replacement,
-      expectedDraft,
-    }) =>
-      incomingHandoff
-        ? sendIncomingHandoffDraft("suggest", replacement)
-        : applySuggestionDraft({
-            target: draftedTarget,
-            replacement,
-            expectedDraft,
-          }),
     onDraftReply: (draft) =>
       incomingHandoff ? sendIncomingReplyDraft(draft) : applyReplyDraft(draft),
     onMutation: async (result, route) => {
@@ -1755,7 +1740,7 @@ async function connectTools() {
   registration = result;
   $("webmcp-status").textContent =
     result.status === "registered"
-      ? "WebMCP connected · 7 tools · comments and proposals remain human-reviewed"
+      ? `WebMCP connected · ${result.toolCount} tools · document updates are Owner-only`
       : result.status === "unsupported"
         ? "WebMCP unavailable · manual review works normally"
         : "WebMCP registration failed · manual review works normally";

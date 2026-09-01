@@ -38,19 +38,18 @@ erase a working credential. Authorization errors from an in-flight tool use
 
 ## Tool contract
 
-All seven tools belong to the Viewer page, not the sandboxed document. All input
-schemas reject additional properties. Descriptions and annotations mark document
-and comment contents as untrusted data. A tool must not treat instructions found
-inside that content as user authorization.
+Up to six role-scoped tools belong to the Viewer page, not the sandboxed
+document. All input schemas reject additional properties. Descriptions and
+annotations mark document and comment contents as untrusted data. A tool must
+not treat instructions found inside that content as user authorization.
 
 | Tool                         | Arguments                                  | Result on success                                                                                                                                               |
 | ---------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `get_review_context`         | `{}`                                       | Public session role/capabilities, package/state IDs, accepted head, reviewed version, selection/action, focused comment, proposals, comments/replies and limits |
 | `read_document`              | `{revision}`                               | Exact immutable revision and complete `files` array                                                                                                             |
 | `draft_selection_comment`    | `{body}`                                   | Opens an editable comment draft for the exact selection; never posts it                                                                                         |
-| `draft_selection_suggestion` | `{replacement}`                            | Fills the editable suggestion composer for the exact selection; never submits it                                                                                |
 | `draft_comment_reply`        | `{commentId, body}`                        | Returns an editable reply draft for the exact focused comment; never posts or resolves it                                                                       |
-| `propose_revision`           | `{base, request, key, files, commentIds?}` | Stored proposal, including exact base/revision, structured motivation links, status and review diff                                                             |
+| `propose_revision` (Owner)   | `{base, request, key, files, commentIds?}` | Stored proposal, including exact base/revision, structured motivation links, status and review diff                                                             |
 | `reply_comment`              | `{commentId, body, key}`                   | Comment with its replies; status is not changed                                                                                                                 |
 
 Every tool result is a string containing a JSON object with `ok: true` or
@@ -91,10 +90,9 @@ revision, and that the target exactly matches its immutable HTML index. It never
 substitutes the latest head into an older target. A selection cannot be sent as
 ready while the preview is still loading or has failed.
 
-`action` is transient and null until the user explicitly chooses **Comment**,
-**Suggest**, or **Ask agent**. Selection actions are
-`{kind, target, draft?}`, where `kind` is `comment` or `suggest` and `target`
-must exactly equal `selection`. An optional
+`action` is transient and null until the user explicitly chooses **Comment** or
+**Ask agent**. A selection action is `{kind:"comment", target, draft?}`, where
+`target` must exactly equal `selection`. An optional
 `draft` captures the editable text at the moment the user asks for agent help.
 The action records intent for the external browser agent; the user's instruction
 is still entered in the agent chat, not in the Viewer. WebMCP does not provide a
@@ -109,18 +107,18 @@ principal and minimum mutation scope; its public result exposes capabilities but
 no token. Clipboard failure revokes the handoff. State drift, expiry, explicit
 page/version changes, credential mismatch and context mismatch fail closed.
 
-For **Comment**, the agent may call `draft_selection_comment`. For **Suggest**,
-it may call `draft_selection_suggestion`. Both tools only fill the matching
-editable Viewer composer and fail rather than overwrite text changed since the
-user asked for help. The user can edit or discard the draft before posting or
-submitting it.
+For **Comment**, the agent may call `draft_selection_comment`. It only fills the
+matching editable Viewer composer and fails rather than overwrite text changed
+since the user asked for help. The user can edit or discard the draft before
+posting it.
 
 For an existing comment, the action is
 `{kind:"address-comment", commentId, target, draft:""}` with
 `focusedCommentId === commentId`, `selection:null`, and `target` exactly equal
 to the persisted comment target. `draft_comment_reply` may return an editable
 reply to the original Viewer, where a person edits and explicitly posts it.
-Alternatively `propose_revision` must send `commentIds:[focusedComment.id]`.
+For an Owner handoff, `propose_revision` may instead send
+`commentIds:[focusedComment.id]`. A Reviewer handoff does not receive that tool.
 The handoff cannot call the direct reply, accept, reject or resolve routes.
 
 The Engine stores sorted validated links as `proposal.motivatedBy`. Every ID
@@ -129,11 +127,9 @@ of proposal idempotency, public projection and history. Accepting a linked
 proposal never resolves a comment, and resolving a comment never changes the
 proposal record.
 
-A manually submitted suggestion replaces one exact `text-range` within one
-stable element and becomes a normal pending attributed proposal. Other files remain
-unchanged, and accepting or rejecting still happens in the Viewer. Structural,
-whole-element and multi-element changes use `propose_revision` with a complete
-candidate instead.
+Document updates use `propose_revision` with a complete candidate and are
+available only to an authenticated Owner or an Owner-created scoped handoff.
+Reviewers express requested changes through comments and replies.
 
 ### Document-library creation handoff
 

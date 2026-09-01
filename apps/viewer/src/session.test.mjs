@@ -149,19 +149,13 @@ it("caches public role capabilities and never lets a reviewer copy a share link"
           displayName: "Ravi Reviewer",
           role: "reviewer",
         },
-        capabilities: [
-          "read",
-          "comment",
-          "suggest",
-          "propose",
-          "handoff",
-          "reply",
-        ],
+        capabilities: ["read", "comment", "handoff", "reply"],
       },
     }),
   );
   await f.session.request("state");
   expect(f.session.can("comment")).toBe(true);
+  expect(f.session.can("propose")).toBe(false);
   expect(f.session.can("decide")).toBe(false);
   expect(f.session.session.identity.displayName).toBe("Ravi Reviewer");
   expect(() => f.session.accessLink(origin)).toThrow(/Only the Owner/);

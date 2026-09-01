@@ -40,7 +40,7 @@ export function reviewContext(
     action:
       selection &&
       action &&
-      ["comment", "suggest"].includes(action.kind) &&
+      action.kind === "comment" &&
       action.target === target
         ? {
             kind: action.kind,
@@ -54,12 +54,8 @@ export function reviewContext(
   };
 }
 
-export function agentHandoffPrompt(
-  kind,
-  viewerUrl,
-  selectorType = "text-range",
-) {
-  if (!["comment", "suggest", "address-comment"].includes(kind))
+export function agentHandoffPrompt(kind, viewerUrl) {
+  if (!["comment", "address-comment"].includes(kind))
     throw new Error("Unsupported agent handoff action");
   const url = new URL(viewerUrl);
   if (!url.hash || !url.searchParams.get("handoff"))
@@ -69,11 +65,7 @@ export function agentHandoffPrompt(
     `Call get_review_context and confirm action.kind is "${kind}". Follow the user's instruction in this chat.`,
     kind === "address-comment"
       ? "Use draft_comment_reply to return an editable reply, or propose_revision with commentIds containing exactly focusedComment.id to create a linked pending proposal. Do not post, accept, reject, resolve, or omit the structured comment link."
-      : kind === "comment"
-        ? "Use draft_selection_comment to return an editable comment draft. Do not post, resolve, accept, or reject anything."
-        : selectorType === "text-range"
-          ? "Use draft_selection_suggestion to return editable replacement text. An empty replacement means delete the selection. Do not submit, accept, reject, or resolve anything."
-          : "This structural or multi-element suggestion cannot use the text draft tool. You may use propose_revision to create a pending proposal for human review; do not accept, reject, or resolve anything.",
+      : "Use draft_selection_comment to return an editable comment draft. Do not post, resolve, accept, or reject anything.",
   ].join("\n");
 }
 

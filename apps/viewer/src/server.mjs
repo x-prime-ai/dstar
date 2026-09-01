@@ -1,23 +1,9 @@
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-import {
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import {
-  open,
-  mediaType,
-  replaceTargetText,
-  resolveTarget,
-  validateTarget,
-} from "@dstar/engine";
+import { readFileSync } from "node:fs";
+import { open, mediaType, resolveTarget, validateTarget } from "@dstar/engine";
 import { decisions } from "@dstar/engine/decisions";
-import { agentRoute, publicProposal } from "./agent-api.mjs";
+import { agentRoute } from "./agent-api.mjs";
 import { createPreviewCache } from "./preview-cache.mjs";
 import { fileDiff } from "./file-diff.mjs";
 import {
@@ -138,7 +124,7 @@ export async function startViewer(root, port = 0, options = {}) {
       !selection ||
       !action ||
       !viewed ||
-      !["comment", "suggest"].includes(action.kind) ||
+      action.kind !== "comment" ||
       JSON.stringify(action.target) !== JSON.stringify(selection) ||
       viewed.revision !== selection.revision ||
       viewed.previewStatus !== "ready" ||
@@ -300,10 +286,7 @@ export async function startViewer(root, port = 0, options = {}) {
             (path === "/api/agent/context" ||
               path === "/api/agent/document" ||
               (path === "/api/agent/proposals" &&
-                (scoped.handoff.context.action.kind === "address-comment" ||
-                  (scoped.handoff.context.action.kind === "suggest" &&
-                    scoped.handoff.context.selection.selector.type !==
-                      "text-range"))) ||
+                scoped.handoff.context.action.kind === "address-comment") ||
               (path === `/api/handoffs/${scoped.id}/draft` &&
                 scoped.handoff.context.action.kind !== "address-comment") ||
               (path === `/api/handoffs/${scoped.id}/reply-draft` &&
@@ -464,14 +447,7 @@ export async function startViewer(root, port = 0, options = {}) {
               principal,
               action.kind === "address-comment"
                 ? [CAPABILITIES.READ, CAPABILITIES.REPLY, CAPABILITIES.PROPOSE]
-                : [
-                    CAPABILITIES.READ,
-                    CAPABILITIES.HANDOFF,
-                    ...(action.kind === "suggest" &&
-                    validated.context.selection.selector.type !== "text-range"
-                      ? [CAPABILITIES.PROPOSE]
-                      : []),
-                  ],
+                : [CAPABILITIES.READ, CAPABILITIES.HANDOFF],
             ),
           };
         handoffs.set(body.id, record);
@@ -540,55 +516,6 @@ export async function startViewer(root, port = 0, options = {}) {
           return json(403, { error: "Only the handoff creator can revoke it" });
         handoffs.delete(revoke[1]);
         return json(200, { revoked: true });
-      }
-      if (path === "/api/suggestions") {
-        exactBody(body, ["target", "replacement", "key"]);
-        const head = engine.snapshot(),
-          viewed = engine.snapshot(body.target?.revision);
-        if (!viewed.index)
-          throw new Error("Suggestion revision is unavailable");
-        validateTarget(viewed.index, body.target);
-        const source = head.revision === null ? viewed : head,
-          resolution = source.index
-            ? resolveTarget(source.index, body.target)
-            : { status: "orphaned" };
-        if (!["exact", "recovered"].includes(resolution.status))
-          throw new Error(
-            "Suggestion selection no longer has one exact match in the accepted document",
-          );
-        const rebasedTarget = {
-            ...body.target,
-            revision: source.revision,
-            selector: {
-              ...body.target.selector,
-              start: resolution.start,
-              end: resolution.end,
-            },
-          },
-          files = replaceTargetText(
-            source.files,
-            rebasedTarget,
-            body.replacement,
-          ),
-          directory = mkdtempSync(join(tmpdir(), "dstar-suggestion-"));
-        let proposal;
-        try {
-          for (const [file, bytes] of files) {
-            const destination = join(directory, file);
-            mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
-            writeFileSync(destination, bytes, { flag: "wx", mode: 0o600 });
-          }
-          proposal = engine.propose({
-            candidate: directory,
-            base: head.revision,
-            request: `Replace “${body.target.selector.exact.slice(0, 160)}” with “${body.replacement.slice(0, 160)}”`,
-            author: principal.identity,
-            key: body.key,
-          });
-        } finally {
-          rmSync(directory, { recursive: true, force: true });
-        }
-        return json(201, { proposal: publicProposal(proposal) });
       }
       const comment =
         /^\/api\/comments\/([a-f0-9-]{36})\/(reply|resolve)$/.exec(path);

@@ -3,7 +3,6 @@ import { authorized } from "./runtime-config.mjs";
 export const CAPABILITIES = Object.freeze({
   READ: "read",
   COMMENT: "comment",
-  SUGGEST: "suggest",
   PROPOSE: "propose",
   HANDOFF: "handoff",
   REPLY: "reply",
@@ -17,8 +16,6 @@ const roleCapabilities = Object.freeze({
   reviewer: Object.freeze([
     CAPABILITIES.READ,
     CAPABILITIES.COMMENT,
-    CAPABILITIES.SUGGEST,
-    CAPABILITIES.PROPOSE,
     CAPABILITIES.HANDOFF,
     CAPABILITIES.REPLY,
   ]),
@@ -32,7 +29,6 @@ const roleCapabilities = Object.freeze({
 const routeRules = Object.freeze([
   ["GET", /^\/api\//, CAPABILITIES.READ],
   ["POST", /^\/api\/comments$/, CAPABILITIES.COMMENT],
-  ["POST", /^\/api\/suggestions$/, CAPABILITIES.SUGGEST],
   ["POST", /^\/api\/handoffs$/, CAPABILITIES.HANDOFF],
   ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/draft$/, CAPABILITIES.HANDOFF],
   ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/revoke$/, CAPABILITIES.HANDOFF],

@@ -20,10 +20,6 @@ it("creates private handoff prompts that another browser task can open", () => {
       "comment",
       `http://127.0.0.1:4321/?handoff=${id}#${token}`,
     ),
-    suggest = agentHandoffPrompt(
-      "suggest",
-      `https://viewer.example/?handoff=${id}#${token}`,
-    ),
     address = agentHandoffPrompt(
       "address-comment",
       `https://viewer.example/?handoff=${id}#${token}`,
@@ -31,19 +27,15 @@ it("creates private handoff prompts that another browser task can open", () => {
   expect(comment).toContain("Open this private, short-lived DSTAR handoff");
   expect(comment).toContain("http://127.0.0.1:4321");
   expect(comment).toContain("draft_selection_comment");
-  expect(suggest).toContain("https://viewer.example");
-  expect(suggest).toContain("draft_selection_suggestion");
-  expect(suggest).not.toContain("propose_revision");
   expect(address).toContain("draft_comment_reply");
   expect(address).toContain("commentIds");
   expect(address).toContain("focusedComment.id");
-  expect(
+  expect(() =>
     agentHandoffPrompt(
       "suggest",
       `https://viewer.example/?handoff=${id}#${token}`,
-      "element",
     ),
-  ).toContain("propose_revision");
+  ).toThrow("Unsupported agent handoff action");
   expect(() => agentHandoffPrompt("resolve", "https://viewer.example")).toThrow(
     "Unsupported agent handoff action",
   );
@@ -317,11 +309,11 @@ it("preserves exact selection revision for candidate/base and never rebinds it t
   ).toBeNull();
   expect(
     reviewContext(selected, true, { revision: "base-rev" }, ready, target, {
-      kind: "suggest",
+      kind: "comment",
       target,
       draft: "Make this shorter",
     }).action,
-  ).toEqual({ kind: "suggest", target, draft: "Make this shorter" });
+  ).toEqual({ kind: "comment", target, draft: "Make this shorter" });
   expect(
     reviewContext(
       selected,

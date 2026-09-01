@@ -183,8 +183,8 @@ it("serves immutable isolated previews and requires session credentials for deci
   ).toBe(409);
 });
 
-it("turns a manual text suggestion into a pending human proposal", async () => {
-  const { root, candidate, engine, proposal } = fixture(),
+it("does not expose the retired manual suggestion endpoint", async () => {
+  const { root, proposal } = fixture(),
     viewer = await startViewer(root),
     token = new URL(viewer.url).hash.slice(1),
     headers = {
@@ -199,63 +199,12 @@ it("turns a manual text suggestion into a pending human proposal", async () => {
         body: JSON.stringify(body),
       });
   cleanup.push(() => close(viewer.server));
-  const initial = engine.snapshot();
-  expect(
-    (
-      await request(`/api/proposals/${proposal.id}/accept`, {
-        revision: proposal.revision,
-        stateId: initial.stateId,
-      })
-    ).status,
-  ).toBe(200);
-  const original = readFileSync(join(candidate, "document.html"), "utf8");
-  writeFileSync(
-    join(candidate, "document.html"),
-    original.replace("Hello 🌍", "Current heading · Hello 🌍"),
-  );
-  const newer = engine.propose({
-    candidate,
-    base: proposal.revision,
-    request: "Unrelated accepted edit",
-    author: "agent",
-    key: "newer-head",
+  const response = await request("/api/suggestions", {
+    target: { revision: proposal.revision },
+    replacement: "world",
+    key: "retired-suggestion",
   });
-  expect(
-    (
-      await request(`/api/proposals/${newer.id}/accept`, {
-        revision: newer.revision,
-        stateId: engine.snapshot().stateId,
-      })
-    ).status,
-  ).toBe(200);
-  const args = {
-      target: {
-        revision: proposal.revision,
-        element: "intro",
-        selector: {
-          type: "text-range",
-          start: 6,
-          end: 7,
-          unit: "unicode-code-point",
-          exact: "🌍",
-        },
-      },
-      replacement: "world",
-      key: "manual-suggestion-one",
-    },
-    response = await request("/api/suggestions", args),
-    result = await response.json();
-  expect(response.status).toBe(201);
-  expect(result.proposal).toMatchObject({
-    author: { id: "owner", displayName: "Owner", role: "owner" },
-    status: "pending",
-  });
-  expect(
-    engine.snapshot(result.proposal.id).files.get("document.html").toString(),
-  ).toContain("Current heading · Hello world");
-  expect(engine.snapshot().revision).toBe(newer.revision);
-  const retry = await (await request("/api/suggestions", args)).json();
-  expect(retry.proposal.id).toBe(result.proposal.id);
+  expect(response.status).toBe(404);
 });
 
 it("uses a short-lived scoped handoff to return an agent draft", async () => {
@@ -283,7 +232,7 @@ it("uses a short-lived scoped handoff to return an agent draft", async () => {
         previewStatus: "ready",
       },
       selection: target,
-      action: { kind: "suggest", target, draft: "" },
+      action: { kind: "comment", target, draft: "" },
     },
     ownerHeaders = {
       Authorization: `Bearer ${ownerToken}`,
@@ -314,7 +263,7 @@ it("uses a short-lived scoped handoff to return an agent draft", async () => {
   });
   expect(toolContext.status).toBe(200);
   expect(toolContext.json().action).toMatchObject({
-    kind: "suggest",
+    kind: "comment",
     target,
   });
   const document = await wire(viewer, "/api/agent/document", {
@@ -339,15 +288,15 @@ it("uses a short-lived scoped handoff to return an agent draft", async () => {
   const returned = await wire(viewer, `/api/handoffs/${id}/draft`, {
     headers: scopedHeaders,
     method: "POST",
-    body: JSON.stringify({ kind: "suggest", content: "world" }),
+    body: JSON.stringify({ kind: "comment", content: "Please clarify this" }),
   });
   expect(returned.status).toBe(200);
   const record = await wire(viewer, `/api/handoffs/${id}`, {
     headers: ownerHeaders,
   });
   expect(record.json().draft).toMatchObject({
-    kind: "suggest",
-    content: "world",
+    kind: "comment",
+    content: "Please clarify this",
   });
   expect(
     (
@@ -968,16 +917,10 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
     identity: { displayName: "Ravi Reviewer", role: "reviewer" },
   });
   expect(reviewerState.session.capabilities).toEqual(
-    expect.arrayContaining([
-      "read",
-      "comment",
-      "suggest",
-      "propose",
-      "handoff",
-    ]),
+    expect.arrayContaining(["read", "comment", "handoff", "reply"]),
   );
   expect(reviewerState.session.capabilities).not.toEqual(
-    expect.arrayContaining(["decide", "resolve", "share"]),
+    expect.arrayContaining(["propose", "decide", "resolve", "share"]),
   );
   expect(reviewerState).not.toHaveProperty("workspaceManagementUrl");
   expect(JSON.stringify(reviewerState)).not.toContain(ownerToken);
@@ -1020,35 +963,15 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
     role: "owner",
   });
 
-  const suggested = (
-    await wire(viewer, "/api/suggestions", {
-      method: "POST",
-      headers: reviewer,
-      body: JSON.stringify({
-        target: {
-          revision: proposal.revision,
-          element: "intro",
-          selector: {
-            type: "text-range",
-            start: 0,
-            end: 5,
-            unit: "unicode-code-point",
-            exact: "Hello",
-          },
-        },
-        replacement: "Greetings",
-        key: "reviewer-suggestion",
-      }),
-    })
-  ).json();
-  expect(suggested.proposal).toMatchObject({
-    status: "pending",
-    author: {
-      id: "reviewer",
-      displayName: "Ravi Reviewer",
-      role: "reviewer",
-    },
-  });
+  expect(
+    (
+      await wire(viewer, "/api/agent/proposals", {
+        method: "POST",
+        headers: reviewer,
+        body: "{}",
+      })
+    ).status,
+  ).toBe(403);
 
   const target = {
     revision: proposal.revision,
@@ -1467,15 +1390,14 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   });
   expect(context.comments[0].viewedResolution.status).toBe("exact");
   expect(context.resolutionRevision).toBe(p.revision);
-  const suggestContext = await api("agent/context", {
-    ...contextArgs,
-    action: { kind: "suggest", target, draft: "Make it friendlier" },
-  });
-  expect(suggestContext.action).toEqual({
-    kind: "suggest",
-    target,
-    draft: "Make it friendlier",
-  });
+  expect(
+    (
+      await api("agent/context", {
+        ...contextArgs,
+        action: { kind: "suggest", target, draft: "Make it friendlier" },
+      })
+    ).code,
+  ).toBe("invalid_input");
   expect(
     (
       await api("agent/context", {

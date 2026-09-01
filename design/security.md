@@ -23,9 +23,9 @@ decision controls.
 ## Viewer roles and identity
 
 The HTML-first Viewer binds credentials to one of two fixed principals. Owner
-has `read`, `comment`, `suggest`, `propose`, `handoff`, `reply`, `decide`,
-`resolve` and `share`. Reviewer has the first six capabilities and cannot
-accept, reject, resolve or manage access links. `src/access-control.mjs` maps
+has `read`, `comment`, `propose`, `handoff`, `reply`, `decide`, `resolve` and
+`share`. Reviewer has `read`, `comment`, `handoff` and `reply`; it cannot update
+the document, accept, reject, resolve or manage access links. `src/access-control.mjs` maps
 HTTP method/path to one required capability before route handlers read or act
 on a mutation. UI visibility uses the same public capability names but is not a
 security boundary.
@@ -33,7 +33,7 @@ security boundary.
 Each credential also binds a trusted `{id, displayName, role}`. Display names
 contain 1–80 Unicode letters/numbers, with only internal spaces or
 `. , ' ’ _ -`; surrounding whitespace, controls, markup and longer values are
-rejected. Comment, reply, manual-suggestion proposal, decision and resolution
+rejected. Comment, reply, document proposal, decision and resolution
 attribution comes from the authenticated principal, never an `author` request
 field. Agent routes use the fixed `Agent` identity. Old string actors remain
 readable for package compatibility but grant no capability.

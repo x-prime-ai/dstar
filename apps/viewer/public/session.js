@@ -147,7 +147,6 @@ export class ViewerSession {
           capabilities: [
             "read",
             "comment",
-            "suggest",
             "propose",
             "handoff",
             "reply",

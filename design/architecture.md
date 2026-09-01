@@ -19,8 +19,8 @@ A Viewer is not needed to prepare a proposal or reconstruct historical HTML.
 
 The Viewer does not calculate or own versions. Its local server reads immutable
 materializations and submits attributed collaboration or Owner decision commands
-to the Engine. Its centralized role gate gives Reviewer comment/suggest/propose/
-handoff capabilities without decision or resolution authority.
+to the Engine. Its centralized role gate gives Reviewer read/comment/reply/
+handoff capabilities; document proposals, decisions and resolution are Owner-only.
 There is no new MCP service, workflow backend, projection renderer or public SDK.
 
 ## Code
