@@ -368,6 +368,41 @@ it("opens the matching slide when navigating to a comment on a hidden slide", as
   expect(slides[0].style.display).toBe("none");
   expect(slides[1].style.display).toBe("");
 });
+it("opens the matching slide when its canonical thumbnail link is clicked", async () => {
+  const slides = [
+    { id: "slide-1", style: {}, contains: () => false },
+    { id: "slide-2", style: {}, contains: () => false },
+  ];
+  const links = slides.map((slide) => ({
+    attributes: { href: `#${slide.id}` },
+    getAttribute(name) {
+      return this.attributes[name];
+    },
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    removeAttribute(name) {
+      delete this.attributes[name];
+    },
+  }));
+  const page = await run({
+    documentOverrides: {
+      body: { dataset: { dstarMode: "slides" } },
+      querySelectorAll: (selector) =>
+        selector === "[data-dstar-slide]" ? slides : links,
+      getElementById: (id) => slides.find((slide) => slide.id === id),
+    },
+  });
+  expect(slides[1].style.display).toBe("none");
+  expect(links[0].attributes["aria-current"]).toBe("page");
+  page.documentListeners.click({
+    target: { closest: () => links[1] },
+  });
+  expect(slides[0].style.display).toBe("none");
+  expect(slides[1].style.display).toBe("");
+  expect(links[0].attributes["aria-current"]).toBeUndefined();
+  expect(links[1].attributes["aria-current"]).toBe("page");
+});
 it.each([
   { sheet: false },
   { image: false, assets: [{ path: "assets/photo.png", type: "image" }] },

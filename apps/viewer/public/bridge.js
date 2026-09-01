@@ -251,12 +251,42 @@
   addEventListener("resize", clearSelection);
   let slide = 0;
   const slides = [...document.querySelectorAll("[data-dstar-slide]")];
+  const linkedSlide = (link) => {
+    const href = link?.getAttribute?.("href");
+    if (!href?.startsWith("#") || href === "#") return null;
+    try {
+      const target = document.getElementById(decodeURIComponent(href.slice(1)));
+      return slides.find(
+        (slideElement) =>
+          slideElement === target || slideElement.contains(target),
+      );
+    } catch {
+      return null;
+    }
+  };
   const showSlide = () => {
     if (!slides.length) return;
     slides.forEach((el, i) => {
       el.style.display = i === slide ? "" : "none";
     });
+    for (const link of document.querySelectorAll('a[href^="#"]')) {
+      const target = linkedSlide(link);
+      if (!target) continue;
+      if (target === slides[slide]) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    }
   };
+  if (document.body.dataset.dstarMode === "slides") {
+    document.addEventListener("click", (event) => {
+      const link = event.target?.closest?.('a[href^="#"]');
+      const nextSlide = slides.indexOf(linkedSlide(link));
+      if (nextSlide < 0) return;
+      clearSelection();
+      slide = nextSlide;
+      showSlide();
+      placeAnnotations();
+    });
+  }
   // Review highlights live in a shadow overlay, never in canonical content or
   // its text nodes. Resolved offsets come from the authorized parent.
   let annotationLayer, highlightLayer, annotationButton;

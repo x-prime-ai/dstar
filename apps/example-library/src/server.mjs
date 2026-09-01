@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { extname, join, relative, resolve, sep } from "node:path";
 
 import { decisions } from "@dstar/engine/decisions";
-import { open } from "@dstar/engine";
+import { open, readCandidate, revision } from "@dstar/engine";
 import { startViewer } from "@dstar/viewer";
 
 const SAMPLES = [
@@ -47,17 +47,20 @@ const TYPES = new Map([
 function seedPackage(packageRoot, candidateRoot) {
   mkdirSync(packageRoot, { recursive: true, mode: 0o700 });
   const engine = open(packageRoot);
-  if (
-    existsSync(join(packageRoot, ".dstar")) &&
-    engine.snapshot().revision !== null
-  )
-    return;
+  const snapshot = existsSync(join(packageRoot, ".dstar"))
+    ? engine.snapshot()
+    : { revision: null };
+  const candidateRevision = revision(readCandidate(candidateRoot));
+  if (snapshot.revision === candidateRevision) return;
   const proposal = engine.propose({
     candidate: candidateRoot,
-    base: null,
-    request: "Create DSTAR example document",
+    base: snapshot.revision,
+    request:
+      snapshot.revision === null
+        ? "Create DSTAR example document"
+        : "Update DSTAR example document",
     author: "example-library",
-    key: "example-library-genesis-v1",
+    key: `example-library-seed:${candidateRevision}`,
   });
   decisions(packageRoot).decide(
     proposal.id,
