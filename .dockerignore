@@ -22,4 +22,10 @@
 !apps/workspaces/src/**
 !apps/workspaces/public/
 !apps/workspaces/public/**
+!apps/example-library/
+!apps/example-library/package.json
+!apps/example-library/src/
+!apps/example-library/src/**
+!examples/
+!examples/**
 **/*.test.*

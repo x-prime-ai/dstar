@@ -1,0 +1,35 @@
+services:
+  example-library:
+    build:
+      context: ../..
+      dockerfile: deploy/example-library/Dockerfile
+    environment:
+      DSTAR_EXAMPLES_BIND_HOST: 0.0.0.0
+      DSTAR_EXAMPLES_PORT: "3000"
+      DSTAR_EXAMPLES_RUNTIME: /data
+      DSTAR_EXAMPLES_EXTERNAL_ORIGIN: ${DSTAR_EXAMPLES_EXTERNAL_ORIGIN:?Set the public Thinkofu HTTPS origin}
+      DSTAR_EXAMPLES_BASE_PATH: /dstar
+      DSTAR_EXAMPLES_PROXY_TOKEN_FILE: /run/secrets/proxy_token
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - example_data:/data
+    secrets:
+      - proxy_token
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+
+volumes:
+  example_data:
+
+secrets:
+  proxy_token:
+    file: ${DSTAR_EXAMPLES_PROXY_TOKEN_FILE:?Set the host path of the shared proxy credential}

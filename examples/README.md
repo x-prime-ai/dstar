@@ -16,6 +16,11 @@ internal Viewer port is never exposed. Text selection, comments, Owner updates
 and versions work from the library rows. Opening the raw `document.html` files
 is preview-only and does not provide review controls.
 
+To publish the same demo behind Thinkofu's `/dstar` path, use the
+[persistent example-library deployment](../deploy/example-library/README.md).
+It keeps DSTAR in a separate single-instance Node service and authenticates the
+Thinkofu reverse proxy with a shared deployment secret.
+
 **New document** creates a private 15-minute handoff for an external agent. The handoff page exposes
 `get_document_creation_request` and `submit_created_document` through WebMCP;
 the agent reads the exact brief and returns a complete self-contained HTML

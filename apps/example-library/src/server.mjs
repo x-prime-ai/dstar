@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync } from "node:fs";
 import { createServer, request as requestHttp } from "node:http";
 import { tmpdir } from "node:os";
@@ -53,15 +53,52 @@ const HOP_BY_HOP = new Set([
   "transfer-encoding",
   "upgrade",
 ]);
+const PROXY_TOKEN_HEADER = "x-dstar-proxy-token";
 
-function proxyHeaders(request, host) {
+function mountPath(value) {
+  if (value === undefined || value === "") return "";
+  if (
+    typeof value !== "string" ||
+    !/^\/[a-z0-9](?:[a-z0-9-]{0,62})(?:\/[a-z0-9](?:[a-z0-9-]{0,62}))*$/.test(
+      value,
+    )
+  )
+    throw new Error("Invalid example library basePath");
+  return value;
+}
+
+function proxyToken(value) {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== "string" ||
+    value.length < 48 ||
+    value.length > 256 ||
+    /[^A-Za-z0-9_-]/.test(value)
+  )
+    throw new Error("Invalid example library trusted proxy credential");
+  return value;
+}
+
+function isTrustedProxy(request, expected) {
+  if (!expected) return false;
+  let count = 0;
+  for (let index = 0; index < request.rawHeaders.length; index += 2)
+    if (request.rawHeaders[index].toLowerCase() === PROXY_TOKEN_HEADER) count++;
+  const actual = request.headers[PROXY_TOKEN_HEADER];
+  if (count !== 1 || typeof actual !== "string") return false;
+  const left = Buffer.from(actual),
+    right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function proxyHeaders(request, host, trustedProxy) {
   const critical = new Set(["host", "origin", "authorization", "content-type"]),
     seen = new Set();
   for (let index = 0; index < request.rawHeaders.length; index += 2) {
     const name = request.rawHeaders[index].toLowerCase();
     if (
-      name === "forwarded" ||
-      name.startsWith("x-forwarded-") ||
+      (!trustedProxy &&
+        (name === "forwarded" || name.startsWith("x-forwarded-"))) ||
       (critical.has(name) && seen.has(name))
     )
       return null;
@@ -71,6 +108,7 @@ function proxyHeaders(request, host) {
   for (const name of Object.keys(headers))
     if (
       HOP_BY_HOP.has(name.toLowerCase()) ||
+      name.toLowerCase() === PROXY_TOKEN_HEADER ||
       name.toLowerCase() === "forwarded" ||
       name.toLowerCase().startsWith("x-forwarded-")
     )
@@ -85,10 +123,10 @@ function proxyResponseHeaders(headers) {
   return safe;
 }
 
-function proxyViewer(request, response, viewer, path) {
+function proxyViewer(request, response, viewer, path, trustedProxy) {
   const target = viewer.server.address(),
     authority = new URL(viewer.origin).host,
-    headers = proxyHeaders(request, authority);
+    headers = proxyHeaders(request, authority, trustedProxy);
   if (!headers) {
     response.writeHead(400, {
       "Content-Type": "application/json; charset=utf-8",
@@ -161,17 +199,17 @@ function json(response, status, value) {
   response.end(content);
 }
 
-function safeStaticPath(examplesRoot, pathname) {
+function safeStaticPath(examplesRoot, pathname, libraryPath) {
   let decoded;
   try {
     decoded = decodeURIComponent(pathname);
   } catch {
     return null;
   }
-  if (decoded === "/" || decoded === "/examples") return "redirect";
-  if (decoded === "/examples/") return join(examplesRoot, "index.html");
-  if (!decoded.startsWith("/examples/")) return null;
-  const path = resolve(examplesRoot, decoded.slice("/examples/".length));
+  if (decoded === "/" || decoded === libraryPath) return "redirect";
+  if (decoded === `${libraryPath}/`) return join(examplesRoot, "index.html");
+  if (!decoded.startsWith(`${libraryPath}/`)) return null;
+  const path = resolve(examplesRoot, decoded.slice(`${libraryPath}/`.length));
   const inside = relative(examplesRoot, path);
   if (!inside || inside.startsWith(`..${sep}`) || inside === "..") return null;
   return path;
@@ -204,12 +242,21 @@ export async function startExampleLibrary(options = {}) {
   );
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 8765;
+  const basePath = mountPath(options.basePath),
+    libraryPath = basePath || "/examples",
+    documentsPath = `${basePath}/documents`,
+    trustedProxyToken = proxyToken(options.trustedProxyToken);
   mkdirSync(runtimeRoot, { recursive: true, mode: 0o700 });
 
   const documents = [];
   let origin, controlAuthority;
   const server = createServer((request, response) => {
-    if (request.headers.host !== controlAuthority) {
+    const trustedProxy = isTrustedProxy(request, trustedProxyToken);
+    if (
+      trustedProxyToken
+        ? !trustedProxy
+        : request.headers.host !== controlAuthority
+    ) {
       json(response, 403, { error: "Unknown local site" });
       return;
     }
@@ -220,9 +267,9 @@ export async function startExampleLibrary(options = {}) {
       json(response, 400, { error: "Invalid request target" });
       return;
     }
-    const mounted = /^\/documents\/([a-z0-9][a-z0-9-]{0,62})(\/.*)?$/.exec(
-      url.pathname,
-    );
+    const mounted = new RegExp(
+      `^${documentsPath}/([a-z0-9][a-z0-9-]{0,62})(/.*)?$`,
+    ).exec(url.pathname);
     if (mounted) {
       const document = documents.find(({ id }) => id === mounted[1]);
       if (!document) {
@@ -236,10 +283,19 @@ export async function startExampleLibrary(options = {}) {
         response.end();
         return;
       }
-      proxyViewer(request, response, document.viewer, request.url);
+      proxyViewer(
+        request,
+        response,
+        document.viewer,
+        request.url,
+        trustedProxy,
+      );
       return;
     }
-    if (request.method === "GET" && url.pathname === "/api/documents") {
+    if (
+      request.method === "GET" &&
+      url.pathname === `${libraryPath}/api/documents`
+    ) {
       json(
         response,
         200,
@@ -254,9 +310,9 @@ export async function startExampleLibrary(options = {}) {
       json(response, 405, { error: "Method not allowed" });
       return;
     }
-    const path = safeStaticPath(examplesRoot, url.pathname);
+    const path = safeStaticPath(examplesRoot, url.pathname, libraryPath);
     if (path === "redirect") {
-      response.writeHead(302, { Location: "/examples/" });
+      response.writeHead(302, { Location: `${libraryPath}/` });
       response.end();
       return;
     }
@@ -274,21 +330,24 @@ export async function startExampleLibrary(options = {}) {
       server.listen(port, host, accept);
     });
     const address = server.address();
-    origin = `http://localhost:${address.port}`;
+    origin =
+      options.externalOrigin === undefined
+        ? `http://localhost:${address.port}`
+        : options.externalOrigin;
     controlAuthority = new URL(origin).host;
     for (const sample of SAMPLES) {
       const packageRoot = join(runtimeRoot, `${sample.id}.dstar`);
       seedPackage(packageRoot, join(examplesRoot, sample.id));
       const viewer = await startViewer(packageRoot, 0, {
         externalOrigin: origin,
-        basePath: `/documents/${sample.id}`,
+        basePath: `${documentsPath}/${sample.id}`,
         ownerToken: randomBytes(32).toString("hex"),
         ownerDisplayName: "Example owner",
       });
       documents.push({
         ...sample,
         viewer,
-        previewUrl: `/examples/${sample.id}/document.html`,
+        previewUrl: `${libraryPath}/${sample.id}/document.html`,
       });
     }
   } catch (error) {
@@ -312,7 +371,7 @@ export async function startExampleLibrary(options = {}) {
   return {
     server,
     origin,
-    url: `${origin}/examples/`,
+    url: `${origin}${libraryPath}/`,
     documents: documents.map(({ viewer, ...document }) => ({
       ...document,
       viewerUrl: viewer.ownerUrl,

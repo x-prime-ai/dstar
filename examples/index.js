@@ -173,7 +173,7 @@ function render() {
 
 async function configureSampleLinks() {
   try {
-    const response = await fetch("/api/documents", {
+    const response = await fetch("api/documents", {
       cache: "no-store",
       headers: { Accept: "application/json" },
     });

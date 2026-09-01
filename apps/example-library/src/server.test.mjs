@@ -14,12 +14,11 @@ afterEach(async () => {
 });
 
 function gateway(path, headers) {
-  const origin = new URL(service.origin);
   return new Promise((resolve, reject) => {
     const request = requestHttp(
       {
         host: "127.0.0.1",
-        port: origin.port,
+        port: service.server.address().port,
         path,
         headers,
       },
@@ -46,7 +45,7 @@ it("serves the library and opens every sample through an isolated Viewer", async
     examplesRoot: resolve(import.meta.dirname, "../../../examples"),
   });
 
-  const response = await fetch(`${service.origin}/api/documents`);
+  const response = await fetch(`${service.origin}/examples/api/documents`);
   expect(response.status).toBe(200);
   const documents = await response.json();
   expect(documents).toHaveLength(4);
@@ -85,7 +84,7 @@ it("serves the library and opens every sample through an isolated Viewer", async
   expect(library).toContain('src="index.js?v=viewer-links"');
   expect(
     await (await fetch(`${service.origin}/examples/index.js`)).text(),
-  ).toContain("/api/documents");
+  ).toContain('fetch("api/documents"');
   expect((await fetch(`${service.origin}/../package.json`)).status).toBe(404);
   expect(
     (await fetch(`${service.origin}/documents/not-a-document/`)).status,
@@ -108,4 +107,51 @@ it("serves the library and opens every sample through an isolated Viewer", async
       })
     ).status,
   ).toBe(400);
+});
+
+it("mounts the complete site under a public base path through a trusted proxy", async () => {
+  const token = "t".repeat(64),
+    publicOrigin = "https://thinkofu.example";
+  service = await startExampleLibrary({
+    port: 0,
+    runtimeRoot: mkdtempSync(join(tmpdir(), "dstar-example-library-proxy-")),
+    examplesRoot: resolve(import.meta.dirname, "../../../examples"),
+    externalOrigin: publicOrigin,
+    basePath: "/dstar",
+    trustedProxyToken: token,
+  });
+  expect(service.url).toBe(`${publicOrigin}/dstar/`);
+  expect(
+    (
+      await gateway("/dstar/", {
+        Host: "private-upstream.example",
+      })
+    ).status,
+  ).toBe(403);
+  const proxyHeaders = {
+    Host: "private-upstream.example",
+    "X-DSTAR-Proxy-Token": token,
+    Forwarded: "host=thinkofu.example;proto=https",
+    "X-Forwarded-Host": "thinkofu.example",
+  };
+  expect((await gateway("/dstar/", proxyHeaders)).status).toBe(200);
+  const documentsResponse = await gateway("/dstar/api/documents", proxyHeaders);
+  expect(documentsResponse.status).toBe(200);
+  const [document] = JSON.parse(documentsResponse.body),
+    viewerUrl = new URL(document.viewerUrl),
+    ownerToken = viewerUrl.hash.slice(1);
+  expect(viewerUrl.origin).toBe(publicOrigin);
+  expect(viewerUrl.pathname).toBe("/dstar/documents/dstar-doc/");
+  const page = await gateway(viewerUrl.pathname, proxyHeaders);
+  expect(page.status).toBe(200);
+  expect(page.body).toContain(
+    'name="dstar-base-path" content="/dstar/documents/dstar-doc"',
+  );
+  const state = await gateway(`${viewerUrl.pathname}api/state`, {
+    ...proxyHeaders,
+    Authorization: `Bearer ${ownerToken}`,
+    Origin: publicOrigin,
+  });
+  expect(state.status).toBe(200);
+  expect(JSON.parse(state.body).session.role).toBe("owner");
 });
