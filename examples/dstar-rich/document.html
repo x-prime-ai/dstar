@@ -36,7 +36,7 @@
                 <strong>HTML</strong><span>canonical</span>
               </div>
               <div class="map-node node-agent">
-                <strong>Agent</strong><span>proposes</span>
+                <strong>Agent</strong><span>drafts</span>
               </div>
               <div class="map-node node-viewer">
                 <strong>Viewer</strong><span>reviews</span>
@@ -59,8 +59,8 @@
         <p class="manifesto-copy" data-dstar-id="rich-manifesto-copy">
           Most agent workflows end in a file and a chat log. DSTAR adds the
           missing layer: a human-readable review contract around the file.
-          Comments remain attached to what was seen. Proposed revisions remain
-          inspectable. Acceptance remains a deliberate human action.
+          Comments remain attached to what was seen. Owner revisions remain
+          inspectable. Publishing remains a deliberate human action.
         </p>
       </section>
 
@@ -107,16 +107,16 @@
             <p class="card-number">C</p>
             <h3>Explicit decisions</h3>
             <p>
-              An agent can draft or propose. Only a person with the right role
-              can accept, decline, resolve, or share.
+              An agent can prepare a complete revision for the owner. Only the
+              owner can submit, accept, decline, resolve, or share it.
             </p>
           </article>
           <article class="bento-card" data-dstar-id="rich-card-history">
             <p class="card-number">D</p>
             <h3>History without ceremony</h3>
             <p>
-              Reopen the package and recover current, previous, suggested, and
-              declined versions without requiring a Git interface.
+              Reopen the package and recover the current document and its
+              previous versions without requiring a Git interface.
             </p>
           </article>
         </div>
@@ -127,9 +127,7 @@
           <p class="section-index" data-dstar-id="rich-journey-index">
             03 / REVIEW LOOP
           </p>
-          <h2 data-dstar-id="rich-journey-title">
-            From intent to accepted document
-          </h2>
+          <h2 data-dstar-id="rich-journey-title">From intent to current</h2>
         </div>
         <ol class="journey-track">
           <li data-dstar-id="rich-step-read">
@@ -149,8 +147,8 @@
           <li data-dstar-id="rich-step-create">
             <span class="step-dot">3</span>
             <div>
-              <strong>Create</strong>
-              <p>Write directly or hand exact context to an agent.</p>
+              <strong>Draft</strong>
+              <p>Write directly or ask an agent using exact page context.</p>
             </div>
           </li>
           <li data-dstar-id="rich-step-review">
@@ -163,8 +161,8 @@
           <li data-dstar-id="rich-step-decide">
             <span class="step-dot">5</span>
             <div>
-              <strong>Decide</strong>
-              <p>Explicitly accept or decline the suggested change.</p>
+              <strong>Publish</strong>
+              <p>The owner explicitly makes the finished revision current.</p>
             </div>
           </li>
         </ol>
@@ -202,7 +200,7 @@
             </div>
             <div>
               <dt>intent</dt>
-              <dd>suggest a revision</dd>
+              <dd>draft an update</dd>
             </div>
           </dl>
           <p class="context-status">
@@ -233,10 +231,10 @@
           </p>
         </details>
         <details data-dstar-id="rich-question-agent">
-          <summary>Can an agent accept its own proposal?</summary>
+          <summary>Can an agent update the document on its own?</summary>
           <p>
-            No. Agent tools can read, draft, reply, and propose within scope;
-            document decisions remain explicit human actions.
+            No. An agent can prepare a draft in context, but the owner submits
+            and publishes every document update.
           </p>
         </details>
       </section>
