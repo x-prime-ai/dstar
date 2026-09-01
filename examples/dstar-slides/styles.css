@@ -1,6 +1,6 @@
 :root {
   color: #17211d;
-  background: #17142f;
+  background: #e8ebe7;
   font-family:
     Inter,
     ui-sans-serif,
@@ -9,11 +9,11 @@
     sans-serif;
   scroll-behavior: smooth;
   --ink: #17211d;
-  --violet: #342e7a;
-  --cream: #fff8e9;
-  --lime: #d8ef74;
-  --coral: #f49a78;
-  --sky: #9fc7ff;
+  --violet: #514d78;
+  --cream: #f7f4ec;
+  --lime: #dfe7bd;
+  --coral: #edc7b8;
+  --sky: #cedded;
 }
 * {
   box-sizing: border-box;
@@ -76,14 +76,14 @@ footer {
   letter-spacing: 0.12em;
 }
 .title-slide {
-  color: #fff;
-  background: var(--violet);
+  color: var(--ink);
+  background: #eeecf3;
 }
 .title-slide .slide-label {
-  color: var(--sky);
+  color: var(--violet);
 }
 .title-slide footer {
-  color: #b8b5da;
+  color: #74717f;
 }
 .title-slide::after {
   position: absolute;
@@ -95,7 +95,7 @@ footer {
   border-radius: 50%;
   content: "";
   box-shadow:
-    0 0 0 min(3vw, 40px) var(--violet),
+    0 0 0 min(3vw, 40px) #eeecf3,
     0 0 0 min(3.2vw, 43px) var(--lime);
 }
 .slide-mark {
@@ -104,7 +104,7 @@ footer {
   right: 7vw;
   width: min(17vw, 200px);
   aspect-ratio: 1;
-  border: 1px dashed #ffffff60;
+  border: 1px dashed #514d7852;
   border-radius: 20px;
   transform: rotate(9deg);
 }
@@ -113,7 +113,7 @@ footer {
   z-index: 2;
   max-width: 610px;
   margin: 4vh 0 0;
-  color: #d0cdeb;
+  color: #5d625f;
   font-size: clamp(15px, 1.7vw, 24px);
   line-height: 1.55;
 }
@@ -163,19 +163,19 @@ footer {
   grid-template-columns: 0.9fr 1.1fr;
   align-items: center;
   gap: 7vw;
-  color: #f5f6f2;
-  background: var(--ink);
+  color: var(--ink);
+  background: #e8ede9;
 }
 .model-slide .slide-label {
-  color: var(--lime);
+  color: #476656;
 }
 .model-slide footer {
-  color: #919d96;
+  color: #6f7a74;
 }
 .model-copy > p:last-child {
   max-width: 510px;
   margin: 4vh 0 0;
-  color: #aab5af;
+  color: #55635c;
   font-size: clamp(12px, 1.3vw, 18px);
   line-height: 1.7;
 }
@@ -194,7 +194,7 @@ footer {
   border-radius: 10px;
   color: var(--ink);
   background: #fff;
-  box-shadow: 0 14px 30px #0005;
+  box-shadow: 0 12px 24px #24372d1f;
 }
 .state span,
 .state small {
@@ -287,55 +287,55 @@ footer {
   grid-template-columns: 1.15fr 0.85fr;
   align-items: center;
   gap: 7vw;
-  color: #fff;
-  background: var(--violet);
+  color: var(--ink);
+  background: #eceaf2;
 }
 .webmcp-slide .slide-label {
-  color: var(--sky);
+  color: var(--violet);
 }
 .webmcp-slide footer {
-  color: #b8b5d5;
+  color: #74717f;
 }
 .webmcp-card > p:last-child {
   max-width: 700px;
   margin: 4vh 0 0;
-  color: #c6c3e2;
+  color: #5c5a68;
   font-size: clamp(12px, 1.3vw, 18px);
   line-height: 1.7;
 }
 .live-context {
   margin: 0;
   padding: 2.5vw;
-  border: 1px solid #ffffff30;
+  border: 1px solid #cfcbdc;
   border-radius: 14px;
-  background: #24205e;
-  box-shadow: 18px 18px 0 var(--coral);
+  background: #f9f8fb;
+  box-shadow: 14px 14px 0 var(--coral);
 }
 .live-context div {
   display: grid;
   grid-template-columns: 110px 1fr;
   gap: 20px;
   padding: 2vh 0;
-  border-top: 1px solid #ffffff1c;
+  border-top: 1px solid #dedbe6;
 }
 .live-context div:first-child {
   border-top: 0;
 }
 .live-context dt {
-  color: var(--lime);
+  color: var(--violet);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.12em;
 }
 .live-context dd {
   margin: 0;
-  color: #fff;
+  color: var(--ink);
   font-family: ui-monospace, monospace;
   font-size: 11px;
 }
 .closing-slide {
   color: var(--ink);
-  background: var(--lime);
+  background: #eef0df;
 }
 .closing-slide .slide-label,
 .closing-slide footer {

@@ -448,8 +448,8 @@ h3 {
   overflow: hidden;
   border: 1px solid #cdd1cc;
   border-radius: 3px;
-  color: #fff;
-  background: #293b33;
+  color: #17211d;
+  background: #dce5df;
 }
 .slide-rail-preview > span {
   position: absolute;
@@ -473,11 +473,11 @@ h3 {
 }
 .slide-rail li:nth-child(4n + 3) .slide-rail-preview {
   color: #17211d;
-  background: #d8ef74;
+  background: #e7ecd4;
 }
 .slide-rail li:nth-child(4n + 4) .slide-rail-preview {
   color: #17211d;
-  background: #ef9473;
+  background: #f0ddd5;
 }
 iframe {
   display: block;
