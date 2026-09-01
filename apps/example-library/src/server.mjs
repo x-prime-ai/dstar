@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync } from "node:fs";
-import { createServer } from "node:http";
+import { createServer, request as requestHttp } from "node:http";
 import { tmpdir } from "node:os";
 import { extname, join, relative, resolve, sep } from "node:path";
 
@@ -43,6 +43,84 @@ const TYPES = new Map([
   [".webp", "image/webp"],
   [".svg", "image/svg+xml"],
 ]);
+const HOP_BY_HOP = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+
+function proxyHeaders(request, host) {
+  const critical = new Set(["host", "origin", "authorization", "content-type"]),
+    seen = new Set();
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    const name = request.rawHeaders[index].toLowerCase();
+    if (
+      name === "forwarded" ||
+      name.startsWith("x-forwarded-") ||
+      (critical.has(name) && seen.has(name))
+    )
+      return null;
+    seen.add(name);
+  }
+  const headers = { ...request.headers, host };
+  for (const name of Object.keys(headers))
+    if (
+      HOP_BY_HOP.has(name.toLowerCase()) ||
+      name.toLowerCase() === "forwarded" ||
+      name.toLowerCase().startsWith("x-forwarded-")
+    )
+      delete headers[name];
+  return headers;
+}
+
+function proxyResponseHeaders(headers) {
+  const safe = { ...headers };
+  for (const name of Object.keys(safe))
+    if (HOP_BY_HOP.has(name.toLowerCase())) delete safe[name];
+  return safe;
+}
+
+function proxyViewer(request, response, viewer) {
+  const target = viewer.server.address(),
+    authority = new URL(viewer.origin).host,
+    headers = proxyHeaders(request, authority);
+  if (!headers) {
+    response.writeHead(400, {
+      "Content-Type": "application/json; charset=utf-8",
+    });
+    response.end('{"error":"Invalid proxy headers"}\n');
+    return;
+  }
+  const upstream = requestHttp({
+    host: target.address,
+    port: target.port,
+    method: request.method,
+    path: request.url,
+    headers,
+  });
+  upstream.on("response", (incoming) => {
+    response.writeHead(
+      incoming.statusCode ?? 502,
+      proxyResponseHeaders(incoming.headers),
+    );
+    incoming.pipe(response);
+  });
+  upstream.on("error", () => {
+    if (response.headersSent) response.destroy();
+    else {
+      response.writeHead(502, {
+        "Content-Type": "application/json; charset=utf-8",
+      });
+      response.end('{"error":"Viewer unavailable"}\n');
+    }
+  });
+  request.pipe(upstream);
+}
 
 function seedPackage(packageRoot, candidateRoot) {
   mkdirSync(packageRoot, { recursive: true, mode: 0o700 });
@@ -129,22 +207,26 @@ export async function startExampleLibrary(options = {}) {
   mkdirSync(runtimeRoot, { recursive: true, mode: 0o700 });
 
   const documents = [];
-  for (const sample of SAMPLES) {
-    const packageRoot = join(runtimeRoot, `${sample.id}.dstar`);
-    seedPackage(packageRoot, join(examplesRoot, sample.id));
-    const viewer = await startViewer(packageRoot, 0, {
-      ownerToken: randomBytes(32).toString("hex"),
-      ownerDisplayName: "Example owner",
-    });
-    documents.push({
-      ...sample,
-      viewer,
-      previewUrl: `/examples/${sample.id}/document.html`,
-    });
-  }
-
+  let origin, controlAuthority;
   const server = createServer((request, response) => {
-    const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
+    const document = documents.find(
+      ({ viewer }) => new URL(viewer.origin).host === request.headers.host,
+    );
+    if (document) {
+      proxyViewer(request, response, document.viewer);
+      return;
+    }
+    if (request.headers.host !== controlAuthority) {
+      json(response, 403, { error: "Unknown local site" });
+      return;
+    }
+    let url;
+    try {
+      url = new URL(request.url ?? "/", origin);
+    } catch {
+      json(response, 400, { error: "Invalid request target" });
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/api/documents") {
       json(
         response,
@@ -179,17 +261,33 @@ export async function startExampleLibrary(options = {}) {
       server.once("error", reject);
       server.listen(port, host, accept);
     });
+    const address = server.address();
+    origin = `http://localhost:${address.port}`;
+    controlAuthority = new URL(origin).host;
+    for (const sample of SAMPLES) {
+      const packageRoot = join(runtimeRoot, `${sample.id}.dstar`);
+      seedPackage(packageRoot, join(examplesRoot, sample.id));
+      const viewer = await startViewer(packageRoot, 0, {
+        externalOrigin: `http://${sample.id}.localhost:${address.port}`,
+        ownerToken: randomBytes(32).toString("hex"),
+        ownerDisplayName: "Example owner",
+      });
+      documents.push({
+        ...sample,
+        viewer,
+        previewUrl: `/examples/${sample.id}/document.html`,
+      });
+    }
   } catch (error) {
     await Promise.all(
       documents.map(
         ({ viewer }) => new Promise((accept) => viewer.server.close(accept)),
       ),
     );
+    if (server.listening) await new Promise((accept) => server.close(accept));
     throw error;
   }
 
-  const address = server.address();
-  const origin = `http://${host}:${address.port}`;
   async function close() {
     await new Promise((accept) => server.close(accept));
     await Promise.all(

@@ -19,12 +19,15 @@ import {
 
 const loopback = (host) =>
   host === "::1" || (isIP(host) === 4 && host.startsWith("127."));
+const localHostname = (host) =>
+  loopback(host) || host === "localhost" || host.endsWith(".localhost");
 const fail = (message) => {
   throw new Error(message);
 };
 
 // Canonical origins only: never normalize userinfo, paths or ambiguous input
-// into a trusted value. TLS is terminated by a separately configured proxy.
+// into a trusted value. HTTP is restricted to loopback/localhost development;
+// deployed origins terminate TLS at a separately configured proxy.
 function externalOrigin(value) {
   if (value === undefined) return undefined;
   let url;
@@ -33,13 +36,14 @@ function externalOrigin(value) {
   } catch {
     fail("Invalid externalOrigin: use a canonical HTTPS origin");
   }
-  if (
-    typeof value !== "string" ||
-    value !== url.origin ||
-    url.protocol !== "https:"
-  )
-    fail("Invalid externalOrigin: use a canonical HTTPS origin without a path");
-  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  const hostname = url.hostname.replace(/^\[|\]$/g, ""),
+    allowedProtocol =
+      url.protocol === "https:" ||
+      (url.protocol === "http:" && localHostname(hostname));
+  if (typeof value !== "string" || value !== url.origin || !allowedProtocol)
+    fail(
+      "Invalid externalOrigin: use canonical HTTPS, or HTTP only for localhost development",
+    );
   if (
     !isIP(hostname) &&
     (hostname.length > 253 ||

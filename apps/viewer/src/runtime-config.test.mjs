@@ -103,6 +103,24 @@ it.each([
   ).toThrow();
 });
 
+it("accepts canonical HTTP only for a local single-port development gateway", () => {
+  for (const externalOrigin of [
+    "http://127.0.0.1:8765",
+    "http://localhost:8765",
+    "http://dstar-doc.localhost:8765",
+  ])
+    expect(
+      resolveViewerConfig("/doc", 0, { externalOrigin, token }).externalOrigin,
+    ).toBe(externalOrigin);
+  for (const externalOrigin of [
+    "http://review.example.com",
+    "http://localhost.example.com:8765",
+  ])
+    expect(() =>
+      resolveViewerConfig("/doc", 0, { externalOrigin, token }),
+    ).toThrow();
+});
+
 it("loads exactly one explicit credential from env or an external regular file", () => {
   const { root, tokenFile } = fixture();
   const configured = viewerConfigFromEnv({
