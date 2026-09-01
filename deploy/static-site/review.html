@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>DSTAR Review</title>
+    <link rel="stylesheet" href="./review.css" />
+    <script type="module" src="./review.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./">DSTAR</a>
+      <strong id="document-title">Opening document…</strong>
+      <nav aria-label="Document activity">
+        <button class="tab active" data-panel="comments">Comments</button>
+        <button class="tab" data-panel="versions">Versions</button>
+      </nav>
+    </header>
+    <main>
+      <section class="canvas" aria-label="Document">
+        <iframe
+          id="document-frame"
+          title="Document"
+          sandbox="allow-scripts allow-same-origin"
+        ></iframe>
+        <button
+          id="selection-comment"
+          type="button"
+          hidden
+          aria-label="Comment on selection"
+          title="Comment on selection"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 5h14v10H9l-4 4V5Z" />
+          </svg>
+        </button>
+      </section>
+      <aside class="sidebar">
+        <section id="comments-panel">
+          <div class="panel-heading">
+            <div class="filters" role="group" aria-label="Comment status">
+              <button class="filter active" data-filter="open">Open</button>
+              <button class="filter" data-filter="resolved">Resolved</button>
+            </div>
+            <p id="comments-summary"></p>
+          </div>
+          <form id="comment-composer" class="composer" hidden>
+            <label for="comment-body">Comment on selection</label>
+            <textarea
+              id="comment-body"
+              rows="4"
+              placeholder="Leave a comment…"
+              required
+            ></textarea>
+            <div class="actions">
+              <button type="button" id="cancel-comment">Cancel</button
+              ><button class="primary">Comment</button>
+            </div>
+          </form>
+          <div id="comments-empty" class="empty">
+            <strong>No open comments</strong>
+            <p>Select text in the document to start a conversation.</p>
+          </div>
+          <div id="comments-list"></div>
+        </section>
+        <section id="versions-panel" hidden>
+          <p class="eyebrow">VERSION HISTORY</p>
+          <article class="version current">
+            <span class="version-dot"></span>
+            <div>
+              <strong>Current version</strong><small>Published sample</small>
+            </div>
+            <em>Current</em>
+          </article>
+          <p class="version-note">
+            This static preview keeps comments in this browser. Shared version
+            history will be available when a workspace backend is connected.
+          </p>
+        </section>
+      </aside>
+    </main>
+    <p id="status" class="sr-only" role="status" aria-live="polite"></p>
+  </body>
+</html>
