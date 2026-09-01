@@ -49,7 +49,7 @@ writeFileSync(
     .replace('href="../"', 'href="./"')
     .replace(
       '<meta name="viewport" content="width=device-width, initial-scale=1" />',
-      '<meta name="viewport" content="width=device-width, initial-scale=1" />\n    <link rel="icon" href="data:," />',
+      `<meta name="viewport" content="width=device-width, initial-scale=1" />\n    <base href="${basePath}/" />\n    <link rel="icon" href="data:," />`,
     ),
 );
 

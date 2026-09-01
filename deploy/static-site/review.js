@@ -18,7 +18,10 @@ const SAMPLES = {
 };
 
 const params = new URL(location.href).searchParams;
-const id = params.get("id");
+const id =
+  params.get("id") ||
+  location.pathname.match(/\/documents\/([^/]+)\/?$/)?.[1] ||
+  null;
 const sample = SAMPLES[id];
 const $ = (selector) => document.querySelector(selector);
 const frame = $("#document-frame");
