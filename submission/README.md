@@ -20,8 +20,8 @@ verified.
       revision without the agent accepting it.
 - [x] Verify a fresh judge session using the exact access instructions and any
       credentials placed in Devpost.
-- [ ] Replace every placeholder in [devpost.md](devpost.md).
-- [ ] Record, edit and publish the demo described in
+- [x] Replace every placeholder in [devpost.md](devpost.md).
+- [x] Record, edit and publish the demo described in
       [demo-script.md](demo-script.md) as a public YouTube video under three
       minutes.
 - [ ] Add final screenshots without third-party trademarks or unlicensed
@@ -49,7 +49,8 @@ that as a fallback: concurrent judges share history and can affect one another.
 - Successful deployed calls for `get_review_context`, `read_document`, and an
   Owner `propose_revision` followed by an explicit human decision.
 - `pnpm verify` output for the submitted commit.
-- Public YouTube URL and exact video duration.
+- Public YouTube URL: https://youtu.be/v66wnIOBoZU (1:47.421 source duration;
+  YouTube displays 1:48).
 - A copy of the final Devpost text and testing instructions.
 
 ## Production verification — September 2, 2026

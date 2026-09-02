@@ -118,7 +118,7 @@ sample state in the visitor's browser.
 
 - Live project: https://www.thinkofu.ai/dstar/
 - Public source: https://github.com/x-prime-ai/dstar
-- Demo video: `REPLACE_WITH_PUBLIC_YOUTUBE_URL`
+- Demo video: https://youtu.be/v66wnIOBoZU
 
 ## Judge testing instructions
 
