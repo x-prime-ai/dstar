@@ -66,7 +66,7 @@ The authenticated top-level Viewer registers role-scoped tools with
 bridge into the DSTAR Engine. The sandboxed authored document receives no tool
 permission.
 
-The core page tools are:
+The public static demo exposes these page tools:
 
 - `get_review_context` — reads the exact displayed version, selection, focused
   comment, role, proposals and comment threads.
@@ -76,8 +76,10 @@ The core page tools are:
   to the matching Viewer composer without posting them.
 - `propose_revision` — Owner only; validates and stores a complete candidate
   against the exact accepted base without publishing it.
-- `reply_comment` — records an explicit keyed agent reply without resolving the
-  thread.
+
+The repository's persistent Viewer applies the same trust boundary over the
+filesystem-backed Engine, with keyed replies, role-bound sessions and
+reopenable history.
 
 Registration is abortable and restored after page lifecycle changes. Inputs
 reject unknown properties. Document and comment content is treated as untrusted
@@ -108,8 +110,9 @@ submission period. Exact dated commits are documented in
 The repository includes unit, integration, security and conformance coverage.
 The Viewer tests use real loopback HTTP servers, filesystem persistence and
 process restarts. We also exercised real tool discovery and calls through the
-ChatGPT in-app browser without injecting a WebMCP polyfill. Final deployed
-origin verification will be recorded before submission.
+ChatGPT in-app browser without injecting a WebMCP polyfill. The public static
+demo uses the same exact-revision and human-decision model while storing its
+sample state in the visitor's browser.
 
 ## Links
 
@@ -121,15 +124,17 @@ origin verification will be recorded before submission.
 
 1. Open https://www.thinkofu.ai/dstar/ in ChatGPT's in-app browser or WebMCP-enabled
    Chrome.
-2. If the deployment uses access credentials, use
-   `REPLACE_WITH_DEVPOST_PRIVATE_TEST_CREDENTIALS_OR_INSTRUCTIONS`.
-3. Open the DSTAR product brief as Owner and confirm that the page reports
-   connected WebMCP tools.
-4. Select a sentence, choose Comment, then choose Ask agent. In the external
-   agent, ask it to draft a concise comment. Return to the Viewer, edit the
-   draft and post it explicitly.
-5. Focus the open thread and choose Ask agent. Ask the agent to revise the
-   document to address that feedback. The result should appear as a new pending
-   version linked to the comment; the current version must remain unchanged.
-6. Open Versions, review the pending version, and accept or reject it manually.
-   The agent has no decision tool.
+2. No access credentials are required. Each sample keeps its comments and
+   version history in the current browser only; use a fresh browser profile to
+   start clean.
+3. Open any sample document and confirm the page exposes
+   `get_review_context`, `read_document`, `draft_selection_comment`,
+   `draft_comment_reply`, and `propose_revision`.
+4. Select a sentence in the document. Ask the external agent to read the page
+   context and draft a concise comment with `draft_selection_comment`. Return
+   to the Viewer, edit the draft and post it explicitly.
+5. Ask the agent to read the exact current revision, revise the complete HTML
+   and CSS, and call `propose_revision`. The result appears under Versions as a
+   pending suggestion while the displayed current version remains unchanged.
+6. Open the pending suggestion, review it, and click Accept update or Reject
+   yourself. The agent has no decision tool and cannot resolve the comment.
