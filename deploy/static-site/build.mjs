@@ -30,7 +30,12 @@ for (const id of ["dstar-doc", "dstar-rich", "dstar-slides", "dstar-ui-design"])
   cpSync(join(root, "examples", id), join(out, "samples", id), {
     recursive: true,
   });
-for (const file of ["review.html", "review.css", "review.js"])
+for (const file of [
+  "review.html",
+  "review.css",
+  "review.js",
+  "review-state.mjs",
+])
   cpSync(join(here, file), join(out, file));
 
 const reviewPath = join(out, "review.html");

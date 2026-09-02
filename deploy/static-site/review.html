@@ -13,6 +13,9 @@
     <header class="topbar">
       <a class="brand" href="./">DSTAR</a>
       <strong id="document-title">Opening document…</strong>
+      <span class="owner-badge" title="Only the Owner can accept a revision"
+        >Owner</span
+      >
       <nav aria-label="Document activity">
         <button class="tab active" data-panel="comments">Comments</button>
         <button class="tab" data-panel="versions">Versions</button>
@@ -20,6 +23,19 @@
     </header>
     <main>
       <section class="canvas" aria-label="Document">
+        <div id="review-bar" class="review-bar" hidden>
+          <div>
+            <strong>Reviewing a suggested version</strong>
+            <span id="review-summary"></span>
+          </div>
+          <div class="review-actions">
+            <button id="return-current" type="button">Back to current</button>
+            <button id="reject-version" type="button">Reject</button>
+            <button id="accept-version" class="primary" type="button">
+              Accept update
+            </button>
+          </div>
+        </div>
         <iframe
           id="document-frame"
           title="Document"
@@ -66,17 +82,18 @@
           <div id="comments-list"></div>
         </section>
         <section id="versions-panel" hidden>
-          <p class="eyebrow">VERSION HISTORY</p>
-          <article class="version current">
-            <span class="version-dot"></span>
+          <div class="versions-heading">
             <div>
-              <strong>Current version</strong><small>Published sample</small>
+              <p class="eyebrow">VERSIONS</p>
+              <strong>Document history</strong>
             </div>
-            <em>Current</em>
-          </article>
+            <span id="pending-count"></span>
+          </div>
+          <div id="versions-list"></div>
           <p class="version-note">
-            This static preview keeps comments in this browser. Shared version
-            history will be available when a workspace backend is connected.
+            Agents can suggest a complete new version through WebMCP. A
+            suggestion never changes the document until the Owner accepts it.
+            This public demo keeps its history in this browser.
           </p>
         </section>
       </aside>
