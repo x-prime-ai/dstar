@@ -26,7 +26,7 @@ verified.
       minutes.
 - [ ] Add final screenshots without third-party trademarks or unlicensed
       material.
-- [ ] Save a Devpost draft early, then run one final link and permissions check
+- [x] Save a Devpost draft early, then run one final link and permissions check
       before submitting.
 
 ## Recommended deployment shape
@@ -52,6 +52,7 @@ that as a fallback: concurrent judges share history and can affect one another.
 - Public YouTube URL: https://youtu.be/v66wnIOBoZU (1:47.421 source duration;
   YouTube displays 1:48).
 - A copy of the final Devpost text and testing instructions.
+- Submitted Devpost project: https://devpost.com/software/dstar
 
 ## Production verification — September 2, 2026
 
@@ -66,3 +67,12 @@ that as a fallback: concurrent judges share history and can affect one another.
   `sha256:afceb807c4b6583ab7ce20103ca918b186d2a6171b23145927161d3e28e71703`
   while the current revision remained unchanged. The revision became current
   only after an explicit Owner review and Accept action in the Viewer.
+
+## Submission record — September 2, 2026
+
+- Devpost confirmed `Project submitted!` for DSTAR.
+- Public project page: https://devpost.com/software/dstar
+- Submitter type: Individual; country: United States.
+- AI tool: Codex; reported learning level: Moderate.
+- The public page embeds the YouTube demo and links to both the live project and
+  public GitHub repository.
