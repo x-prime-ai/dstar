@@ -21,7 +21,7 @@ const SAMPLES = [
   },
   {
     id: "dstar-slides",
-    title: "Review the document",
+    title: "Why we built DSTAR",
     format: "slides",
   },
   {

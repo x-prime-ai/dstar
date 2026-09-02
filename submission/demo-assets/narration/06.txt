@@ -1,0 +1,1 @@
+A normal MCP server can read stored files. WebMCP knows what is happening on the page right now: the active slide, the exact selection, the focused thread, and the user's intent. That's the missing bridge. Agents create. People review, collaborate, and decide.

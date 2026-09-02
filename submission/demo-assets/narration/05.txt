@@ -1,0 +1,1 @@
+Next, I ask xPrime to address that feedback. It reads the accepted Slides document, then submits a linked revision. The current version doesn't change until the Owner reviews and accepts it. And resolving the discussion? That's a separate decision.

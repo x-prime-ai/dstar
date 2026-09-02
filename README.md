@@ -10,6 +10,9 @@ different source schemas. There is no parallel source JSON.
 Four complete [sample documents](examples/README.md) demonstrate a conventional
 product brief, a rich HTML explainer, a slide deck, and a Viewer UI design spec.
 
+[Open the live WebMCP demo](https://www.thinkofu.ai/dstar/) or read the
+[WebMCP Challenge submission notes](submission/README.md).
+
 ## Working prototype
 
 The new HTML-first path consists of:
@@ -158,3 +161,7 @@ also covers the retained legacy implementation.
 See the [integration validation record](design/integration-validation.md) for
 the tested browser/HTTP flows and the remaining native Chrome/container/TLS
 verification limits.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

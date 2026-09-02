@@ -1,0 +1,1 @@
+D-star means document star. D is document; star is the wildcard: any form an agent can create. Underneath, it's one HTML-based format. It can be a traditional document, a rich explainer, a slide deck, or a UI design spec. And comments and versions work the same way across all four.

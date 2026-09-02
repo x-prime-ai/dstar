@@ -1,0 +1,1 @@
+Now I select the exact text on this slide and ask xPrime to draft a comment. The page gives the agent two things: the live selection, and what I'm trying to do. The draft comes back to DSTAR. I can edit it, and I decide whether to post it.

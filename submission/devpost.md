@@ -113,13 +113,13 @@ origin verification will be recorded before submission.
 
 ## Links
 
-- Live project: `REPLACE_WITH_LIVE_URL`
-- Public source: `REPLACE_WITH_PUBLIC_REPOSITORY_URL`
+- Live project: https://www.thinkofu.ai/dstar/
+- Public source: https://github.com/x-prime-ai/dstar
 - Demo video: `REPLACE_WITH_PUBLIC_YOUTUBE_URL`
 
 ## Judge testing instructions
 
-1. Open `REPLACE_WITH_LIVE_URL` in ChatGPT's in-app browser or WebMCP-enabled
+1. Open https://www.thinkofu.ai/dstar/ in ChatGPT's in-app browser or WebMCP-enabled
    Chrome.
 2. If the deployment uses access credentials, use
    `REPLACE_WITH_DEVPOST_PRIVATE_TEST_CREDENTIALS_OR_INSTRUCTIONS`.

@@ -468,7 +468,11 @@ export async function startViewer(root, port = 0, options = {}) {
               principal,
               action.kind === "address-comment"
                 ? [CAPABILITIES.READ, CAPABILITIES.REPLY, CAPABILITIES.PROPOSE]
-                : [CAPABILITIES.READ, CAPABILITIES.HANDOFF],
+                : [
+                    CAPABILITIES.READ,
+                    CAPABILITIES.COMMENT,
+                    CAPABILITIES.HANDOFF,
+                  ],
             ),
           };
         handoffs.set(body.id, record);

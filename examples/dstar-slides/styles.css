@@ -41,7 +41,7 @@ body {
   z-index: 1;
   margin: 0 0 3vh;
   color: var(--violet);
-  font-size: clamp(9px, 1vw, 13px);
+  font-size: clamp(12px, 1.15vw, 16px);
   font-weight: 800;
   letter-spacing: 0.18em;
 }
@@ -50,18 +50,18 @@ h2 {
   position: relative;
   z-index: 1;
   margin: 0;
-  font-weight: 720;
-  letter-spacing: -0.07em;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 h1 {
   max-width: 1050px;
   font-size: clamp(50px, 8.5vw, 128px);
-  line-height: 0.88;
+  line-height: 0.96;
 }
 h2 {
   max-width: 1020px;
   font-size: clamp(44px, 6vw, 90px);
-  line-height: 0.92;
+  line-height: 0.98;
 }
 footer {
   position: absolute;
@@ -72,7 +72,7 @@ footer {
   display: flex;
   justify-content: space-between;
   color: #6e746f;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.12em;
 }
 .title-slide {
@@ -114,8 +114,8 @@ footer {
   max-width: 610px;
   margin: 4vh 0 0;
   color: #5d625f;
-  font-size: clamp(15px, 1.7vw, 24px);
-  line-height: 1.55;
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.45;
 }
 .problem-slide {
   justify-content: flex-start;
@@ -149,14 +149,14 @@ footer {
 }
 .problem-grid h3 {
   margin: 5vh 0 1.5vh;
-  font-size: clamp(20px, 2.2vw, 32px);
-  letter-spacing: -0.04em;
+  font-size: clamp(24px, 2.35vw, 34px);
+  letter-spacing: -0.02em;
 }
 .problem-grid p {
   margin: 0;
   color: #27312d;
-  font-size: clamp(11px, 1.05vw, 15px);
-  line-height: 1.6;
+  font-size: clamp(16px, 1.4vw, 20px);
+  line-height: 1.45;
 }
 .model-slide {
   display: grid;
@@ -169,6 +169,10 @@ footer {
 .model-slide .slide-label {
   color: #476656;
 }
+.model-slide h2,
+.webmcp-slide h2 {
+  font-size: clamp(44px, 4.5vw, 64px);
+}
 .model-slide footer {
   color: #6f7a74;
 }
@@ -176,8 +180,8 @@ footer {
   max-width: 510px;
   margin: 4vh 0 0;
   color: #55635c;
-  font-size: clamp(12px, 1.3vw, 18px);
-  line-height: 1.7;
+  font-size: clamp(17px, 1.55vw, 22px);
+  line-height: 1.5;
 }
 .state-stack {
   display: grid;
@@ -199,10 +203,10 @@ footer {
 .state span,
 .state small {
   color: #68746e;
-  font-size: 10px;
+  font-size: 15px;
 }
 .state strong {
-  font-size: clamp(20px, 2.4vw, 34px);
+  font-size: clamp(24px, 2.5vw, 36px);
 }
 .state.current {
   background: var(--lime);
@@ -256,16 +260,16 @@ footer {
 .loop-step span {
   color: #59645e;
   font:
-    700 9px ui-monospace,
+    700 13px ui-monospace,
     monospace;
 }
 .loop-step strong {
   color: var(--ink);
-  font-size: clamp(18px, 2.2vw, 30px);
+  font-size: clamp(24px, 2.4vw, 34px);
 }
 .loop-step small {
   color: #58635d;
-  font-size: 9px;
+  font-size: 16px;
 }
 .loop-link {
   color: var(--violet);
@@ -279,8 +283,8 @@ footer {
   border-left: 5px solid var(--violet);
   color: #48544e;
   background: #ffffff90;
-  font-size: clamp(11px, 1.1vw, 15px);
-  line-height: 1.7;
+  font-size: clamp(16px, 1.4vw, 20px);
+  line-height: 1.5;
 }
 .webmcp-slide {
   display: grid;
@@ -300,8 +304,8 @@ footer {
   max-width: 700px;
   margin: 4vh 0 0;
   color: #5c5a68;
-  font-size: clamp(12px, 1.3vw, 18px);
-  line-height: 1.7;
+  font-size: clamp(17px, 1.55vw, 22px);
+  line-height: 1.5;
 }
 .live-context {
   margin: 0;
@@ -323,7 +327,7 @@ footer {
 }
 .live-context dt {
   color: var(--violet);
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.12em;
 }
@@ -331,7 +335,7 @@ footer {
   margin: 0;
   color: var(--ink);
   font-family: ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 16px;
 }
 .closing-slide {
   color: var(--ink);
@@ -356,7 +360,7 @@ footer {
   padding: 9px 14px;
   border: 1px solid #17211d66;
   border-radius: 7px;
-  font-size: 10px;
+  font-size: 16px;
 }
 .closing-word {
   position: absolute;

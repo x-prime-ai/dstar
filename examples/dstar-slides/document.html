@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DSTAR — Review the document, not the machinery</title>
+    <title>DSTAR — Agents create, people decide</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body data-dstar-mode="slides">
@@ -16,16 +16,18 @@
       >
         <div class="slide-mark" aria-hidden="true"></div>
         <p class="slide-label" data-dstar-id="deck-title-label">
-          DSTAR / PRODUCT STORY
+          WHY WE BUILT DSTAR
         </p>
         <h1 data-dstar-id="deck-title">
-          Review the document.<br />Not the machinery.
+          AI writes fast.<br />
+          Collaboration still breaks.
         </h1>
         <p class="slide-lead" data-dstar-id="deck-title-lead">
-          A portable HTML artifact where agents assist and owners publish.
+          Agents can create almost any artifact. People still need a clear place
+          to review it together.
         </p>
         <footer data-dstar-id="deck-title-footer">
-          <span>2026</span><span>01 / 06</span>
+          <span>2026</span><span>01 / 08</span>
         </footer>
       </section>
 
@@ -35,38 +37,37 @@
         data-dstar-slide="2"
         data-dstar-id="deck-slide-problem"
       >
-        <p class="slide-label" data-dstar-id="deck-problem-label">THE GAP</p>
+        <p class="slide-label" data-dstar-id="deck-problem-label">THE BREAK</p>
         <h2 data-dstar-id="deck-problem-title">
-          Agent output is easy.<br />Trustworthy review is not.
+          Creation changed.<br />
+          Collaboration did not.
         </h2>
         <div class="problem-grid">
-          <article data-dstar-id="deck-problem-chat">
+          <article data-dstar-id="deck-problem-formats">
             <span class="problem-number">01</span>
-            <h3>Chat loses place</h3>
+            <h3>Formats fragment</h3>
             <p>
-              Feedback drifts away from the exact sentence and version it
-              describes.
+              Docs, slides, explainers, and UI designs live in separate tools.
+            </p>
+          </article>
+          <article data-dstar-id="deck-problem-context">
+            <span class="problem-number">02</span>
+            <h3>Comments lose context</h3>
+            <p>
+              The agent cannot see the exact selection, version, or focused
+              thread.
             </p>
           </article>
           <article data-dstar-id="deck-problem-files">
-            <span class="problem-number">02</span>
-            <h3>Files lose intent</h3>
-            <p>
-              A final export rarely explains what changed, who requested it, or
-              why.
-            </p>
-          </article>
-          <article data-dstar-id="deck-problem-tools">
             <span class="problem-number">03</span>
-            <h3>Developer tools add friction</h3>
+            <h3>Revisions become files</h3>
             <p>
-              Most reviewers should not need branches, diffs, or repository
-              concepts.
+              New files hide what changed, who commented, and what was accepted.
             </p>
           </article>
         </div>
         <footer data-dstar-id="deck-problem-footer">
-          <span>DSTAR</span><span>02 / 06</span>
+          <span>DSTAR</span><span>02 / 08</span>
         </footer>
       </section>
 
@@ -74,81 +75,191 @@
         id="slide-3"
         class="slide model-slide"
         data-dstar-slide="3"
-        data-dstar-id="deck-slide-model"
+        data-dstar-id="deck-slide-origin"
       >
         <div class="model-copy">
-          <p class="slide-label" data-dstar-id="deck-model-label">THE MODEL</p>
-          <h2 data-dstar-id="deck-model-title">
-            One artifact.<br />A clear timeline.
+          <p class="slide-label" data-dstar-id="deck-origin-label">THE IDEA</p>
+          <h2 data-dstar-id="deck-origin-title">
+            So we built<br />
+            DSTAR.
           </h2>
-          <p data-dstar-id="deck-model-copy">
-            The Viewer translates an exact version graph into language a reader
-            already understands.
+          <p data-dstar-id="deck-origin-copy">
+            D-star means document star: one HTML-based artifact model for
+            anything an agent can create, with review built in.
           </p>
         </div>
-        <div class="state-stack" data-dstar-id="deck-state-stack">
+        <div class="state-stack" data-dstar-id="deck-origin-stack">
           <div class="state current">
-            <span>01</span><strong>Current</strong
-            ><small>what readers see</small>
+            <span>01</span><strong>Agent-native</strong
+            ><small>agents create and revise</small>
           </div>
           <div class="state suggested">
-            <span>02</span><strong>Draft</strong><small>owner is editing</small>
+            <span>02</span><strong>Human review</strong
+            ><small>comments stay in context</small>
           </div>
           <div class="state previous">
-            <span>03</span><strong>Previous</strong
-            ><small>accepted history</small>
-          </div>
-          <div class="state declined">
-            <span>04</span><strong>Comments</strong
-            ><small>open or resolved threads</small>
+            <span>03</span><strong>Explicit decisions</strong
+            ><small>owners accept changes</small>
           </div>
         </div>
-        <footer data-dstar-id="deck-model-footer">
-          <span>DSTAR</span><span>03 / 06</span>
+        <footer data-dstar-id="deck-origin-footer">
+          <span>DSTAR</span><span>03 / 08</span>
         </footer>
       </section>
 
       <section
         id="slide-4"
-        class="slide loop-slide"
+        class="slide model-slide"
         data-dstar-slide="4"
-        data-dstar-id="deck-slide-loop"
+        data-dstar-id="deck-slide-format"
       >
-        <p class="slide-label" data-dstar-id="deck-loop-label">
-          THE REVIEW LOOP
-        </p>
-        <h2 data-dstar-id="deck-loop-title">Context travels with the work.</h2>
-        <div class="loop" data-dstar-id="deck-loop-diagram">
-          <div class="loop-step">
-            <span>1</span><strong>Select</strong><small>exact text</small>
+        <div class="model-copy">
+          <p class="slide-label" data-dstar-id="deck-format-label">
+            THE FORMAT
+          </p>
+          <h2 data-dstar-id="deck-format-title">
+            One review layer.<br />
+            Any format.
+          </h2>
+          <p data-dstar-id="deck-format-copy">
+            HTML gives agents one expressive, portable canvas while comments and
+            versions stay consistent for people.
+          </p>
+        </div>
+        <div class="state-stack" data-dstar-id="deck-format-stack">
+          <div class="state current">
+            <span>01</span><strong>Document</strong
+            ><small>structured reading</small>
           </div>
-          <div class="loop-link" aria-hidden="true">→</div>
-          <div class="loop-step">
-            <span>2</span><strong>Comment</strong><small>human intent</small>
+          <div class="state suggested">
+            <span>02</span><strong>Rich HTML</strong
+            ><small>expressive explanation</small>
           </div>
-          <div class="loop-link" aria-hidden="true">→</div>
-          <div class="loop-step">
-            <span>3</span><strong>Draft</strong><small>owner update</small>
+          <div class="state previous">
+            <span>03</span><strong>Slides</strong
+            ><small>paced storytelling</small>
           </div>
-          <div class="loop-link" aria-hidden="true">→</div>
-          <div class="loop-step">
-            <span>4</span><strong>Publish</strong
-            ><small>explicit owner action</small>
+          <div class="state declined">
+            <span>04</span><strong>UI design</strong
+            ><small>visual specification</small>
           </div>
         </div>
-        <aside data-dstar-id="deck-loop-note">
-          Comments stay open until they are resolved. A new version never
-          silently closes the conversation.
-        </aside>
-        <footer data-dstar-id="deck-loop-footer">
-          <span>DSTAR</span><span>04 / 06</span>
+        <footer data-dstar-id="deck-format-footer">
+          <span>DSTAR</span><span>04 / 08</span>
         </footer>
       </section>
 
       <section
         id="slide-5"
-        class="slide webmcp-slide"
+        class="slide loop-slide"
         data-dstar-slide="5"
+        data-dstar-id="deck-slide-create"
+      >
+        <p class="slide-label" data-dstar-id="deck-create-label">CREATE</p>
+        <h2 data-dstar-id="deck-create-title">Create with your agent.</h2>
+        <div class="loop" data-dstar-id="deck-create-flow">
+          <div class="loop-step">
+            <span>1</span><strong>Brief</strong><small>title + format</small>
+          </div>
+          <div class="loop-link" aria-hidden="true">→</div>
+          <div class="loop-step">
+            <span>2</span><strong>Ask</strong><small>your external agent</small>
+          </div>
+          <div class="loop-link" aria-hidden="true">→</div>
+          <div class="loop-step">
+            <span>3</span><strong>Create</strong
+            ><small>agent builds artifact</small>
+          </div>
+          <div class="loop-link" aria-hidden="true">→</div>
+          <div class="loop-step">
+            <span>4</span><strong>Return</strong><small>DSTAR opens it</small>
+          </div>
+        </div>
+        <aside data-dstar-id="deck-create-note">
+          The artifact returns directly to the review space.
+        </aside>
+        <footer data-dstar-id="deck-create-footer">
+          <span>DSTAR</span><span>05 / 08</span>
+        </footer>
+      </section>
+
+      <section
+        id="slide-6"
+        class="slide loop-slide comment-slide"
+        data-dstar-slide="6"
+        data-dstar-id="deck-slide-comment"
+      >
+        <p class="slide-label" data-dstar-id="deck-comment-label">COMMENT</p>
+        <h2 data-dstar-id="deck-comment-title">Review in context.</h2>
+        <div class="loop" data-dstar-id="deck-comment-flow">
+          <div class="loop-step">
+            <span>1</span><strong>Select</strong><small>exact text</small>
+          </div>
+          <div class="loop-link" aria-hidden="true">→</div>
+          <div class="loop-step">
+            <span>2</span><strong>Ask</strong><small>current intent</small>
+          </div>
+          <div class="loop-link" aria-hidden="true">→</div>
+          <div class="loop-step">
+            <span>3</span><strong>Draft</strong><small>agent returns</small>
+          </div>
+          <div class="loop-link" aria-hidden="true">→</div>
+          <div class="loop-step">
+            <span>4</span><strong>Post</strong><small>human action</small>
+          </div>
+        </div>
+        <aside data-dstar-id="deck-comment-note">
+          The agent opens an editable draft. It never posts for the reviewer.
+        </aside>
+        <footer data-dstar-id="deck-comment-footer">
+          <span>DSTAR</span><span>06 / 08</span>
+        </footer>
+      </section>
+
+      <section
+        id="slide-7"
+        class="slide model-slide update-slide"
+        data-dstar-slide="7"
+        data-dstar-id="deck-slide-update"
+      >
+        <div class="model-copy">
+          <p class="slide-label" data-dstar-id="deck-update-label">UPDATE</p>
+          <h2 data-dstar-id="deck-update-title">
+            Agent revises.<br />
+            Owner decides.
+          </h2>
+          <p data-dstar-id="deck-update-copy">
+            A revision stays proposed until the Owner reviews it. Accepting the
+            change and resolving the discussion remain separate decisions.
+          </p>
+        </div>
+        <div class="state-stack" data-dstar-id="deck-update-stack">
+          <div class="state current">
+            <span>01</span><strong>Current</strong
+            ><small>accepted version</small>
+          </div>
+          <div class="state suggested">
+            <span>02</span><strong>Proposal</strong
+            ><small>linked to comment</small>
+          </div>
+          <div class="state previous">
+            <span>03</span><strong>Owner review</strong
+            ><small>explicit decision</small>
+          </div>
+          <div class="state declined">
+            <span>04</span><strong>Resolve</strong
+            ><small>separate discussion</small>
+          </div>
+        </div>
+        <footer data-dstar-id="deck-update-footer">
+          <span>DSTAR</span><span>07 / 08</span>
+        </footer>
+      </section>
+
+      <section
+        id="slide-8"
+        class="slide webmcp-slide"
+        data-dstar-slide="8"
         data-dstar-id="deck-slide-webmcp"
       >
         <div class="webmcp-card">
@@ -156,22 +267,21 @@
             WHY WEBMCP
           </p>
           <h2 data-dstar-id="deck-webmcp-title">
-            The page knows what the person means now.
+            The page carries live context.
           </h2>
           <p data-dstar-id="deck-webmcp-copy">
-            Ordinary MCP can read a document. The live Viewer can also bind the
-            exact selection, focused comment, visible version, and requested
-            action to the agent handoff.
+            Ordinary MCP can read stored files. WebMCP lets an external agent
+            act on the exact page state the person is reviewing now.
           </p>
         </div>
         <dl class="live-context" data-dstar-id="deck-webmcp-context">
           <div>
-            <dt>VERSION</dt>
-            <dd>current</dd>
+            <dt>VIEW</dt>
+            <dd>active slide</dd>
           </div>
           <div>
             <dt>SELECTION</dt>
-            <dd>“human decisions”</dd>
+            <dd>exact text</dd>
           </div>
           <div>
             <dt>FOCUS</dt>
@@ -179,33 +289,11 @@
           </div>
           <div>
             <dt>INTENT</dt>
-            <dd>draft an update</dd>
+            <dd>draft or revise</dd>
           </div>
         </dl>
         <footer data-dstar-id="deck-webmcp-footer">
-          <span>DSTAR</span><span>05 / 06</span>
-        </footer>
-      </section>
-
-      <section
-        id="slide-6"
-        class="slide closing-slide"
-        data-dstar-slide="6"
-        data-dstar-id="deck-slide-closing"
-      >
-        <p class="slide-label" data-dstar-id="deck-closing-label">
-          THE PROMISE
-        </p>
-        <h2 data-dstar-id="deck-closing-title">
-          Expressive enough for agents.<br />Clear enough for everyone.
-        </h2>
-        <div class="closing-line" data-dstar-id="deck-closing-line">
-          <span>Canonical HTML</span><span>Exact review</span
-          ><span>Portable history</span><span>Human control</span>
-        </div>
-        <p class="closing-word" data-dstar-id="deck-closing-word">DSTAR</p>
-        <footer data-dstar-id="deck-closing-footer">
-          <span>END</span><span>06 / 06</span>
+          <span>AGENTS CREATE · PEOPLE DECIDE</span><span>08 / 08</span>
         </footer>
       </section>
     </main>

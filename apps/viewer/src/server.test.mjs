@@ -286,6 +286,11 @@ it("uses a short-lived scoped handoff to return an agent draft", async () => {
   expect(created.status).toBe(201);
   expect(created.text).not.toContain(ownerToken);
   expect(created.text).not.toContain(scopedToken);
+  expect(created.json().session.capabilities).toEqual([
+    "read",
+    "comment",
+    "handoff",
+  ]);
   expect(
     (await wire(viewer, "/api/state", { headers: scopedHeaders })).status,
   ).toBe(200);
@@ -1106,7 +1111,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
   expect(handoff.text).not.toContain(accessToken);
   expect(handoff.json().session).toMatchObject({
     role: "reviewer",
-    capabilities: ["read", "handoff"],
+    capabilities: ["read", "comment", "handoff"],
   });
   const scopedHeaders = {
       Authorization: `Bearer ${accessToken}`,
@@ -1121,7 +1126,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
   expect(toolContext.status).toBe(200);
   expect(toolContext.json().session).toMatchObject({
     role: "reviewer",
-    capabilities: ["read", "handoff"],
+    capabilities: ["read", "comment", "handoff"],
   });
   expect(
     (await wire(viewer, `/api/handoffs/${handoffId}`, { headers: owner }))

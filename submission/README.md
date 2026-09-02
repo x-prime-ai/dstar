@@ -9,7 +9,7 @@ verified.
 ## Required before submission
 
 - [ ] Register for the WebMCP Challenge on Devpost.
-- [ ] Choose and add an open source license. Apache-2.0 is recommended for this
+- [x] Choose and add an open source license. Apache-2.0 is recommended for this
       protocol and SDK repository because it includes an explicit patent grant.
 - [ ] Make the source repository public and confirm the license is detected on
       the repository landing page.

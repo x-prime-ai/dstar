@@ -7,3 +7,19 @@ coverage/
 .env
 .env.local
 deploy/viewer/secrets/
+
+# Demo build products and private voice references. Keep the selected export,
+# source frames, scripts, and narration text in version control.
+submission/demo-assets/__pycache__/
+submission/demo-assets/**/*.aiff
+submission/demo-assets/**/*.wav
+submission/demo-assets/segment-*.txt
+submission/demo-assets/*.png
+submission/demo-assets/*.svg
+submission/demo-assets/frames/
+submission/demo-assets/generated-launch-note.html
+submission/demo-assets/generate-cloned-narration.py
+submission/demo-assets/make-*.py
+submission/demo-assets/narration/07.txt
+submission/demo-output/*
+!submission/demo-output/dstar-demo.mp4

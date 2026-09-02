@@ -33,7 +33,7 @@ package automatically.
 | -------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
 | [`dstar-doc`](dstar-doc/document.html)             | Conventional product brief     | Long-form text, metadata, a process diagram, table, ordered principles, callouts    |
 | [`dstar-rich`](dstar-rich/document.html)           | Rich HTML explainer            | Editorial hero, CSS system map, bento layout, journey, live-context panel, details  |
-| [`dstar-slides`](dstar-slides/document.html)       | Six-slide product story        | Title, problem, state model, review loop, WebMCP context, closing slides            |
+| [`dstar-slides`](dstar-slides/document.html)       | Eight-slide WebMCP demo story  | Problem, shared format, create, comment, update, WebMCP context, and closing slides |
 | [`dstar-ui-design`](dstar-ui-design/document.html) | Viewer UI design specification | Interface mockup, component anatomy, annotation states, tokens, responsive behavior |
 
 Validate any candidate directly:

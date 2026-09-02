@@ -1,0 +1,1 @@
+AI agents can create polished documents in seconds. But reviewing them? That still happens across disconnected editors, slide tools, design files, and chat. Comments lose context. Revisions become replacement files. That's why we built DSTAR: one place to review every artifact an agent can create.
