@@ -8,17 +8,17 @@ verified.
 
 ## Required before submission
 
-- [ ] Register for the WebMCP Challenge on Devpost.
+- [x] Register for the WebMCP Challenge on Devpost.
 - [x] Choose and add an open source license. Apache-2.0 is recommended for this
       protocol and SDK repository because it includes an explicit patent grant.
 - [x] Make the source repository public and confirm the license is detected on
       the repository landing page.
-- [ ] Publish a stable HTTPS URL that judges can open without payment or local
+- [x] Publish a stable HTTPS URL that judges can open without payment or local
       setup through the end of judging.
-- [ ] Verify the deployed page in the ChatGPT in-app browser: tools are
+- [x] Verify the deployed page in the ChatGPT in-app browser: tools are
       discovered, context and document reads succeed, and an Owner can submit a
       revision without the agent accepting it.
-- [ ] Verify a fresh judge session using the exact access instructions and any
+- [x] Verify a fresh judge session using the exact access instructions and any
       credentials placed in Devpost.
 - [ ] Replace every placeholder in [devpost.md](devpost.md).
 - [ ] Record, edit and publish the demo described in
@@ -51,3 +51,17 @@ that as a fallback: concurrent judges share history and can affect one another.
 - `pnpm verify` output for the submitted commit.
 - Public YouTube URL and exact video duration.
 - A copy of the final Devpost text and testing instructions.
+
+## Production verification — September 2, 2026
+
+- Live URL: https://www.thinkofu.ai/dstar/
+- Vercel deployment: `dpl_BAUGHzgxyEWNym2m2sVbsRgeQvQN` (`READY`, production).
+- Response policy: `Permissions-Policy: tools=(self)` on both the library and
+  document review routes.
+- Fresh in-app-browser session discovered all five public WebMCP tools.
+- `get_review_context` returned the exact accepted revision and
+  `read_document` returned its complete HTML/CSS files.
+- `propose_revision` created pending revision
+  `sha256:afceb807c4b6583ab7ce20103ca918b186d2a6171b23145927161d3e28e71703`
+  while the current revision remained unchanged. The revision became current
+  only after an explicit Owner review and Accept action in the Viewer.
