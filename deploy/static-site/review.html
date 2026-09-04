@@ -36,11 +36,34 @@
             </button>
           </div>
         </div>
-        <iframe
-          id="document-frame"
-          title="Document"
-          sandbox="allow-scripts allow-same-origin"
-        ></iframe>
+        <div class="document-stage">
+          <aside id="slide-rail" class="slide-rail" hidden>
+            <div class="slide-rail-heading">
+              <strong>Slides</strong><small>Use arrow keys</small>
+            </div>
+            <ol id="slide-list"></ol>
+          </aside>
+          <div class="document-view">
+            <iframe
+              id="document-frame"
+              title="Document"
+              sandbox="allow-scripts allow-same-origin"
+            ></iframe>
+            <div id="slide-controls" class="slide-controls" hidden>
+              <button
+                id="previous-slide"
+                type="button"
+                aria-label="Previous slide"
+              >
+                ←
+              </button>
+              <span id="slide-position"></span>
+              <button id="next-slide" type="button" aria-label="Next slide">
+                →
+              </button>
+            </div>
+          </div>
+        </div>
         <button
           id="selection-comment"
           type="button"

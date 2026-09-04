@@ -43,6 +43,8 @@ let replyDraft = "";
 let versionState = null;
 let previewing = null;
 let sourceBase = null;
+let slides = [];
+let activeSlide = 0;
 const registrationController = new AbortController();
 
 const uid = () => crypto.randomUUID();
@@ -143,6 +145,77 @@ function validateCandidateDocument(html, css) {
 
 function showDocument(version) {
   frame.srcdoc = candidateDocument(version.html, version.css);
+}
+
+function slideTitle(slide, index) {
+  const heading = slide.querySelector("h1, h2, h3");
+  return (
+    safe(heading?.textContent).replace(/\s+/g, " ").trim() ||
+    `Slide ${index + 1}`
+  );
+}
+
+function showSlide(index, announceChange = false) {
+  if (!slides.length) return;
+  activeSlide = (index + slides.length) % slides.length;
+  slides.forEach((slide, itemIndex) => {
+    slide.style.display = itemIndex === activeSlide ? "" : "none";
+    slide.setAttribute("aria-hidden", String(itemIndex !== activeSlide));
+  });
+  for (const button of document.querySelectorAll("#slide-list button")) {
+    const current = Number(button.dataset.slide) === activeSlide;
+    if (current) {
+      button.setAttribute("aria-current", "page");
+      button.scrollIntoView({ block: "nearest" });
+    } else button.removeAttribute("aria-current");
+  }
+  $("#slide-position").textContent = `${activeSlide + 1} / ${slides.length}`;
+  frame.contentWindow?.scrollTo?.(0, 0);
+  clearSelection();
+  paint();
+  if (announceChange) announce(`Slide ${activeSlide + 1} of ${slides.length}.`);
+}
+
+function moveSlide(direction) {
+  if (slides.length > 1) showSlide(activeSlide + direction, true);
+}
+
+function renderSlideRail() {
+  const doc = frame.contentDocument;
+  slides =
+    doc?.body?.dataset.dstarMode === "slides"
+      ? [...doc.querySelectorAll("[data-dstar-slide]")]
+      : [];
+  const enabled = slides.length > 1;
+  $("#slide-rail").hidden = !enabled;
+  $("#slide-controls").hidden = !enabled;
+  if (!enabled) {
+    $("#slide-list").replaceChildren();
+    return;
+  }
+  activeSlide = Math.min(activeSlide, slides.length - 1);
+  $("#slide-list").replaceChildren(
+    ...slides.map((slide, index) => {
+      const title = slideTitle(slide, index);
+      const button = node("button");
+      button.type = "button";
+      button.dataset.slide = String(index);
+      button.setAttribute("aria-label", `Open slide ${index + 1}: ${title}`);
+      const thumbnail = node("span", "slide-thumbnail");
+      thumbnail.append(node("b", "", title));
+      const copy = node("span", "slide-rail-copy");
+      copy.append(
+        node("b", "", String(index + 1).padStart(2, "0")),
+        document.createTextNode(title),
+      );
+      button.append(thumbnail, copy);
+      button.onclick = () => showSlide(index, true);
+      const item = node("li");
+      item.append(button);
+      return item;
+    }),
+  );
+  showSlide(activeSlide);
 }
 
 function activatePanel(panel) {
@@ -603,6 +676,7 @@ function commentAtPoint(x, y) {
 function attach() {
   const doc = frame.contentDocument;
   if (!doc) return;
+  renderSlideRail();
   doc.addEventListener("mouseup", () =>
     setTimeout(() => {
       const target = captureSelection();
@@ -626,6 +700,21 @@ function attach() {
     clearSelection();
     render();
     paint();
+  });
+  doc.addEventListener("keydown", (event) => {
+    if (
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key) &&
+      !event.target?.closest?.(
+        'input,textarea,select,button,[contenteditable="true"]',
+      )
+    ) {
+      event.preventDefault();
+      moveSlide(["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1);
+    }
   });
   paint();
 }
@@ -900,6 +989,23 @@ for (const button of document.querySelectorAll(".filter"))
 for (const button of document.querySelectorAll(".tab"))
   button.onclick = () => activatePanel(button.dataset.panel);
 $("#return-current").onclick = returnToCurrent;
+$("#previous-slide").onclick = () => moveSlide(-1);
+$("#next-slide").onclick = () => moveSlide(1);
+document.addEventListener("keydown", (event) => {
+  if (
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key) &&
+    !event.target?.closest?.(
+      'input,textarea,select,button,[contenteditable="true"]',
+    )
+  ) {
+    event.preventDefault();
+    moveSlide(["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1);
+  }
+});
 window.addEventListener("pagehide", () => registrationController.abort(), {
   once: true,
 });
