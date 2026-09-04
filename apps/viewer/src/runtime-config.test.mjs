@@ -31,19 +31,19 @@ function fixture() {
 
 it("keeps programmatic local defaults independent of ambient service configuration", () => {
   vi.stubEnv("DSTAR_BIND_HOST", "0.0.0.0");
-  vi.stubEnv("DSTAR_VIEWER_TOKEN", token);
+  vi.stubEnv("DSTAR_OWNER_TOKEN", token);
   vi.stubEnv("DSTAR_PACKAGE_ROOT", "/should-not-be-used");
   const config = resolveViewerConfig("document.dstar");
   expect(config.root).toBe(resolve("document.dstar"));
   expect(config.host).toBe("127.0.0.1");
   expect(config.port).toBe(0);
   expect(config.basePath).toBe("");
-  expect(config.token).not.toBe(token);
-  expect(config.token).toMatch(/^[a-f0-9]{48}$/);
+  expect(config.ownerToken).not.toBe(token);
+  expect(config.ownerToken).toMatch(/^[a-f0-9]{48}$/);
   expect(config.reviewerToken).toMatch(/^[a-f0-9]{48}$/);
-  expect(config.reviewerToken).not.toBe(config.token);
+  expect(config.reviewerToken).not.toBe(config.ownerToken);
   expect(viewerOrigin(config, 12345)).toBe("http://127.0.0.1:12345");
-  expect(resolveViewerConfig("doc").token).not.toBe(config.token);
+  expect(resolveViewerConfig("doc").ownerToken).not.toBe(config.ownerToken);
   expect(
     viewerOrigin(resolveViewerConfig("doc", 0, { host: "::1" }), 12345),
   ).toBe("http://[::1]:12345");
@@ -55,9 +55,9 @@ it.each([
     "relative remote root",
     "doc",
     0,
-    { externalOrigin: "https://review.example.com", token },
+    { externalOrigin: "https://review.example.com", ownerToken: token },
   ],
-  ["missing origin", "/doc", 3000, { host: "0.0.0.0", token }],
+  ["missing origin", "/doc", 3000, { host: "0.0.0.0", ownerToken: token }],
   [
     "missing credential",
     "/doc",
@@ -77,12 +77,13 @@ it.each([
   ["trailing base slash", "/doc", 0, { basePath: "/documents/doc/" }],
   ["encoded base path", "/doc", 0, { basePath: "/documents/%64oc" }],
   ["uppercase base path", "/doc", 0, { basePath: "/documents/Doc" }],
-  ["short token", "/doc", 0, { token: "secret" }],
-  ["empty token", "/doc", 0, { token: "" }],
-  ["null token", "/doc", 0, { token: null }],
-  ["token newline", "/doc", 0, { token: token + "\n" }],
-  ["token whitespace", "/doc", 0, { token: " " + token }],
-  ["both sources", "/doc", 0, { token, tokenFile: "/secret" }],
+  ["short token", "/doc", 0, { ownerToken: "secret" }],
+  ["empty token", "/doc", 0, { ownerToken: "" }],
+  ["null token", "/doc", 0, { ownerToken: null }],
+  ["token newline", "/doc", 0, { ownerToken: token + "\n" }],
+  ["token whitespace", "/doc", 0, { ownerToken: " " + token }],
+  ["both sources", "/doc", 0, { ownerToken: token, ownerTokenFile: "/secret" }],
+  ["removed token alias", "/doc", 0, { token }],
 ])("rejects invalid configuration: %s", (_name, root, port, options) => {
   expect(() => resolveViewerConfig(root, port, options)).toThrow();
 });
@@ -104,7 +105,7 @@ it.each([
   "https://review.example.com https://evil.example",
 ])("rejects a noncanonical or unsafe trusted origin: %s", (externalOrigin) => {
   expect(() =>
-    resolveViewerConfig("/doc", 3000, { externalOrigin, token }),
+    resolveViewerConfig("/doc", 3000, { externalOrigin, ownerToken: token }),
   ).toThrow();
 });
 
@@ -114,14 +115,15 @@ it("accepts canonical HTTP only for a local single-port development gateway", ()
     "http://localhost:8765",
   ])
     expect(
-      resolveViewerConfig("/doc", 0, { externalOrigin, token }).externalOrigin,
+      resolveViewerConfig("/doc", 0, { externalOrigin, ownerToken: token })
+        .externalOrigin,
     ).toBe(externalOrigin);
   for (const externalOrigin of [
     "http://review.example.com",
     "http://localhost.example.com:8765",
   ])
     expect(() =>
-      resolveViewerConfig("/doc", 0, { externalOrigin, token }),
+      resolveViewerConfig("/doc", 0, { externalOrigin, ownerToken: token }),
     ).toThrow();
 });
 
@@ -130,7 +132,7 @@ it("accepts a canonical document mount path", () => {
     resolveViewerConfig("/doc", 0, {
       externalOrigin: "http://localhost:8765",
       basePath: "/documents/dstar-doc",
-      token,
+      ownerToken: token,
     }).basePath,
   ).toBe("/documents/dstar-doc");
 });
@@ -142,7 +144,7 @@ it("loads exactly one explicit credential from env or an external regular file",
     DSTAR_BIND_HOST: "0.0.0.0",
     DSTAR_PORT: "3000",
     DSTAR_EXTERNAL_ORIGIN: "https://review.example.com:8443",
-    DSTAR_VIEWER_TOKEN_FILE: tokenFile,
+    DSTAR_OWNER_TOKEN_FILE: tokenFile,
   });
   expect(configured).toEqual({
     root,
@@ -160,7 +162,7 @@ it("loads exactly one explicit credential from env or an external regular file",
     viewerOrigin(resolveViewerConfig(root, 3000, configured.options), 3000),
   ).toBe("https://review.example.com:8443");
   expect(
-    viewerConfigFromEnv({ DSTAR_PACKAGE_ROOT: root, DSTAR_VIEWER_TOKEN: token })
+    viewerConfigFromEnv({ DSTAR_PACKAGE_ROOT: root, DSTAR_OWNER_TOKEN: token })
       .options.ownerToken,
   ).toBe(token);
 });
@@ -249,10 +251,10 @@ it.each([
   { DSTAR_PORT: "" },
   { DSTAR_BIND_HOST: "" },
   { DSTAR_EXTERNAL_ORIGIN: "" },
-  { DSTAR_VIEWER_TOKEN: "" },
+  { DSTAR_OWNER_TOKEN: "" },
 ])("fails closed on missing or invalid service env: %j", (bad) => {
-  const env = { DSTAR_PACKAGE_ROOT: "/doc", DSTAR_VIEWER_TOKEN: token, ...bad };
-  if (Object.keys(bad).length === 0) delete env.DSTAR_VIEWER_TOKEN;
+  const env = { DSTAR_PACKAGE_ROOT: "/doc", DSTAR_OWNER_TOKEN: token, ...bad };
+  if (Object.keys(bad).length === 0) delete env.DSTAR_OWNER_TOKEN;
   expect(() => viewerConfigFromEnv(env)).toThrow();
 });
 
@@ -264,16 +266,22 @@ it("rejects credential paths in the package, symlinks, directories and oversized
   writeFileSync(inside, token);
   symlinkSync(inside, link);
   for (const path of [inside, link, root, join(temp, "missing"), "relative"]) {
-    expect(() => resolveViewerConfig(root, 0, { tokenFile: path })).toThrow();
+    expect(() =>
+      resolveViewerConfig(root, 0, { ownerTokenFile: path }),
+    ).toThrow();
     try {
-      resolveViewerConfig(root, 0, { tokenFile: path });
+      resolveViewerConfig(root, 0, { ownerTokenFile: path });
     } catch (error) {
       expect(error.message).not.toContain(token);
       expect(error.message).not.toContain(temp);
     }
   }
   writeFileSync(tokenFile, token.repeat(6));
-  expect(() => resolveViewerConfig(root, 0, { tokenFile })).toThrow();
+  expect(() =>
+    resolveViewerConfig(root, 0, { ownerTokenFile: tokenFile }),
+  ).toThrow();
   writeFileSync(tokenFile, token + "\n\n");
-  expect(() => resolveViewerConfig(root, 0, { tokenFile })).toThrow();
+  expect(() =>
+    resolveViewerConfig(root, 0, { ownerTokenFile: tokenFile }),
+  ).toThrow();
 });

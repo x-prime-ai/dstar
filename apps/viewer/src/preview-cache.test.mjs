@@ -107,7 +107,7 @@ it("uses one verified preview for HTML, CSS and images with 20 comments while de
   cleanup.push(() => new Promise((resolve) => viewer.server.close(resolve)));
   const viewerSnapshot = opened.at(-1);
   viewerSnapshot.mockClear();
-  const token = new URL(viewer.url).hash.slice(1);
+  const token = new URL(viewer.ownerUrl).hash.slice(1);
   const get = (path) =>
     fetch(viewer.origin + path, {
       headers: { Authorization: `Bearer ${token}` },

@@ -1,5 +1,8 @@
 # DSTAR sample documents
 
+For a compile-checked server integration using the public TypeScript packages,
+see [`typescript-host`](typescript-host/README.md).
+
 Each directory is a complete, validated DSTAR candidate with canonical
 `document.html` and `styles.css`. The four samples use DSTAR itself as their
 subject while demonstrating different document forms.

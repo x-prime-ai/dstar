@@ -27,7 +27,14 @@ The new HTML-first path consists of:
 
 The Engine creates the candidate revision, review summary and storage delta
 **during `propose`**, not when the Viewer opens. No Git installation, MCP server,
-hosted service or public SDK is needed. Node 22+ and pnpm are required.
+hosted DSTAR service is needed. Node 22+ and pnpm are required for this source
+workspace.
+
+External products can run the same stack at their own origin and keep all
+document data on their own infrastructure. Start with the
+[host integration guide](integration/README.md), the
+[`@dstar/engine` TypeScript SDK](packages/engine/README.md), or the
+[`@dstar/viewer` package](apps/viewer/README.md).
 
 ## Try it
 

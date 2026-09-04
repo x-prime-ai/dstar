@@ -191,8 +191,6 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
         "host",
         "externalOrigin",
         "basePath",
-        "token",
-        "tokenFile",
         "ownerToken",
         "ownerTokenFile",
         "reviewerToken",
@@ -220,31 +218,17 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
   if (origin && !isAbsolute(root))
     fail("externalOrigin requires an absolute persistent package root");
   const resolvedRoot = resolve(root);
-  if (options.token !== undefined && options.tokenFile !== undefined)
-    fail("Configure only one of token or tokenFile");
-  const legacyOwner =
-      options.token !== undefined || options.tokenFile !== undefined,
-    namedOwner =
-      options.ownerToken !== undefined || options.ownerTokenFile !== undefined;
-  if (legacyOwner && namedOwner)
-    fail(
-      "Configure legacy token/tokenFile or ownerToken/ownerTokenFile, not both",
-    );
-  const normalized = {
-      ...options,
-      ownerToken: legacyOwner ? options.token : options.ownerToken,
-      ownerTokenFile: legacyOwner ? options.tokenFile : options.ownerTokenFile,
-    },
-    explicitOwner = legacyOwner || namedOwner,
-    explicitReviewer =
-      options.reviewerToken !== undefined ||
-      options.reviewerTokenFile !== undefined;
+  const explicitOwner =
+    options.ownerToken !== undefined || options.ownerTokenFile !== undefined;
+  const explicitReviewer =
+    options.reviewerToken !== undefined ||
+    options.reviewerTokenFile !== undefined;
   if (origin && !explicitOwner)
     fail("externalOrigin requires an explicit owner credential");
   if (!explicitOwner && explicitReviewer)
     fail("A reviewer credential requires an explicit owner credential");
-  let ownerToken = source(normalized, resolvedRoot, "owner"),
-    reviewerToken = source(normalized, resolvedRoot, "reviewer");
+  let ownerToken = source(options, resolvedRoot, "owner"),
+    reviewerToken = source(options, resolvedRoot, "reviewer");
   if (!explicitOwner) {
     ownerToken = randomBytes(24).toString("hex");
     reviewerToken = randomBytes(24).toString("hex");
@@ -272,7 +256,7 @@ export function resolveViewerConfig(root, port = 0, options = {}) {
     externalOrigin: origin,
     basePath: mountPath,
     ...(managementUrl ? { workspaceManagementUrl: managementUrl } : {}),
-    token: ownerToken,
+    ownerToken,
     reviewerToken,
     credentials: Object.freeze({
       owner: Object.freeze({ token: ownerToken, identity: ownerIdentity }),
@@ -297,8 +281,6 @@ export function viewerConfigFromEnv(env = process.env) {
     "DSTAR_PORT",
     "DSTAR_EXTERNAL_ORIGIN",
     "DSTAR_BASE_PATH",
-    "DSTAR_VIEWER_TOKEN",
-    "DSTAR_VIEWER_TOKEN_FILE",
     "DSTAR_OWNER_TOKEN",
     "DSTAR_OWNER_TOKEN_FILE",
     "DSTAR_REVIEWER_TOKEN",
@@ -322,8 +304,6 @@ export function viewerConfigFromEnv(env = process.env) {
     fail("DSTAR_PORT must be a decimal port number");
   // Persistent services must never generate unreported ephemeral credentials.
   if (
-    env.DSTAR_VIEWER_TOKEN === undefined &&
-    env.DSTAR_VIEWER_TOKEN_FILE === undefined &&
     env.DSTAR_OWNER_TOKEN === undefined &&
     env.DSTAR_OWNER_TOKEN_FILE === undefined
   )
@@ -333,8 +313,6 @@ export function viewerConfigFromEnv(env = process.env) {
     host: env.DSTAR_BIND_HOST,
     externalOrigin: env.DSTAR_EXTERNAL_ORIGIN,
     basePath: env.DSTAR_BASE_PATH,
-    token: env.DSTAR_VIEWER_TOKEN,
-    tokenFile: env.DSTAR_VIEWER_TOKEN_FILE,
     ownerToken: env.DSTAR_OWNER_TOKEN,
     ownerTokenFile: env.DSTAR_OWNER_TOKEN_FILE,
     reviewerToken: env.DSTAR_REVIEWER_TOKEN,
@@ -351,7 +329,7 @@ export function viewerConfigFromEnv(env = process.env) {
       host: config.host,
       externalOrigin: config.externalOrigin,
       ...(config.basePath ? { basePath: config.basePath } : {}),
-      ownerToken: config.token,
+      ownerToken: config.ownerToken,
       reviewerToken: config.reviewerToken,
       ownerDisplayName: config.credentials.owner.identity.displayName,
       reviewerDisplayName: config.credentials.reviewer?.identity.displayName,

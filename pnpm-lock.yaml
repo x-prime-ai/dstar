@@ -75,6 +75,22 @@ importers:
         specifier: 'catalog:'
         version: 3.2.7(@types/node@22.20.1)
 
+  examples/typescript-host:
+    dependencies:
+      '@dstar/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@dstar/viewer':
+        specifier: workspace:*
+        version: link:../../apps/viewer
+    devDependencies:
+      '@types/node':
+        specifier: ^22.17.2
+        version: 22.20.1
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/engine:
     dependencies:
       domhandler:

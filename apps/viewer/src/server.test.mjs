@@ -117,7 +117,7 @@ it("serves immutable isolated previews and requires session credentials for deci
   const { root, engine, proposal } = fixture();
   const viewer = await startViewer(root);
   cleanup.push(() => new Promise((resolve) => viewer.server.close(resolve)));
-  const token = new URL(viewer.url).hash.slice(1),
+  const token = new URL(viewer.ownerUrl).hash.slice(1),
     headers = { authorization: `Bearer ${token}` };
   const request = (path, extra = {}) =>
     fetch(viewer.origin + path, { headers, ...extra });
@@ -219,7 +219,7 @@ it("serves immutable isolated previews and requires session credentials for deci
 it("does not expose the retired manual suggestion endpoint", async () => {
   const { root, proposal } = fixture(),
     viewer = await startViewer(root),
-    token = new URL(viewer.url).hash.slice(1),
+    token = new URL(viewer.ownerUrl).hash.slice(1),
     headers = {
       authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -243,7 +243,7 @@ it("does not expose the retired manual suggestion endpoint", async () => {
 it("uses a short-lived scoped handoff to return an agent draft", async () => {
   const { root, engine, proposal } = fixture(),
     viewer = await startViewer(root),
-    ownerToken = new URL(viewer.url).hash.slice(1),
+    ownerToken = new URL(viewer.ownerUrl).hash.slice(1),
     scopedToken = "h".repeat(64),
     id = "11111111-1111-4111-8111-111111111111",
     target = {
@@ -362,7 +362,7 @@ it("binds an existing-comment handoff to an editable reply or linked pending pro
       author: "human",
     }),
     viewer = await startViewer(root),
-    ownerToken = new URL(viewer.url).hash.slice(1),
+    ownerToken = new URL(viewer.ownerUrl).hash.slice(1),
     scopedToken = "j".repeat(64),
     id = "33333333-3333-4333-8333-333333333333",
     context = {
@@ -468,7 +468,7 @@ it("resolves comment markers against the viewed revision without changing canoni
   const { root, candidate, engine, proposal } = fixture();
   const viewer = await start(root);
   const headers = {
-    Authorization: `Bearer ${new URL(viewer.url).hash.slice(1)}`,
+    Authorization: `Bearer ${new URL(viewer.ownerUrl).hash.slice(1)}`,
     Origin: viewer.origin,
     "Content-Type": "application/json",
   };
@@ -601,7 +601,7 @@ it("uses only the configured external authority while preserving opaque-origin f
   const viewer = await start(root, 0, {
     host: "0.0.0.0",
     externalOrigin,
-    token,
+    ownerToken: token,
     reviewerToken,
   });
   expect(viewer.server.address().address).toBe("0.0.0.0");
@@ -684,7 +684,7 @@ it("rejects forwarded authority, duplicate sensitive headers and unsafe raw requ
   const { root } = fixture();
   const token = "c".repeat(64),
     viewer = await start(root, 0, {
-      token,
+      ownerToken: token,
       externalOrigin: "https://review.example.com",
     });
   const headers = { Authorization: `Bearer ${token}` };
@@ -740,7 +740,7 @@ it("rejects forwarded authority, duplicate sensitive headers and unsafe raw requ
 it("requires exact Origin and JSON for every mutation without accepting tokens from URLs or cookies", async () => {
   const { root, engine, proposal } = fixture();
   const viewer = await start(root),
-    token = new URL(viewer.url).hash.slice(1);
+    token = new URL(viewer.ownerUrl).hash.slice(1);
   const state = engine.snapshot();
   const path = `/api/proposals/${proposal.id}/accept`,
     body = JSON.stringify({
@@ -778,11 +778,11 @@ it("keeps roots, credentials and preview capabilities separate between configure
   const a = fixture("First document"),
     b = fixture("Second document");
   const first = await start(a.root, 0, {
-    token: "d".repeat(64),
+    ownerToken: "d".repeat(64),
     externalOrigin: "https://first.example.com",
   });
   const second = await start(b.root, 0, {
-    token: "e".repeat(64),
+    ownerToken: "e".repeat(64),
     externalOrigin: "https://second.example.com",
   });
   const authA = { Authorization: `Bearer ${"d".repeat(64)}` },
@@ -831,7 +831,10 @@ it("retains accepted versions, comments and pending work across restart; refresh
   const { root, temp, candidate, engine, proposal } = fixture();
   const tokenFile = join(temp, "credential");
   writeFileSync(tokenFile, "f".repeat(64));
-  const options = { tokenFile, externalOrigin: "https://review.example.com" };
+  const options = {
+    ownerTokenFile: tokenFile,
+    externalOrigin: "https://review.example.com",
+  };
   const first = await start(root, 0, options);
   const port = first.server.address().port,
     headers = {
@@ -930,7 +933,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
       Origin: viewer.origin,
       "Content-Type": "application/json",
     };
-  expect(viewer.url).toBe(viewer.ownerUrl);
+  expect(viewer).not.toHaveProperty("url");
   expect(new URL(viewer.ownerUrl).hash.slice(1)).toBe(ownerToken);
   expect(new URL(viewer.reviewerUrl).hash.slice(1)).toBe(reviewerToken);
 
@@ -1211,7 +1214,7 @@ it("runs the service entrypoint, suppresses secret/path logging, and reopens the
   Object.assign(env, {
     DSTAR_PACKAGE_ROOT: root,
     DSTAR_PORT: "0",
-    DSTAR_VIEWER_TOKEN_FILE: tokenFile,
+    DSTAR_OWNER_TOKEN_FILE: tokenFile,
   });
   // Also exercise the same explicit parsing contract used by the process.
   expect(viewerConfigFromEnv(env).root).toBe(root);
@@ -1304,7 +1307,7 @@ it("runs the service entrypoint, suppresses secret/path logging, and reopens the
     service.child.kill("SIGTERM");
     expect(await service.exited).toEqual([0, null]);
   }
-  const broken = await launch({ DSTAR_VIEWER_TOKEN_FILE: join(temp, token) });
+  const broken = await launch({ DSTAR_OWNER_TOKEN_FILE: join(temp, token) });
   expect(await broken.exited).toEqual([1, null]);
   expect(broken.output()).toContain("startup failed");
   expect(broken.output()).not.toContain(token);
@@ -1342,7 +1345,7 @@ async function agentFixture() {
   );
   const viewer = await startViewer(root);
   cleanup.push(() => new Promise((resolve) => viewer.server.close(resolve)));
-  const token = new URL(viewer.url).hash.slice(1);
+  const token = new URL(viewer.ownerUrl).hash.slice(1);
   const request = (route, body, extraHeaders = {}) =>
     fetch(`${viewer.origin}/api/${route}`, {
       method: "POST",
@@ -1808,7 +1811,7 @@ it("keeps all agent routes inside configured authority and persists retries acro
   writeFileSync(tokenFile, token, { mode: 0o600 });
   const options = {
     externalOrigin: "https://review.example.test:8443",
-    tokenFile,
+    ownerTokenFile: tokenFile,
   };
   let viewer = await start(root, 0, options);
   const headers = {

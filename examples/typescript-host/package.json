@@ -1,0 +1,19 @@
+{
+  "name": "@dstar/example-typescript-host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm clean && tsc -p tsconfig.json",
+    "clean": "node scripts/clean.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit --composite false"
+  },
+  "dependencies": {
+    "@dstar/engine": "workspace:*",
+    "@dstar/viewer": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.17.2",
+    "typescript": "catalog:"
+  }
+}

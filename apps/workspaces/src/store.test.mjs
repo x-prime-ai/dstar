@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { decisions } from "@dstar/engine/decisions";
+import { openHost } from "@dstar/engine/host";
 import { open } from "@dstar/engine";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -43,7 +43,7 @@ function fixture() {
     key: randomUUID(),
   });
   const state = engine.snapshot();
-  decisions(seedRoot).decide(
+  openHost(seedRoot).decide(
     proposal.id,
     "accept",
     proposal.revision,

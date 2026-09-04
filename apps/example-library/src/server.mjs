@@ -4,7 +4,7 @@ import { createServer, request as requestHttp } from "node:http";
 import { tmpdir } from "node:os";
 import { extname, join, relative, resolve, sep } from "node:path";
 
-import { decisions } from "@dstar/engine/decisions";
+import { openHost } from "@dstar/engine/host";
 import { open, readCandidate, revision } from "@dstar/engine";
 import { startViewer } from "@dstar/viewer";
 
@@ -178,7 +178,7 @@ function seedPackage(packageRoot, candidateRoot) {
     author: "example-library",
     key: `example-library-seed:${candidateRevision}`,
   });
-  decisions(packageRoot).decide(
+  openHost(packageRoot).decide(
     proposal.id,
     "accept",
     proposal.revision,

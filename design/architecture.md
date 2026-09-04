@@ -1,16 +1,17 @@
 # Reference architecture
 
-Status: implemented local MVP; development format, not a stable public SDK.
+Status: implemented host-owned MVP; development format with a pre-stable public
+SDK surface.
 
 ## Three responsibilities
 
 ```text
-Agent + DSTAR skill ──CLI──> Engine <──private local adapter── Viewer
-                              │                             │
-                    proposal/delta/history          preview/select/comment
-                              │                     Owner accept/reject
-                              ▼
-                       portable directory
+Agent + DSTAR skill ──CLI/SDK──> Engine <──trusted host API── Viewer
+                                  │                         │
+                        proposal/delta/history      preview/select/comment
+                                  │                 Owner accept/reject
+                                  ▼
+                        host-owned directory
 ```
 
 The Engine is independent of the Viewer. Its proposal operation derives and
@@ -21,15 +22,17 @@ The Viewer does not calculate or own versions. Its local server reads immutable
 materializations and submits attributed collaboration or Owner decision commands
 to the Engine. Its centralized role gate gives Reviewer read/comment/reply/
 handoff capabilities; document proposals, decisions and resolution are Owner-only.
-There is no new MCP service, workflow backend, projection renderer or public SDK.
+There is no required MCP service, workflow backend or projection renderer. The
+public Node/TypeScript SDK is the same Engine used by the reference Viewer; the
+integrating host owns the process and package directory.
 
 ## Code
 
 - `packages/engine`: file inventory, HTML/CSS validation, hashes, byte deltas,
   materialization, comments, proposals and locked/journaled writes.
 - `packages/engine/src/cli.ts`: validate, inspect, export, propose, comment, reply.
-- `packages/engine/src/decisions.ts`: internal adapter for Owner decisions;
-  deliberately absent from the agent command set.
+- `packages/engine/src/host.ts`: explicit trusted-host adapter for Owner
+  decisions; deliberately absent from the agent command set and root SDK entry.
 - `apps/viewer`: loopback HTTP adapter and static browser UI.
 - `scripts/dstar.mjs`: repository launcher, including `serve`.
 - `skills/dstar-documents`: agent operating instructions and format references.

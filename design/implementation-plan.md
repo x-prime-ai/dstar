@@ -15,6 +15,10 @@
   pending queue, accepted history and human acceptance/rejection.
 - Doc-like/rich HTML and slide examples using one format.
 - Repo-local agent skill using actual CLI commands.
+- Publish-ready `@dstar/engine` TypeScript API with a separate trusted-host
+  authority surface.
+- Publish-ready `@dstar/viewer`, a host-owned deployment contract and a
+  compile-checked external TypeScript consumer.
 
 ## Verification
 
@@ -38,5 +42,6 @@ actual presentation, selecting text, adding comments and review controls.
 - Better slide sizing/fullscreen/accessibility and review ergonomics.
 - Explicit retention/GC/compaction.
 
-No new MCP server or public SDK is on the critical path. Add an integration
-only when a concrete consumer cannot use the CLI.
+No standalone MCP server is on the critical path. Browser agents use the
+self-hosted Viewer's WebMCP surface; server integrations use the same Engine as
+the CLI and Viewer.

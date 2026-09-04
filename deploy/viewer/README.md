@@ -46,9 +46,6 @@ set these values explicitly. Empty values are errors, not defaults.
 | `DSTAR_OWNER_DISPLAY_NAME`    | Optional trusted Owner display name; default `Owner`.                                                                                                                                                                                              |
 | `DSTAR_REVIEWER_DISPLAY_NAME` | Optional trusted Reviewer display name; default `Reviewer` when Reviewer access is configured.                                                                                                                                                     |
 
-Legacy `DSTAR_VIEWER_TOKEN(_FILE)` remains an Owner-only alias so existing
-services can restart unchanged. Do not combine legacy and named Owner sources.
-
 Credentials must be 48–256 ASCII base64url characters (`A-Z a-z 0-9 _ -`).
 Generate random bytes, not a password or a repeated string; syntax validation
 cannot measure entropy. For example, create a private file without printing it:
@@ -75,10 +72,9 @@ handoff but cannot decide or resolve. The configured display name and fixed role
 are persisted as write attribution; request bodies cannot override authors.
 Programmatic callers may use `startViewer(root, port, {host, externalOrigin,
 ownerToken, reviewerToken, ownerDisplayName, reviewerDisplayName})`, with file
-variants for each token. Legacy `token/tokenFile` remains an Owner alias. The
-return value is `{server, origin, url, ownerUrl, reviewerUrl?}`, where `url` is
-the compatibility alias for `ownerUrl`. Treat all returned role URLs as secrets
-and never log them in a service.
+variants for each token. The return value is
+`{server, origin, baseUrl, ownerUrl, reviewerUrl?}`. Treat all returned role URLs
+as secrets and never log them in a service.
 
 ## TLS proxy and instance boundaries
 

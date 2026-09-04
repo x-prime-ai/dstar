@@ -136,3 +136,54 @@ export interface Snapshot {
   files: Files;
   index: HtmlIndex | null;
 }
+
+export interface ProposeInput {
+  candidate: string;
+  base: string | null;
+  request: string;
+  author: Actor;
+  key: string;
+  commentIds?: string[];
+}
+
+export interface CommentInput {
+  target: Target;
+  body: string;
+  author: Actor;
+}
+
+export interface ExportResult {
+  revision: string | null;
+  directory: string;
+}
+
+/** Agent-safe filesystem API. Human decisions are available from `@dstar/engine/host`. */
+export interface DstarEngine {
+  snapshot(revisionOrProposalId?: string): Snapshot;
+  propose(input: ProposeInput): Proposal;
+  comment(input: CommentInput): Comment;
+  reply(
+    commentId: string,
+    body: string,
+    author: Actor,
+    key?: string,
+    expectedStateId?: string,
+  ): Comment;
+  export(directory: string, revisionOrProposalId?: string): ExportResult;
+}
+
+/** Trusted-host API. Callers must enforce Owner authorization before invoking it. */
+export interface DstarHost {
+  decide(
+    proposalId: string,
+    action: "accept" | "reject",
+    expectedRevision: string,
+    expectedStateId: string,
+    actor: Actor,
+  ): Proposal;
+  resolveComment(
+    commentId: string,
+    expectedStateId: string,
+    actor?: Actor,
+  ): Comment;
+}

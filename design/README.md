@@ -14,8 +14,10 @@ Start here:
 - [Implementation status](implementation-plan.md): delivered scope and next work.
 - [Agent skill](../skills/dstar-documents/SKILL.md): executable workflows.
 - [ADR 0001](decisions/0001-canonical-html.md): HTML as the only canonical artifact.
-- [ADR 0002](decisions/0002-small-engine.md): no Git dependency, no required MCP/SDK,
+- [ADR 0002](decisions/0002-small-engine.md): no Git or required MCP dependency,
   and version/delta generation during agent proposal submission.
+- [ADR 0003](decisions/0003-host-owned-runtime.md): public TypeScript and
+  self-hosted Viewer boundaries, with no central DSTAR service dependency.
 
 The concrete MVP document and code define implementation behavior; the Vision
 defines product intent. Superseded JSON-schema, renderer, MCP and application

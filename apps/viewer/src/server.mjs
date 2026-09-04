@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { open, mediaType, resolveTarget, validateTarget } from "@dstar/engine";
-import { decisions } from "@dstar/engine/decisions";
+import { openHost } from "@dstar/engine/host";
 import { agentRoute } from "./agent-api.mjs";
 import { createPreviewCache } from "./preview-cache.mjs";
 import { fileDiff } from "./file-diff.mjs";
@@ -41,7 +41,7 @@ const exactBody = (body, keys) => {
 export async function startViewer(root, port = 0, options = {}) {
   const config = resolveViewerConfig(root, port, options);
   const engine = open(config.root),
-    review = decisions(config.root);
+    review = openHost(config.root);
   engine.snapshot();
   const capabilities = createPreviewCache(),
     handoffs = new Map();
@@ -599,7 +599,7 @@ export async function startViewer(root, port = 0, options = {}) {
   });
   origin = viewerOrigin(config, server.address().port);
   const baseUrl = `${origin}${config.basePath}`,
-    ownerUrl = `${baseUrl}/#${config.token}`,
+    ownerUrl = `${baseUrl}/#${config.ownerToken}`,
     reviewerUrl = config.reviewerToken
       ? `${baseUrl}/#${config.reviewerToken}`
       : undefined;
@@ -607,7 +607,6 @@ export async function startViewer(root, port = 0, options = {}) {
     server,
     origin,
     baseUrl,
-    url: ownerUrl,
     ownerUrl,
     ...(reviewerUrl ? { reviewerUrl } : {}),
   };

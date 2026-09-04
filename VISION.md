@@ -27,10 +27,10 @@ DSTAR needs a skill, a small deterministic Engine and a Viewer:
   provides a separate human accept/reject action. It delegates persistence
   and exact-base verification to the same Engine.
 
-A CLI is sufficient for the first agent integration. MCP and a public SDK are
-not required. The Engine is an implementation utility, not a new platform,
-agent orchestrator or hosted service. Its internal module boundaries do not
-imply a promise of public SDK compatibility.
+A CLI remains sufficient for agent authoring. External products may instead use
+the pre-stable TypeScript SDK or self-host the Viewer at their own origin. The
+Engine is a document runtime, not a platform, agent orchestrator or hosted
+service; a host owns its storage, identity and deployment lifecycle.
 
 ## The loop
 

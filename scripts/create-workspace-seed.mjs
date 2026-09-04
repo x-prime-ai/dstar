@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { decisions } from "../packages/engine/dist/decisions.js";
+import { openHost } from "../packages/engine/dist/host.js";
 import { open } from "../packages/engine/dist/index.js";
 
 const destination = process.argv[2];
@@ -25,7 +25,7 @@ if (!destination || !isAbsolute(destination)) {
     key: "workspace-seed-v1",
   });
   const snapshot = engine.snapshot();
-  decisions(destination).decide(
+  openHost(destination).decide(
     proposal.id,
     "accept",
     proposal.revision,

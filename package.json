@@ -17,6 +17,7 @@
     "build": "pnpm --recursive --if-present build",
     "check:links": "node scripts/check-markdown-links.mjs",
     "check:node": "node scripts/check-node-version.mjs",
+    "check:packages": "pnpm --filter @dstar/engine pack --dry-run && pnpm --filter @dstar/viewer pack --dry-run",
     "check:static-demo": "node --test deploy/static-site/review-state.test.mjs",
     "clean": "pnpm --recursive --if-present clean",
     "format": "prettier --write package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs scripts packages apps examples design/decisions .github deploy/static-site/build.mjs deploy/static-site/review-state.mjs deploy/static-site/review-state.test.mjs deploy/static-site/review.js deploy/static-site/review.html deploy/static-site/review.css",
@@ -24,7 +25,7 @@
     "lint": "eslint scripts packages apps examples",
     "test": "pnpm --recursive --if-present test",
     "typecheck": "pnpm --recursive --if-present typecheck",
-    "verify": "pnpm check:node && pnpm format:check && pnpm lint && pnpm check:links && pnpm build && pnpm check:static-demo && pnpm typecheck && pnpm test",
+    "verify": "pnpm check:node && pnpm format:check && pnpm lint && pnpm check:links && pnpm build && pnpm check:packages && pnpm check:static-demo && pnpm typecheck && pnpm test",
     "bootstrap:check": "pnpm install --frozen-lockfile && pnpm verify"
   },
   "devDependencies": {

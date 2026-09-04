@@ -1,6 +1,7 @@
 # ADR 0002: Skill, independent Engine and Viewer
 
-Status: accepted for the local HTML-first MVP.
+Status: accepted for the local HTML-first MVP; SDK publication timing superseded
+by [ADR 0003](0003-host-owned-runtime.md).
 
 Use an agent skill plus a small independent Engine/CLI and a Viewer.
 The agent stages full HTML/CSS/assets; `propose` computes and stores revision,

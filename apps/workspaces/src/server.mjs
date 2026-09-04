@@ -235,7 +235,7 @@ export async function startWorkspaceService(options) {
   const sessionLinks =
     options.sessionAdapter?.links ??
     (({ viewer }) => ({
-      ownerUrl: viewer.ownerUrl ?? viewer.url,
+      ownerUrl: viewer.ownerUrl,
       ...(viewer.reviewerUrl ? { reviewerUrl: viewer.reviewerUrl } : {}),
     }));
   const startOptions =

@@ -1,4 +1,5 @@
 import { Repository } from "./repository.js";
+import type { DstarEngine } from "./types.js";
 export type * from "./types.js";
 export { readCandidate } from "./repository.js";
 export { revision, digest } from "./delta.js";
@@ -11,7 +12,7 @@ export {
   filePath,
 } from "./html.js";
 // The agent surface intentionally has no accept/reject/resolve entry point.
-export function open(root: string) {
+export function open(root: string): DstarEngine {
   const repo = new Repository(root);
   return {
     snapshot: repo.snapshot.bind(repo),

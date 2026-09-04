@@ -11,3 +11,5 @@ portable specification and fixtures, not only in an ADR.
   artifact for the redesign.
 - [ADR 0002](0002-small-engine.md) — keep a small independent Engine/CLI and
   Viewer; generate deltas during proposal submission, without Git or MCP.
+- [ADR 0003](0003-host-owned-runtime.md) — make the integrating host own its
+  runtime, data, identity and browser origin through public SDK/Viewer packages.
