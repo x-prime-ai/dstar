@@ -206,7 +206,7 @@ function renderSlideRail() {
       const copy = node("span", "slide-rail-copy");
       copy.append(
         node("b", "", String(index + 1).padStart(2, "0")),
-        document.createTextNode(title),
+        node("span", "slide-rail-title", title),
       );
       button.append(thumbnail, copy);
       button.onclick = () => showSlide(index, true);
