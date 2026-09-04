@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { open, readCandidate, revision, validateHtml } from "./index.js";
+import {
+  openDocument,
+  readCandidate,
+  revision,
+  validateHtml,
+} from "./index.js";
 import type { Target } from "./types.js";
 
 export function run(args: string[]): void {
@@ -36,7 +41,7 @@ export function run(args: string[]): void {
     const files = readCandidate(root);
     result = { revision: revision(files), index: validateHtml(files) };
   } else {
-    const engine = open(root);
+    const engine = openDocument(root);
     switch (command) {
       case "propose":
         result = engine.propose({

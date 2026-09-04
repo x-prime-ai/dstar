@@ -3,18 +3,17 @@
 Status: implemented host-owned MVP; development format with a pre-stable public
 SDK surface.
 
-## Three responsibilities
+## Responsibilities
 
 ```text
-Agent + DSTAR skill ──CLI/SDK──> Engine <──trusted host API── Viewer
-                                  │                         │
-                        proposal/delta/history      preview/select/comment
-                                  │                 Owner accept/reject
-                                  ▼
-                        host-owned directory
+MCP client ──> host MCP transport ──> @dstar/mcp ──┐
+                                                   ├──> @dstar/core
+product UI / reference Viewer ─────────────────────┘         │
+                                                             ▼
+                                                   host-owned directory
 ```
 
-The Engine is independent of the Viewer. Its proposal operation derives and
+Core is independent of MCP and the Viewer. Its proposal operation derives and
 stores candidate revision, compact byte deltas and review summaries immediately.
 A Viewer is not needed to prepare a proposal or reconstruct historical HTML.
 
@@ -22,17 +21,16 @@ The Viewer does not calculate or own versions. Its local server reads immutable
 materializations and submits attributed collaboration or Owner decision commands
 to the Engine. Its centralized role gate gives Reviewer read/comment/reply/
 handoff capabilities; document proposals, decisions and resolution are Owner-only.
-There is no required MCP service, workflow backend or projection renderer. The
-public Node/TypeScript SDK is the same Engine used by the reference Viewer; the
-integrating host owns the process and package directory.
+`@dstar/mcp` does not own versions either: it validates protocol inputs, exposes
+only host-selected capabilities and invokes Core. The integrating product owns
+the MCP transport, authentication, process and package directory.
 
 ## Code
 
-- `packages/engine`: file inventory, HTML/CSS validation, hashes, byte deltas,
+- `packages/core`: file inventory, HTML/CSS validation, hashes, byte deltas,
   materialization, comments, proposals and locked/journaled writes.
-- `packages/engine/src/cli.ts`: validate, inspect, export, propose, comment, reply.
-- `packages/engine/src/host.ts`: explicit trusted-host adapter for Owner
-  decisions; deliberately absent from the agent command set and root SDK entry.
+- `packages/core/src/cli.ts`: validate, inspect, export, propose, comment, reply.
+- `packages/mcp`: MCP server/tool adapter over the complete Core API.
 - `apps/viewer`: loopback HTTP adapter and static browser UI.
 - `scripts/dstar.mjs`: repository launcher, including `serve`.
 - `skills/dstar-documents`: agent operating instructions and format references.

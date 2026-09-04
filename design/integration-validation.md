@@ -93,7 +93,7 @@ Checked on 2026-08-28 in `codex/dstar-integrated-review`, without merging main.
 | ------------- | ------------------ | -------------------------------------------------------------------------------- |
 | `6902987`     | baseline           | HTML-first Engine/Viewer                                                         |
 | `f9296e0`     | same               | Early HTML tree resource guard and regression                                    |
-| `8220958`     | `df002a8`          | WebMCP, restricted agent routes, review context and idempotent replies           |
+| `8220958`     | `df002a8`          | WebMCP, restricted tool routes, review context and idempotent replies            |
 | `bdbc1b0`     | `898a0f5`          | Explicit runtime configuration, persistent entrypoint and deployment preparation |
 
 Integration resolved README, server and server-test conflicts while preserving
@@ -104,7 +104,7 @@ also retained. Main was not changed.
 The integration follow-up also:
 
 - Extends the existing server suite with a configured HTTPS-origin/Host test
-  for all four agent routes. It reads a Unicode selection and exact document,
+  for all four WebMCP routes. It reads a Unicode selection and exact document,
   submits a candidate larger than the ordinary 64 KiB API limit, verifies head
   is unchanged, rejects bad authority/credentials on every route, and checks
   persisted proposal/reply retries after restart. Old preview capabilities

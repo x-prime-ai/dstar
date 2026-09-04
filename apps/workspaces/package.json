@@ -12,7 +12,7 @@
     "@dstar/viewer": "workspace:*"
   },
   "devDependencies": {
-    "@dstar/engine": "workspace:*",
+    "@dstar/core": "workspace:*",
     "vitest": "catalog:"
   }
 }

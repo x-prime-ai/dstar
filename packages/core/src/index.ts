@@ -1,5 +1,5 @@
 import { Repository } from "./repository.js";
-import type { DstarEngine } from "./types.js";
+import type { DstarDocument } from "./types.js";
 export type * from "./types.js";
 export { readCandidate } from "./repository.js";
 export { revision, digest } from "./delta.js";
@@ -11,8 +11,7 @@ export {
   mediaType,
   filePath,
 } from "./html.js";
-// The agent surface intentionally has no accept/reject/resolve entry point.
-export function open(root: string): DstarEngine {
+export function openDocument(root: string): DstarDocument {
   const repo = new Repository(root);
   return {
     snapshot: repo.snapshot.bind(repo),
@@ -20,5 +19,7 @@ export function open(root: string): DstarEngine {
     comment: repo.comment.bind(repo),
     reply: repo.reply.bind(repo),
     export: repo.export.bind(repo),
+    decide: repo.decide.bind(repo),
+    resolveComment: repo.resolveComment.bind(repo),
   };
 }

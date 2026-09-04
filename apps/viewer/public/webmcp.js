@@ -212,7 +212,7 @@ export function createTools({
           }
           try {
             const result = await api(
-              `agent/${route}`,
+              `webmcp/${route}`,
               input ? input() : args,
               signal,
             );

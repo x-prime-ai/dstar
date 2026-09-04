@@ -1,6 +1,6 @@
 # `@dstar/viewer`
 
-Self-hosted DSTAR review UI and browser-agent WebMCP surface. It serves one
+Self-hosted DSTAR review UI with its browser WebMCP surface built in. It serves one
 filesystem-backed DSTAR package from one Node.js process; it does not call a
 DSTAR-operated service.
 

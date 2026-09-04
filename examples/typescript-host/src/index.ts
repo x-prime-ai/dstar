@@ -1,5 +1,9 @@
-import { open, type ActorIdentity, type Proposal } from "@dstar/engine";
-import { openHost } from "@dstar/engine/host";
+import {
+  openDocument as openCoreDocument,
+  type ActorIdentity,
+  type DstarDocument,
+} from "@dstar/core";
+import { createDstarMcpServer, type DstarMcpCapability } from "@dstar/mcp";
 import {
   startViewer,
   type StartedViewer,
@@ -11,36 +15,27 @@ export interface HostViewerConfig extends ViewerOptions {
   port?: number;
 }
 
-/** Start the reference UI behind the integrating product's own origin. */
+/** Open the complete document API inside the product's trusted server. */
+export function openDocument(packageRoot: string): DstarDocument {
+  return openCoreDocument(packageRoot);
+}
+
+export function createDocumentMcp(
+  packageRoot: string,
+  actor: ActorIdentity,
+  capabilities: readonly DstarMcpCapability[],
+) {
+  return createDstarMcpServer({
+    document: openCoreDocument(packageRoot),
+    actor,
+    capabilities,
+  });
+}
+
+/** Start the complete Viewer behind the integrating product's own origin. */
 export function serveDocument(
   config: HostViewerConfig,
 ): Promise<StartedViewer> {
   const { packageRoot, port = 0, ...options } = config;
   return startViewer(packageRoot, port, options);
-}
-
-/**
- * Accept one pending proposal after the caller's own auth layer identifies an
- * Owner. Exact revision and state checks prevent stale UI decisions.
- */
-export function acceptProposal(
-  packageRoot: string,
-  proposalId: string,
-  owner: ActorIdentity & { role: "owner" },
-): Proposal {
-  const document = open(packageRoot);
-  const snapshot = document.snapshot();
-  const proposal = snapshot.state.proposals.find(
-    (candidate) =>
-      candidate.id === proposalId && candidate.status === "pending",
-  );
-  if (!proposal) throw new Error("Pending proposal not found");
-
-  return openHost(packageRoot).decide(
-    proposal.id,
-    "accept",
-    proposal.revision,
-    snapshot.stateId,
-    owner,
-  );
 }

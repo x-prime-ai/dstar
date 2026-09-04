@@ -19,7 +19,7 @@ The persistent entrypoint does not print a token or a login URL:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter @dstar/engine build
+pnpm --filter @dstar/core build
 node --env-file=/absolute/private/runtime.env apps/viewer/src/start.mjs
 # Or inject the same environment into: pnpm --filter @dstar/viewer start
 ```
@@ -105,7 +105,7 @@ proxy configuration separately before exposure.
 The proxy example sets `client_max_body_size 48m` to match the agent JSON
 request cap (Nginx otherwise defaults to 1 MiB; see
 [client_max_body_size](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)).
-Decoded candidate files remain limited to 32 MiB by the Engine/agent API.
+Decoded candidate files remain limited to 32 MiB by the WebMCP bridge.
 Compose gives `/tmp` 64 MiB so an allowed candidate can be staged; budget
 additional memory and proxy temporary disk for concurrent requests. These
 limits are not a load-test or production capacity guarantee.
@@ -140,7 +140,7 @@ For a future local container run (these commands do not publish a website):
 # Supply DSTAR_EXTERNAL_ORIGIN and both host role token files to Compose.
 docker compose --env-file /absolute/private/runtime.env -p dstar-review -f deploy/viewer/compose.yaml build
 # First use only: initialize an EMPTY volume from a prepared candidate.
-docker compose --env-file /absolute/private/runtime.env -p dstar-review -f deploy/viewer/compose.yaml run --rm --no-deps -v "$PWD/examples/html-first:/candidate:ro" viewer node --input-type=module -e 'import {open} from "@dstar/engine"; open(process.env.DSTAR_PACKAGE_ROOT).propose({candidate:"/candidate",base:null,request:"Initial document",author:"agent",key:"initial"});'
+docker compose --env-file /absolute/private/runtime.env -p dstar-review -f deploy/viewer/compose.yaml run --rm --no-deps -v "$PWD/examples/html-first:/candidate:ro" viewer node --input-type=module -e 'import {openDocument} from "@dstar/core"; openDocument(process.env.DSTAR_PACKAGE_ROOT).propose({candidate:"/candidate",base:null,request:"Initial document",author:"agent",key:"initial"});'
 docker compose --env-file /absolute/private/runtime.env -p dstar-review -f deploy/viewer/compose.yaml up -d
 ```
 
@@ -178,7 +178,7 @@ configuration and package integrity locally on the trusted host.
 
 ## Verification
 
-Run `pnpm --filter @dstar/engine build`, `pnpm --filter @dstar/engine test`
+Run `pnpm --filter @dstar/core build`, `pnpm --filter @dstar/core test`
 and `pnpm --filter @dstar/viewer test` (the Viewer tests bind temporary ports).
 The suite covers local compatibility, invalid configuration, authority/header
 and path boundaries, role separation, identity spoofing, separate instance

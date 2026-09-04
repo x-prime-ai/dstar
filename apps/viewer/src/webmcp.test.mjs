@@ -37,7 +37,7 @@ it("defines page-context, draft and proposal tools with the current WebMCP signa
     expect(JSON.parse(await tool.execute({}, { signal })).ok).toBe(true);
   expect(cb.api.mock.calls.every((call) => call[2] === signal)).toBe(true);
   expect(cb.api.mock.calls[0]).toEqual([
-    "agent/context",
+    "webmcp/context",
     { review: null, selection: null },
     signal,
   ]);
@@ -128,7 +128,7 @@ it("captures current context when called, not when registered, and preserves suc
   });
   await contextTool.execute({});
   expect(cb.api).toHaveBeenLastCalledWith(
-    "agent/context",
+    "webmcp/context",
     cb.getReviewContext(),
     undefined,
   );

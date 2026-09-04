@@ -13,8 +13,8 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { open, revision } from "@dstar/engine";
-import { AGENT_LIMITS, decodeCandidate, agentRoute } from "./agent-api.mjs";
+import { openDocument, revision } from "@dstar/core";
+import { WEBMCP_LIMITS, decodeCandidate, webmcpRoute } from "./webmcp-api.mjs";
 import { startViewer } from "./server.mjs";
 import { viewerConfigFromEnv } from "./runtime-config.mjs";
 
@@ -32,7 +32,7 @@ function fixture(text = "Hello 🌍") {
     join(candidate, "document.html"),
     `<!doctype html><html><head><title>Preview</title></head><body><p data-dstar-id="intro">${text}</p></body></html>`,
   );
-  const engine = open(root),
+  const engine = openDocument(root),
     proposal = engine.propose({
       candidate,
       base: null,
@@ -294,7 +294,7 @@ it("uses a short-lived scoped handoff to return an agent draft", async () => {
   expect(
     (await wire(viewer, "/api/state", { headers: scopedHeaders })).status,
   ).toBe(200);
-  const toolContext = await wire(viewer, "/api/agent/context", {
+  const toolContext = await wire(viewer, "/api/webmcp/context", {
     headers: scopedHeaders,
     method: "POST",
     body: JSON.stringify(context),
@@ -304,7 +304,7 @@ it("uses a short-lived scoped handoff to return an agent draft", async () => {
     kind: "comment",
     target,
   });
-  const document = await wire(viewer, "/api/agent/document", {
+  const document = await wire(viewer, "/api/webmcp/document", {
     headers: scopedHeaders,
     method: "POST",
     body: JSON.stringify({ revision: proposal.revision }),
@@ -404,7 +404,7 @@ it("binds an existing-comment handoff to an editable reply or linked pending pro
     "reply",
     "propose",
   ]);
-  const read = await post("/api/agent/context", context);
+  const read = await post("/api/webmcp/context", context);
   expect(read.status).toBe(200);
   expect(read.json()).toMatchObject({
     focusedComment: { id: comment.id, status: "open" },
@@ -427,7 +427,7 @@ it("binds an existing-comment handoff to an editable reply or linked pending pro
   });
   expect(
     (
-      await post("/api/agent/reply", {
+      await post("/api/webmcp/reply", {
         commentId: comment.id,
         body: "Do not post this",
         key: "forbidden-direct-reply",
@@ -443,17 +443,17 @@ it("binds an existing-comment handoff to an editable reply or linked pending pro
   };
   expect(
     (
-      await post("/api/agent/proposals", {
+      await post("/api/webmcp/proposals", {
         ...request,
         commentIds: ["44444444-4444-4444-8444-444444444444"],
       })
     ).status,
   ).toBe(403);
-  const proposed = await post("/api/agent/proposals", request);
+  const proposed = await post("/api/webmcp/proposals", request);
   expect(proposed.status).toBe(200);
   expect(proposed.json().proposal.motivatedBy).toEqual([comment.id]);
   expect(engine.snapshot().state.comments[0].status).toBe("open");
-  expect((await post("/api/agent/context", context)).status).toBe(409);
+  expect((await post("/api/webmcp/context", context)).status).toBe(409);
   const linked = engine.snapshot().state.proposals.at(-1);
   const accepted = await post(
     `/api/proposals/${linked.id}/accept`,
@@ -1006,7 +1006,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
 
   expect(
     (
-      await wire(viewer, "/api/agent/proposals", {
+      await wire(viewer, "/api/webmcp/proposals", {
         method: "POST",
         headers: reviewer,
         body: "{}",
@@ -1121,7 +1121,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
       Origin: viewer.origin,
       "Content-Type": "application/json",
     },
-    toolContext = await wire(viewer, "/api/agent/context", {
+    toolContext = await wire(viewer, "/api/webmcp/context", {
       method: "POST",
       headers: scopedHeaders,
       body: JSON.stringify(context),
@@ -1326,10 +1326,10 @@ const candidateFiles = (text) => [
   },
 ];
 async function agentFixture() {
-  const temp = mkdtempSync(join(tmpdir(), "dstar-agent-test-"));
+  const temp = mkdtempSync(join(tmpdir(), "dstar-webmcp-test-"));
   cleanup.push(() => rmSync(temp, { recursive: true, force: true }));
   const root = join(temp, "document"),
-    engine = open(root);
+    engine = openDocument(root);
   // An existing empty HTML-first package, before any genesis proposal.
   mkdirSync(join(root, ".dstar"), { recursive: true });
   writeFileSync(
@@ -1360,13 +1360,13 @@ async function agentFixture() {
   const api = async (route, body) => {
     const response = await request(route, body),
       result = await response.json();
-    if (route.startsWith("agent/")) expect(result).not.toHaveProperty("key");
+    if (route.startsWith("webmcp/")) expect(result).not.toHaveProperty("key");
     expect(JSON.stringify(result)).not.toContain(token);
     expect(JSON.stringify(result)).not.toContain(temp);
     return { ...result, status: response.status };
   };
   const propose = (key, base = null, text = "Hello 🌍") =>
-    api("agent/proposals", {
+    api("webmcp/proposals", {
       base,
       request: `Edit ${text}`,
       key,
@@ -1389,7 +1389,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   expect(p).not.toHaveProperty("command");
   expect(p).not.toHaveProperty("changes");
   expect(engine.snapshot().revision).toBeNull();
-  const read = await api("agent/document", { revision: p.revision });
+  const read = await api("webmcp/document", { revision: p.revision });
   expect(read.files).toEqual(
     candidateFiles().sort((a, b) => a.path.localeCompare(b.path)),
   );
@@ -1420,7 +1420,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
     selection: target,
     focusedCommentId: c.id,
   };
-  const context = await api("agent/context", contextArgs);
+  const context = await api("webmcp/context", contextArgs);
   expect(context.head).toBeNull();
   expect(context.selection).toEqual(target);
   expect(context.focusedComment).toMatchObject({
@@ -1433,7 +1433,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   expect(context.resolutionRevision).toBe(p.revision);
   expect(
     (
-      await api("agent/context", {
+      await api("webmcp/context", {
         ...contextArgs,
         action: { kind: "suggest", target, draft: "Make it friendlier" },
       })
@@ -1441,7 +1441,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   ).toBe("invalid_input");
   expect(
     (
-      await api("agent/context", {
+      await api("webmcp/context", {
         ...contextArgs,
         action: {
           kind: "comment",
@@ -1452,7 +1452,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   ).toBe("invalid_input");
   expect(
     (
-      await api("agent/context", {
+      await api("webmcp/context", {
         ...contextArgs,
         focusedCommentId: "22222222-2222-4222-8222-222222222222",
       })
@@ -1463,7 +1463,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
     body: "I will propose a revision",
     key: "reply-one",
   };
-  const reply = await api("agent/reply", replyArgs);
+  const reply = await api("webmcp/reply", replyArgs);
   expect(reply.comment.status).toBe("open");
   expect(reply.comment.replies).toHaveLength(1);
   expect(reply.comment.replies[0].author).toEqual({
@@ -1473,10 +1473,12 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   });
   expect(reply.comment.replies[0]).not.toHaveProperty("key");
   const stateId = engine.snapshot().stateId;
-  expect((await api("agent/reply", replyArgs)).comment.replies).toHaveLength(1);
-  expect(open(root).snapshot().stateId).toBe(stateId);
+  expect((await api("webmcp/reply", replyArgs)).comment.replies).toHaveLength(
+    1,
+  );
+  expect(openDocument(root).snapshot().stateId).toBe(stateId);
   expect(
-    (await api("agent/reply", { ...replyArgs, body: "Changed reply" })).code,
+    (await api("webmcp/reply", { ...replyArgs, body: "Changed reply" })).code,
   ).toBe("idempotency_conflict");
   expect((await decide(p)).status).toBe(200);
   expect((await propose("genesis")).proposal.id).toBe(p.id);
@@ -1487,13 +1489,13 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   expect(next.diff.elementChangeCount).toBe(1);
   expect(engine.snapshot().revision).toBe(p.revision);
   // Both the viewed base and its selection stay pinned to the original revision.
-  const comparing = await api("agent/context", {
+  const comparing = await api("webmcp/context", {
     ...contextArgs,
     review: { ...contextArgs.review, proposalId: next.id, showingBase: true },
   });
   expect(comparing.selection.revision).toBe(p.revision);
   expect((await decide(next, "reject")).status).toBe(200);
-  const final = await api("agent/context", {});
+  const final = await api("webmcp/context", {});
   expect(final.proposals.map((p) => p.status)).toEqual([
     "accepted",
     "rejected",
@@ -1540,7 +1542,7 @@ it("rejects stale bases, mismatched selections and stale human review states; pr
     showingBase: false,
     previewStatus: "ready",
   };
-  expect((await api("agent/context", { review })).review.stale).toBe(true);
+  expect((await api("webmcp/context", { review })).review.stale).toBe(true);
   for (const [r, target] of [
     [
       review,
@@ -1574,35 +1576,35 @@ it("rejects stale bases, mismatched selections and stale human review states; pr
     ],
   ])
     expect(
-      (await api("agent/context", { review: r, selection: target })).status,
+      (await api("webmcp/context", { review: r, selection: target })).status,
     ).toBeGreaterThanOrEqual(400);
   expect(
     (
-      await api("agent/context", {
+      await api("webmcp/context", {
         review: { ...review, revision: genesis.revision },
       })
     ).status,
   ).toBe(400);
-  expect((await api("agent/document", { revision: "head" })).status).toBe(400);
+  expect((await api("webmcp/document", { revision: "head" })).status).toBe(400);
   expect(
-    (await api("agent/document", { revision: `sha256:${"f".repeat(64)}` }))
+    (await api("webmcp/document", { revision: `sha256:${"f".repeat(64)}` }))
       .code,
   ).toBe("not_found");
 });
 
-it("limits agent routes, authority, input shapes, byte sizes and capabilities", async () => {
+it("limits WebMCP routes, authority, input shapes, byte sizes and capabilities", async () => {
   const { viewer, request, api, engine } = await agentFixture();
   const stateId = engine.snapshot().stateId;
   expect(
-    (await request("agent/context", {}, { Authorization: "Bearer wrong" }))
+    (await request("webmcp/context", {}, { Authorization: "Bearer wrong" }))
       .status,
   ).toBe(401);
   expect(
-    (await request("agent/context", {}, { Origin: "http://evil.invalid" }))
+    (await request("webmcp/context", {}, { Origin: "http://evil.invalid" }))
       .status,
   ).toBe(403);
   expect(
-    (await request("agent/context", {}, { "Content-Type": "text/plain" }))
+    (await request("webmcp/context", {}, { "Content-Type": "text/plain" }))
       .status,
   ).toBe(403);
   for (const route of [
@@ -1613,7 +1615,7 @@ it("limits agent routes, authority, input shapes, byte sizes and capabilities", 
     "shell",
     "fetch",
   ])
-    expect((await api(`agent/${route}`, {})).status).toBe(404);
+    expect((await api(`webmcp/${route}`, {})).status).toBe(404);
   for (const body of [
     null,
     [],
@@ -1621,13 +1623,13 @@ it("limits agent routes, authority, input shapes, byte sizes and capabilities", 
     { url: "https://example.com" },
     { command: "ls" },
   ])
-    expect((await api("agent/proposals", body)).status).toBe(400);
-  const raw = await request("agent/context", { huge: "x".repeat(65536) });
+    expect((await api("webmcp/proposals", body)).status).toBe(400);
+  const raw = await request("webmcp/context", { huge: "x".repeat(65536) });
   expect(raw.status).toBe(413);
   expect(
     (
-      await request("agent/proposals", {
-        huge: "x".repeat(AGENT_LIMITS.requestBytes),
+      await request("webmcp/proposals", {
+        huge: "x".repeat(WEBMCP_LIMITS.requestBytes),
       })
     ).status,
   ).toBe(413);
@@ -1722,12 +1724,12 @@ it("validates complete candidate content without accepting paths, scripts, remot
       {
         path: "document.html",
         encoding: "utf8",
-        content: "x".repeat(AGENT_LIMITS.fileBytes + 1),
+        content: "x".repeat(WEBMCP_LIMITS.fileBytes + 1),
       },
     ],
   ];
   for (const files of invalid) {
-    const result = await api("agent/proposals", {
+    const result = await api("webmcp/proposals", {
       base: null,
       request: "Invalid",
       key: "invalid",
@@ -1767,10 +1769,10 @@ it("cleans private staging after an Engine failure and never returns host error 
       yield Buffer.from(JSON.stringify(body));
     },
   };
-  await agentRoute({
+  await webmcpRoute({
     req,
     origin,
-    path: "/api/agent/proposals",
+    path: "/api/webmcp/proposals",
     json: (status, data) => {
       response = { status, data };
     },
@@ -1804,7 +1806,7 @@ it("allows identical retries after a busy Engine without leaking the lock path",
   expect((await propose("busy-retry")).proposal.status).toBe("pending");
 });
 
-it("keeps all agent routes inside configured authority and persists retries across restart", async () => {
+it("keeps all WebMCP routes inside configured authority and persists retries across restart", async () => {
   const { root, temp, engine, proposal } = fixture();
   const token = "integration-test-credential-" + "x".repeat(48);
   const tokenFile = join(temp, "viewer-token");
@@ -1856,11 +1858,11 @@ it("keeps all agent routes inside configured authority and persists retries acro
     showingBase: false,
     previewStatus: "ready",
   };
-  const context = await api("/api/agent/context", { review, selection });
+  const context = await api("/api/webmcp/context", { review, selection });
   expect(context.selection).toEqual(selection);
   expect(context.comments[0].target.revision).toBe(proposal.revision);
   expect(context.head.revision).toBe(proposal.revision);
-  const document = await api("/api/agent/document", {
+  const document = await api("/api/webmcp/document", {
     revision: proposal.revision,
   });
   // Exceeds the ordinary 64 KiB POST cap, proving the agent body reader is used.
@@ -1875,14 +1877,14 @@ it("keeps all agent routes inside configured authority and persists retries acro
         " ".repeat(70000),
     })),
   };
-  const pending = (await api("/api/agent/proposals", request)).proposal;
+  const pending = (await api("/api/webmcp/proposals", request)).proposal;
   expect(engine.snapshot().revision).toBe(proposal.revision);
   const reply = {
     commentId: comment.id,
     body: "Candidate is ready",
     key: "configured-reply",
   };
-  await api("/api/agent/reply", reply);
+  await api("/api/webmcp/reply", reply);
   const before = engine.snapshot().stateId;
   for (const route of ["context", "document", "proposals", "reply"])
     for (const denied of [
@@ -1891,7 +1893,7 @@ it("keeps all agent routes inside configured authority and persists retries acro
       { Origin: "https://evil.example.test" },
       { "X-Forwarded-Host": "review.example.test:8443" },
     ]) {
-      const result = await post(`/api/agent/${route}`, {}, denied);
+      const result = await post(`/api/webmcp/${route}`, {}, denied);
       expect(result.status).toBe(denied.Authorization ? 401 : 403);
     }
   expect(engine.snapshot().stateId).toBe(before);
@@ -1901,17 +1903,17 @@ it("keeps all agent routes inside configured authority and persists retries acro
   await close(viewer.server);
   viewer = await start(root, 0, options);
   expect((await wire(viewer, preview.url)).status).toBe(404);
-  expect((await api("/api/agent/proposals", request)).proposal.id).toBe(
+  expect((await api("/api/webmcp/proposals", request)).proposal.id).toBe(
     pending.id,
   );
-  expect((await api("/api/agent/reply", reply)).comment.replies).toHaveLength(
+  expect((await api("/api/webmcp/reply", reply)).comment.replies).toHaveLength(
     1,
   );
-  const reopened = await api("/api/agent/context", { review, selection });
+  const reopened = await api("/api/webmcp/context", { review, selection });
   expect(reopened.stateId).toBe(before);
   expect(reopened.head.revision).toBe(proposal.revision);
   expect(reopened.comments[0].status).toBe("open");
   expect(
-    (await api("/api/agent/document", { revision: pending.revision })).files,
+    (await api("/api/webmcp/document", { revision: pending.revision })).files,
   ).toEqual(request.files);
 });

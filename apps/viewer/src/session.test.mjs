@@ -202,8 +202,8 @@ it("does not authenticate network errors or forbidden origins, and propagates ab
   expect(f.session.authorized).toBe(false);
   expect(f.onAuthorization).not.toHaveBeenCalled();
   const signal = new AbortController().signal;
-  await f.session.request("agent/context", {}, signal);
-  expect(f.fetch).toHaveBeenLastCalledWith(`${origin}/api/agent/context`, {
+  await f.session.request("webmcp/context", {}, signal);
+  expect(f.fetch).toHaveBeenLastCalledWith(`${origin}/api/webmcp/context`, {
     signal,
     headers: {
       Authorization: `Bearer ${token}`,

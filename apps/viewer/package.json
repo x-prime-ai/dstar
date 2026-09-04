@@ -21,7 +21,7 @@
   "files": [
     "public",
     "src/access-control.mjs",
-    "src/agent-api.mjs",
+    "src/webmcp-api.mjs",
     "src/file-diff.mjs",
     "src/preview-cache.mjs",
     "src/runtime-config.mjs",
@@ -38,7 +38,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dstar/engine": "workspace:*"
+    "@dstar/core": "workspace:*"
   },
   "devDependencies": {
     "vitest": "catalog:"

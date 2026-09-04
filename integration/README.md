@@ -7,12 +7,13 @@ the request path.
 
 ## Choose an integration level
 
-| Need | Use | Host owns |
-| --- | --- | --- |
-| Complete review UI and browser-agent tools | `@dstar/viewer` or the Viewer container | origin, auth links, package volume, TLS and proxy |
-| Custom product UI and workflow | `@dstar/engine` plus `@dstar/engine/host` | routes, UI, identity, authorization and storage |
-| Resettable isolated review spaces | workspace service | wildcard routing, lifecycle policy, seed and volume |
-| Local agent authoring only | `pnpm dstar` and the DSTAR skill | package and candidate directories |
+| Need                                       | Use                                     | Host owns                                                            |
+| ------------------------------------------ | --------------------------------------- | -------------------------------------------------------------------- |
+| Complete review UI and browser-agent tools | `@dstar/viewer` or the Viewer container | origin, auth links, package volume, TLS and proxy                    |
+| MCP tools for an existing product          | `@dstar/mcp` with `@dstar/core`         | MCP transport, document routing, identity, authorization and storage |
+| Custom product UI and workflow             | `@dstar/core`                           | routes, UI, identity, authorization and storage                      |
+| Resettable isolated review spaces          | workspace service                       | wildcard routing, lifecycle policy, seed and volume                  |
+| Local agent authoring only                 | `pnpm dstar` and the DSTAR skill        | package and candidate directories                                    |
 
 The first option is the recommended starting point. It gives the host DSTAR's
 reference review experience while keeping the deployment and all data under the
@@ -21,27 +22,23 @@ host's control.
 ## Reference topology
 
 ```text
-browser / browser agent
-          │ HTTPS, host identity boundary
-          ▼
-host-owned origin and reverse proxy
-          │ fixed upstream, private network
-          ▼
-@dstar/viewer ── trusted host calls ──> @dstar/engine/host
-       │          agent-safe calls ──> @dstar/engine
-       ▼
-host-owned persistent <document>.dstar directory
+MCP client ──> host-owned MCP endpoint ──> @dstar/mcp ──┐
+                                                       ├──> @dstar/core
+browser ─────> host-owned UI / @dstar/viewer ──────────┘         │
+                                                                 ▼
+                                      persistent <document>.dstar directory
 ```
 
-The Viewer registers WebMCP tools in the browser when WebMCP is available. This
-is not an MCP server registration and does not require a DSTAR MCP endpoint.
-Normal reading and review continue to work without WebMCP.
+`@dstar/mcp` is only the server-side MCP adapter. WebMCP belongs to Viewer: the
+Viewer registers its own tools in supporting browsers and owns the restricted
+HTTP bridge behind them. It is not implemented by `@dstar/mcp` and is not a
+separate package or service. Both surfaces call the same Core API.
 
 ## Complete self-host path
 
 1. Prepare a complete candidate directory with `document.html`, optional CSS
    and local assets.
-2. Create a package and initial pending proposal with `@dstar/engine` or the CLI.
+2. Create a package and initial pending proposal with `@dstar/core` or the CLI.
 3. Persist the entire package directory, including hidden `.dstar` state.
 4. Run one `@dstar/viewer` process for that package.
 5. Terminate TLS and enforce host identity at the host's reverse proxy.
@@ -51,7 +48,8 @@ Normal reading and review continue to work without WebMCP.
 
 The runnable container, environment contract, proxy rules and backup checklist
 are in the [self-hosting guide](../deploy/viewer/README.md). The
-[`@dstar/engine` SDK guide](../packages/engine/README.md) covers custom servers.
+[`@dstar/core` SDK guide](../packages/core/README.md) covers custom servers, and
+the [`@dstar/mcp` guide](../packages/mcp/README.md) covers MCP mounting.
 
 ## Integration contract
 

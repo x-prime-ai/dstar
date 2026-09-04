@@ -17,7 +17,7 @@
     "build": "pnpm --recursive --if-present build",
     "check:links": "node scripts/check-markdown-links.mjs",
     "check:node": "node scripts/check-node-version.mjs",
-    "check:packages": "pnpm --filter @dstar/engine pack --dry-run && pnpm --filter @dstar/viewer pack --dry-run",
+    "check:packages": "pnpm --filter @dstar/core pack --dry-run && pnpm --filter @dstar/mcp pack --dry-run && pnpm --filter @dstar/viewer pack --dry-run",
     "check:static-demo": "node --test deploy/static-site/review-state.test.mjs",
     "clean": "pnpm --recursive --if-present clean",
     "format": "prettier --write package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs scripts packages apps examples design/decisions .github deploy/static-site/build.mjs deploy/static-site/review-state.mjs deploy/static-site/review-state.test.mjs deploy/static-site/review.js deploy/static-site/review.html deploy/static-site/review.css",

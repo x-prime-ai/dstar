@@ -1,7 +1,7 @@
 {
-  "name": "@dstar/engine",
+  "name": "@dstar/mcp",
   "version": "0.1.0",
-  "description": "Server-side TypeScript SDK for portable DSTAR HTML documents",
+  "description": "MCP server adapter for the DSTAR Core API",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
@@ -11,17 +11,12 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "README.md",
-    "!dist/cli.*"
+    "README.md"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./host": {
-      "types": "./dist/host.d.ts",
-      "import": "./dist/host.js"
     }
   },
   "publishConfig": {
@@ -34,10 +29,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit --composite false"
   },
   "dependencies": {
-    "parse5": "8.0.1",
-    "parse5-htmlparser2-tree-adapter": "8.0.1",
-    "domhandler": "5.0.3",
-    "postcss": "8.5.26"
+    "@dstar/core": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.17.2",

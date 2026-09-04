@@ -9,7 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dstar/engine": "workspace:*",
+    "@dstar/core": "workspace:*",
     "@dstar/viewer": "workspace:*"
   },
   "devDependencies": {

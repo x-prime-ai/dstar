@@ -25,7 +25,7 @@ try {
       `DSTAR Viewer Owner: ${viewer.ownerUrl}\nDSTAR Viewer Reviewer: ${viewer.reviewerUrl}\nKeep each role-specific URL private. Ctrl-C to stop.`,
     );
   } else {
-    const { run } = await import("../packages/engine/dist/cli.js");
+    const { run } = await import("../packages/core/dist/cli.js");
     run(args);
   }
 } catch (error) {

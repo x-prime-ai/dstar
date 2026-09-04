@@ -2,7 +2,8 @@ export type Files = Map<string, Buffer>;
 export interface ActorIdentity {
   id: string;
   displayName: string;
-  role: "owner" | "reviewer" | "agent";
+  /** Host-defined audit label; Core does not use it for authorization. */
+  role: string;
 }
 /** String actors remain readable for pre-identity state and non-Viewer callers. */
 export type Actor = ActorIdentity | string;
@@ -157,8 +158,8 @@ export interface ExportResult {
   directory: string;
 }
 
-/** Agent-safe filesystem API. Human decisions are available from `@dstar/engine/host`. */
-export interface DstarEngine {
+/** Complete filesystem-backed DSTAR document API. */
+export interface DstarDocument {
   snapshot(revisionOrProposalId?: string): Snapshot;
   propose(input: ProposeInput): Proposal;
   comment(input: CommentInput): Comment;
@@ -170,10 +171,6 @@ export interface DstarEngine {
     expectedStateId?: string,
   ): Comment;
   export(directory: string, revisionOrProposalId?: string): ExportResult;
-}
-
-/** Trusted-host API. Callers must enforce Owner authorization before invoking it. */
-export interface DstarHost {
   decide(
     proposalId: string,
     action: "accept" | "reject",

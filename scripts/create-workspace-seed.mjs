@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { openHost } from "../packages/engine/dist/host.js";
-import { open } from "../packages/engine/dist/index.js";
+import { openDocument } from "../packages/core/dist/index.js";
 
 const destination = process.argv[2];
 const candidate = resolve(process.argv[3] ?? "examples/html-first");
@@ -16,7 +15,7 @@ if (!destination || !isAbsolute(destination)) {
   process.exitCode = 1;
 } else {
   mkdirSync(destination, { recursive: true, mode: 0o700 });
-  const engine = open(destination);
+  const engine = openDocument(destination);
   const proposal = engine.propose({
     candidate,
     base: null,
@@ -25,7 +24,7 @@ if (!destination || !isAbsolute(destination)) {
     key: "workspace-seed-v1",
   });
   const snapshot = engine.snapshot();
-  openHost(destination).decide(
+  openDocument(destination).decide(
     proposal.id,
     "accept",
     proposal.revision,

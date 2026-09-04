@@ -1,19 +1,22 @@
 {
-  "name": "@dstar/example-typescript-host",
+  "name": "dstar-typescript-host-example",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "pnpm clean && tsc -p tsconfig.json",
     "clean": "node scripts/clean.mjs",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit --composite false"
   },
   "dependencies": {
-    "@dstar/engine": "workspace:*",
+    "@dstar/core": "workspace:*",
+    "@dstar/mcp": "workspace:*",
     "@dstar/viewer": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.17.2",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

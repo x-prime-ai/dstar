@@ -6,16 +6,16 @@ import {
   validateHtml,
   validateTarget,
   resolveTarget,
-} from "@dstar/engine";
+} from "@dstar/core";
 import { publicPrincipal } from "./access-control.mjs";
 
-export const AGENT_IDENTITY = Object.freeze({
+export const WEBMCP_IDENTITY = Object.freeze({
   id: "agent",
   displayName: "Agent",
   role: "agent",
 });
 
-export const AGENT_LIMITS = Object.freeze({
+export const WEBMCP_LIMITS = Object.freeze({
   files: 512,
   fileBytes: 8 * 1024 * 1024,
   totalBytes: 32 * 1024 * 1024,
@@ -90,7 +90,7 @@ export function decodeCandidate(input) {
   requireInput(
     Array.isArray(input) &&
       input.length > 0 &&
-      input.length <= AGENT_LIMITS.files,
+      input.length <= WEBMCP_LIMITS.files,
     "Invalid file count",
   );
   const files = new Map(),
@@ -101,8 +101,8 @@ export function decodeCandidate(input) {
     object(file, ["path", "encoding", "content"]);
     requireInput(
       typeof file.path === "string" &&
-        file.path.length <= AGENT_LIMITS.pathLength &&
-        file.path.split("/").length <= AGENT_LIMITS.pathDepth,
+        file.path.length <= WEBMCP_LIMITS.pathLength &&
+        file.path.split("/").length <= WEBMCP_LIMITS.pathDepth,
       "Invalid canonical path",
     );
     // Validate before touching the filesystem; do not normalize hostile paths.
@@ -127,7 +127,7 @@ export function decodeCandidate(input) {
       spellings.set(lower, prefix);
     }
     requireInput(
-      spellings.size <= AGENT_LIMITS.directoryEntries,
+      spellings.size <= WEBMCP_LIMITS.directoryEntries,
       "Directory entry limit exceeded",
     );
     const isText = /\.(html|css)$/.test(file.path);
@@ -137,7 +137,7 @@ export function decodeCandidate(input) {
       "HTML/CSS require utf8; assets require base64",
     );
     requireInput(
-      file.content.length <= AGENT_LIMITS.fileBytes * (isText ? 1 : 4 / 3) + 4,
+      file.content.length <= WEBMCP_LIMITS.fileBytes * (isText ? 1 : 4 / 3) + 4,
       "File too large",
     );
     const bytes = Buffer.from(file.content, isText ? "utf8" : "base64");
@@ -150,8 +150,8 @@ export function decodeCandidate(input) {
     );
     total += bytes.length;
     requireInput(
-      bytes.length <= AGENT_LIMITS.fileBytes &&
-        total <= AGENT_LIMITS.totalBytes,
+      bytes.length <= WEBMCP_LIMITS.fileBytes &&
+        total <= WEBMCP_LIMITS.totalBytes,
       "Candidate too large",
     );
     files.set(file.path, bytes);
@@ -298,7 +298,7 @@ function selectionContext(engine, input, principal) {
     proposals: state.proposals.map(publicProposal),
     comments: state.comments.map(contextualComment),
     resolutionRevision: snapshot.revision,
-    limits: AGENT_LIMITS,
+    limits: WEBMCP_LIMITS,
     guidance:
       action?.kind === "comment"
         ? "The user chose Comment for this exact selection. Draft a concise comment in the Viewer when asked; the user reviews it before posting."
@@ -354,7 +354,7 @@ function errorResult(error) {
       "The document or request failed validation. Check HTML/CSS, local assets, exact selection and resource limits; no successful operation is implied.",
   };
 }
-export async function agentRoute({
+export async function webmcpRoute({
   engine,
   req,
   json,
@@ -363,7 +363,7 @@ export async function agentRoute({
   principal,
   scope,
 }) {
-  if (!path.startsWith("/api/agent/")) return false;
+  if (!path.startsWith("/api/webmcp/")) return false;
   const send = (status, data) => {
     json(status, data);
     return true;
@@ -371,10 +371,10 @@ export async function agentRoute({
   if (
     req.method !== "POST" ||
     !["context", "document", "proposals", "reply"].some(
-      (name) => path === `/api/agent/${name}`,
+      (name) => path === `/api/webmcp/${name}`,
     )
   )
-    return send(404, { code: "unknown_route", error: "Unknown agent route" });
+    return send(404, { code: "unknown_route", error: "Unknown WebMCP route" });
   if (
     req.headers.origin !== origin ||
     req.headers["content-type"] !== "application/json"
@@ -385,7 +385,7 @@ export async function agentRoute({
     });
   try {
     const cap = path.endsWith("/proposals")
-      ? AGENT_LIMITS.requestBytes
+      ? WEBMCP_LIMITS.requestBytes
       : 64 * 1024;
     let size = 0;
     const chunks = [];
@@ -473,7 +473,7 @@ export async function agentRoute({
       text(body.key, "key", 200);
       return send(200, {
         comment: publicComment(
-          engine.reply(body.commentId, body.body, AGENT_IDENTITY, body.key),
+          engine.reply(body.commentId, body.body, WEBMCP_IDENTITY, body.key),
         ),
       });
     }
@@ -502,7 +502,7 @@ export async function agentRoute({
       "Invalid motivating comment IDs",
     );
     const files = decodeCandidate(body.files);
-    const directory = mkdtempSync(join(tmpdir(), "dstar-agent-"));
+    const directory = mkdtempSync(join(tmpdir(), "dstar-webmcp-"));
     let proposal;
     try {
       for (const [path, bytes] of files) {
@@ -515,7 +515,7 @@ export async function agentRoute({
         base: body.base,
         request: body.request,
         key: body.key,
-        author: AGENT_IDENTITY,
+        author: WEBMCP_IDENTITY,
         ...(body.commentIds === undefined
           ? {}
           : { commentIds: body.commentIds }),

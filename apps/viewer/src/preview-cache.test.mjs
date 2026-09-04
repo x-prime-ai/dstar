@@ -8,17 +8,17 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { open } from "@dstar/engine";
+import { openDocument } from "@dstar/core";
 import { startViewer } from "./server.mjs";
 import { createPreviewCache } from "./preview-cache.mjs";
 
 const opened = vi.hoisted(() => []);
-vi.mock("@dstar/engine", async (importOriginal) => {
+vi.mock("@dstar/core", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    open(...args) {
-      const engine = actual.open(...args);
+    openDocument(...args) {
+      const engine = actual.openDocument(...args);
       engine.snapshot = vi.fn(engine.snapshot);
       opened.push(engine.snapshot);
       return engine;
@@ -83,7 +83,7 @@ it("uses one verified preview for HTML, CSS and images with 20 comments while de
   writeFileSync(join(candidate, "styles.css"), css);
   for (const name of ["one", "two"])
     writeFileSync(join(candidate, `assets/${name}.gif`), gif);
-  const engine = open(root);
+  const engine = openDocument(root);
   const p = engine.propose({
     candidate,
     base: null,

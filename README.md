@@ -17,23 +17,23 @@ product brief, a rich HTML explainer, a slide deck, and a Viewer UI design spec.
 
 The new HTML-first path consists of:
 
-- [Agent skill](skills/dstar-documents/SKILL.md): authoring and comment workflow.
-- [Engine](packages/engine/src/index.ts): validation, revisions, comments,
+- [Core](packages/core/src/index.ts): validation, revisions, comments,
   compact history and exact-base proposals.
-- [CLI](scripts/dstar.mjs): the agent-facing entrypoint.
+- [MCP](packages/mcp/README.md): caller-scoped MCP tools backed by Core.
+- [CLI](scripts/dstar.mjs): local development and operator tooling.
 - [Viewer](apps/viewer/src/server.mjs): current-document reading, precise
   comments, a simple version timeline, Before/After review,
   role-bound identity and explicit human decisions.
 
-The Engine creates the candidate revision, review summary and storage delta
-**during `propose`**, not when the Viewer opens. No Git installation, MCP server,
-hosted DSTAR service is needed. Node 22+ and pnpm are required for this source
-workspace.
+Core creates the candidate revision, review summary and storage delta **during
+`propose`**, not when the Viewer opens. No Git installation or hosted DSTAR
+service is needed. Node 22+ and pnpm are required for this source workspace.
 
 External products can run the same stack at their own origin and keep all
 document data on their own infrastructure. Start with the
 [host integration guide](integration/README.md), the
-[`@dstar/engine` TypeScript SDK](packages/engine/README.md), or the
+[`@dstar/core` TypeScript SDK](packages/core/README.md), the
+[`@dstar/mcp` server adapter](packages/mcp/README.md), or the
 [`@dstar/viewer` package](apps/viewer/README.md).
 
 ## Try it
@@ -42,7 +42,7 @@ Run from this repository:
 
 ```sh
 pnpm install
-pnpm --filter @dstar/engine build
+pnpm --filter @dstar/core build
 pnpm dstar validate examples/html-first
 pnpm dstar propose ./my-document.dstar --candidate examples/html-first --base none --request "Create a document" --key first
 pnpm dstar serve ./my-document.dstar
@@ -151,7 +151,8 @@ scaling, or migration from earlier pre-HTML formats.
 
 ```sh
 pnpm build
-pnpm --filter @dstar/engine test
+pnpm --filter @dstar/core test
+pnpm --filter @dstar/mcp test
 pnpm --filter @dstar/viewer test
 pnpm --filter @dstar/workspaces test
 pnpm lint

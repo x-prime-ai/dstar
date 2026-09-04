@@ -19,7 +19,7 @@ are authoring intentions, not different source schemas.
 ## Use the Engine through the CLI
 
 This repository provides `pnpm dstar` (Node 22+; run `pnpm install` and
-`pnpm --filter @dstar/engine build` once when needed).
+`pnpm --filter @dstar/core build` once when needed).
 Run commands from the DSTAR repository, passing absolute document and candidate
 paths when working elsewhere. No Git or MCP server is required; a host may use
 the public TypeScript SDK instead of the CLI.

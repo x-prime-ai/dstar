@@ -17,7 +17,7 @@ Build the Engine and create a disposable seed from the checked-in safe HTML
 example:
 
 ```sh
-pnpm --filter @dstar/engine build
+pnpm --filter @dstar/core build
 pnpm workspace:seed /absolute/private/seed.dstar
 mkdir -p /absolute/private/workspace-data
 DSTAR_SEED_ROOT=/absolute/private/seed.dstar \

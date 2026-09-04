@@ -4,8 +4,7 @@ import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { openHost } from "@dstar/engine/host";
-import { open } from "@dstar/engine";
+import { openDocument } from "@dstar/core";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { startWorkspaceService } from "./server.mjs";
@@ -29,7 +28,7 @@ function fixture() {
     join(candidate, "document.html"),
     '<!doctype html><html><head><title>Seed review</title></head><body><p data-dstar-id="intro">Seed text</p></body></html>',
   );
-  const engine = open(seedRoot);
+  const engine = openDocument(seedRoot);
   const proposal = engine.propose({
     candidate,
     base: null,
@@ -38,7 +37,7 @@ function fixture() {
     key: randomUUID(),
   });
   const state = engine.snapshot();
-  openHost(seedRoot).decide(
+  openDocument(seedRoot).decide(
     proposal.id,
     "accept",
     proposal.revision,
@@ -328,7 +327,7 @@ describe("online workspace service", () => {
     };
     expect(
       (
-        await wire(service, old.host, "/api/agent/context", {
+        await wire(service, old.host, "/api/webmcp/context", {
           method: "POST",
           token: handoffToken,
           origin: old.origin,
@@ -445,9 +444,9 @@ describe("online workspace service", () => {
       ["GET", `/api/handoffs/${handoffId}`],
       ["POST", `/api/handoffs/${handoffId}/reply-draft`],
       ["POST", `/api/handoffs/${handoffId}/revoke`],
-      ["POST", "/api/agent/context"],
-      ["POST", "/api/agent/document"],
-      ["POST", "/api/agent/proposals"],
+      ["POST", "/api/webmcp/context"],
+      ["POST", "/api/webmcp/document"],
+      ["POST", "/api/webmcp/proposals"],
     ])
       expect(
         (

@@ -35,7 +35,7 @@ function actorField(value: Actor, name: string): void {
     !value ||
     Object.keys(value).sort().join(",") !== "displayName,id,role" ||
     !/^[a-z][a-z0-9-]{0,63}$/.test(value.id) ||
-    !["owner", "reviewer", "agent"].includes(value.role) ||
+    !/^[a-z][a-z0-9-]{0,63}$/.test(value.role) ||
     value.displayName !== value.displayName.trim() ||
     [...value.displayName].length < 1 ||
     [...value.displayName].length > 80 ||

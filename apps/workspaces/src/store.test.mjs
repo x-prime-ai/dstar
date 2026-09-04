@@ -9,8 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openHost } from "@dstar/engine/host";
-import { open } from "@dstar/engine";
+import { openDocument } from "@dstar/core";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { workspaceStore } from "./store.mjs";
@@ -34,7 +33,7 @@ function fixture() {
     join(candidate, "document.html"),
     '<!doctype html><html><head><title>Seed</title></head><body><p data-dstar-id="intro">Seed text</p></body></html>',
   );
-  const engine = open(seedRoot);
+  const engine = openDocument(seedRoot);
   const proposal = engine.propose({
     candidate,
     base: null,
@@ -43,7 +42,7 @@ function fixture() {
     key: randomUUID(),
   });
   const state = engine.snapshot();
-  openHost(seedRoot).decide(
+  openDocument(seedRoot).decide(
     proposal.id,
     "accept",
     proposal.revision,
@@ -56,7 +55,7 @@ function fixture() {
 describe("persistent workspace store", () => {
   it("copies a read-only seed into isolated generations without mutating it", async () => {
     const { root, seedRoot } = fixture();
-    const before = open(seedRoot).snapshot().stateId;
+    const before = openDocument(seedRoot).snapshot().stateId;
     chmodSync(seedRoot, 0o555);
     const store = workspaceStore({
       root: join(root, "runtime"),
@@ -78,8 +77,8 @@ describe("persistent workspace store", () => {
     expect(store.load(first.metadata.id).packageRoot).not.toBe(
       store.load(second.metadata.id).packageRoot,
     );
-    expect(open(seedRoot).snapshot().stateId).toBe(before);
-    const firstState = open(store.load(first.metadata.id).packageRoot);
+    expect(openDocument(seedRoot).snapshot().stateId).toBe(before);
+    const firstState = openDocument(store.load(first.metadata.id).packageRoot);
     firstState.comment({
       target: {
         revision: firstState.snapshot().revision,
@@ -97,7 +96,7 @@ describe("persistent workspace store", () => {
     });
     expect(firstState.snapshot().state.comments).toHaveLength(1);
     expect(
-      open(store.load(second.metadata.id).packageRoot).snapshot().state
+      openDocument(store.load(second.metadata.id).packageRoot).snapshot().state
         .comments,
     ).toHaveLength(0);
   });

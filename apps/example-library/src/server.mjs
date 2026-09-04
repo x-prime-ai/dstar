@@ -4,8 +4,7 @@ import { createServer, request as requestHttp } from "node:http";
 import { tmpdir } from "node:os";
 import { extname, join, relative, resolve, sep } from "node:path";
 
-import { openHost } from "@dstar/engine/host";
-import { open, readCandidate, revision } from "@dstar/engine";
+import { openDocument, readCandidate, revision } from "@dstar/core";
 import { startViewer } from "@dstar/viewer";
 
 const SAMPLES = [
@@ -162,7 +161,7 @@ function proxyViewer(request, response, viewer, path, trustedProxy) {
 
 function seedPackage(packageRoot, candidateRoot) {
   mkdirSync(packageRoot, { recursive: true, mode: 0o700 });
-  const engine = open(packageRoot);
+  const engine = openDocument(packageRoot);
   const snapshot = existsSync(join(packageRoot, ".dstar"))
     ? engine.snapshot()
     : { revision: null };
@@ -178,7 +177,7 @@ function seedPackage(packageRoot, candidateRoot) {
     author: "example-library",
     key: `example-library-seed:${candidateRevision}`,
   });
-  openHost(packageRoot).decide(
+  openDocument(packageRoot).decide(
     proposal.id,
     "accept",
     proposal.revision,

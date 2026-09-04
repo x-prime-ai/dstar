@@ -1,0 +1,43 @@
+{
+  "name": "@dstar/core",
+  "version": "0.1.0",
+  "description": "Server-side TypeScript SDK for portable DSTAR HTML documents",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "!dist/cli.*"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "pnpm clean && tsc -p tsconfig.json",
+    "clean": "node scripts/clean.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit --composite false"
+  },
+  "dependencies": {
+    "parse5": "8.0.1",
+    "parse5-htmlparser2-tree-adapter": "8.0.1",
+    "domhandler": "5.0.3",
+    "postcss": "8.5.26"
+  },
+  "devDependencies": {
+    "@types/node": "^22.17.2",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

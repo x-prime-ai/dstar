@@ -40,9 +40,9 @@ const routeRules = Object.freeze([
     /^\/api\/proposals\/[a-f0-9-]{36}\/(accept|reject)$/,
     CAPABILITIES.DECIDE,
   ],
-  ["POST", /^\/api\/agent\/(context|document)$/, CAPABILITIES.READ],
-  ["POST", /^\/api\/agent\/proposals$/, CAPABILITIES.PROPOSE],
-  ["POST", /^\/api\/agent\/reply$/, CAPABILITIES.REPLY],
+  ["POST", /^\/api\/webmcp\/(context|document)$/, CAPABILITIES.READ],
+  ["POST", /^\/api\/webmcp\/proposals$/, CAPABILITIES.PROPOSE],
+  ["POST", /^\/api\/webmcp\/reply$/, CAPABILITIES.REPLY],
 ]);
 
 export function capabilitiesForRole(role) {

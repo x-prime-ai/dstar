@@ -196,14 +196,14 @@ HTML-first package; creating/opening package roots remains host/CLI work.
 
 ## Restricted HTTP bridge
 
-`src/agent-api.mjs` handles only these authenticated JSON POST routes:
+`src/webmcp-api.mjs` handles only these authenticated JSON POST routes:
 
 | Route                  | Body                                                                                                   |
 | ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `/api/agent/context`   | `{review?, selection?, action?, focusedCommentId?}` supplied by the top-level page, validated as above |
-| `/api/agent/document`  | `{revision}`                                                                                           |
-| `/api/agent/proposals` | `{base, request, key, files, commentIds?}`                                                             |
-| `/api/agent/reply`     | `{commentId, body, key}`                                                                               |
+| `/api/webmcp/context`   | `{review?, selection?, action?, focusedCommentId?}` supplied by the top-level page, validated as above |
+| `/api/webmcp/document`  | `{revision}`                                                                                           |
+| `/api/webmcp/proposals` | `{base, request, key, files, commentIds?}`                                                             |
+| `/api/webmcp/reply`     | `{commentId, body, key}`                                                                               |
 
 The normal Viewer Bearer-session gate runs first. Each route also requires the
 configured exact Origin and `Content-Type: application/json`. No route accepts
@@ -215,7 +215,7 @@ fingerprints. Unexpected Engine/filesystem errors are not echoed to tools.
 
 Short-lived handoffs additionally use `/api/handoffs/:id/reply-draft` for the
 exact bound comment and `/api/handoffs/:id/revoke` for creator-driven
-invalidation. These are not generic agent routes. The server checks the
+invalidation. These are not generic WebMCP routes. The server checks the
 handoff's state hash and resource binding before dispatching any allowed route.
 
 Before any filesystem write, the bridge validates canonical paths and encodings,
@@ -245,7 +245,7 @@ files are removed in `finally`; there is no shell or outbound fetch operation.
 
 The preview's sandbox without `allow-same-origin`, nonce-only trusted bridge,
 CSP, immutable read-only capabilities and resource readiness gate remain in
-place. A preview capability cannot authorize agent API calls.
+place. A preview capability cannot authorize WebMCP bridge calls.
 
 ### Retry, concurrency and errors
 
@@ -269,7 +269,7 @@ Error results have `{ok:false, code, error}`. Codes include `invalid_input`,
 `too_large`, `stale_base`, `idempotency_conflict`, `not_found`, `no_changes`,
 `busy`, `validation_failed`, `forbidden`, `unknown_route`, and the browser-side
 `comment_closed`, `connection_error`. HTTP validation/input failures use 400/413/422; conflicts
-and busy/not-found conditions use 409. Unknown agent routes use 404. A 401 from
+and busy/not-found conditions use 409. Unknown WebMCP routes use 404. A 401 from
 the shared session gate is reported as a connection/session failure by the tool.
 
 Tool mutations refresh the Viewer immediately. A three-second poll also picks
@@ -305,11 +305,11 @@ and tool-client compatibility are experimental and may change.
 ## Verification
 
 ```sh
-pnpm --filter @dstar/engine build
-pnpm --filter @dstar/engine test
+pnpm --filter @dstar/core build
+pnpm --filter @dstar/core test
 pnpm --filter @dstar/viewer test
 pnpm lint
-pnpm --filter @dstar/engine typecheck
+pnpm --filter @dstar/core typecheck
 pnpm check:links
 ```
 

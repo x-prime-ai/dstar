@@ -30,7 +30,7 @@ it("keeps document updates, decisions, resolution and sharing owner-only", () =>
 });
 
 it("classifies current and integration routes through one reusable gate", () => {
-  expect(routeCapability("POST", "/api/agent/proposals")).toBe("propose");
+  expect(routeCapability("POST", "/api/webmcp/proposals")).toBe("propose");
   expect(routeCapability("POST", "/api/handoffs")).toBe("handoff");
   expect(
     routeCapability(

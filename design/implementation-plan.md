@@ -2,7 +2,7 @@
 
 ## Delivered
 
-- Independent `@dstar/engine` and `pnpm dstar` launcher, without Git or legacy MCP.
+- Independent `@dstar/core` and `pnpm dstar` launcher, without Git.
 - Complete static HTML/CSS/assets candidate validation and stable-ID indexing.
 - Exact revision hashing, compressed copy/insert deltas, blob fallback,
   content-addressed deduplication and checkpoints every 20 accepted versions.
@@ -15,8 +15,9 @@
   pending queue, accepted history and human acceptance/rejection.
 - Doc-like/rich HTML and slide examples using one format.
 - Repo-local agent skill using actual CLI commands.
-- Publish-ready `@dstar/engine` TypeScript API with a separate trusted-host
-  authority surface.
+- Publish-ready `@dstar/core` TypeScript API for the complete document lifecycle.
+- Publish-ready `@dstar/mcp` adapter with caller-scoped read, propose, comment,
+  reply, decision and resolution tools.
 - Publish-ready `@dstar/viewer`, a host-owned deployment contract and a
   compile-checked external TypeScript consumer.
 
@@ -42,6 +43,6 @@ actual presentation, selecting text, adding comments and review controls.
 - Better slide sizing/fullscreen/accessibility and review ergonomics.
 - Explicit retention/GC/compaction.
 
-No standalone MCP server is on the critical path. Browser agents use the
-self-hosted Viewer's WebMCP surface; server integrations use the same Engine as
-the CLI and Viewer.
+The integrating product mounts `@dstar/mcp` using its chosen MCP transport and
+authentication. Browser WebMCP in the reference Viewer is an additional UI
+integration; both surfaces use the same Core API.

@@ -1,9 +1,13 @@
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { open, mediaType, resolveTarget, validateTarget } from "@dstar/engine";
-import { openHost } from "@dstar/engine/host";
-import { agentRoute } from "./agent-api.mjs";
+import {
+  openDocument,
+  mediaType,
+  resolveTarget,
+  validateTarget,
+} from "@dstar/core";
+import { webmcpRoute } from "./webmcp-api.mjs";
 import { createPreviewCache } from "./preview-cache.mjs";
 import { fileDiff } from "./file-diff.mjs";
 import {
@@ -40,8 +44,9 @@ const exactBody = (body, keys) => {
 };
 export async function startViewer(root, port = 0, options = {}) {
   const config = resolveViewerConfig(root, port, options);
-  const engine = open(config.root),
-    review = openHost(config.root);
+  const document = openDocument(config.root),
+    engine = document,
+    review = document;
   engine.snapshot();
   const capabilities = createPreviewCache(),
     handoffs = new Map();
@@ -304,9 +309,9 @@ export async function startViewer(root, port = 0, options = {}) {
               /^\/api\/annotations\/[a-f0-9-]{36}$/.test(path) ||
               path === `/api/handoffs/${scoped.id}`)) ||
           (req.method === "POST" &&
-            (path === "/api/agent/context" ||
-              path === "/api/agent/document" ||
-              (path === "/api/agent/proposals" &&
+            (path === "/api/webmcp/context" ||
+              path === "/api/webmcp/document" ||
+              (path === "/api/webmcp/proposals" &&
                 scoped.handoff.context.action.kind === "address-comment") ||
               (path === `/api/handoffs/${scoped.id}/draft` &&
                 scoped.handoff.context.action.kind !== "address-comment") ||
@@ -318,7 +323,7 @@ export async function startViewer(root, port = 0, options = {}) {
       const needed = routeCapability(req.method, path);
       if (needed) requireCapability(principal, needed);
       if (
-        await agentRoute({
+        await webmcpRoute({
           engine,
           req,
           json,

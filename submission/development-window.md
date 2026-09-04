@@ -47,7 +47,7 @@ the cutoff evidence.
 The submitted WebMCP implementation lives primarily in:
 
 - `apps/viewer/public/webmcp.js`
-- `apps/viewer/src/agent-api.mjs`
+- `apps/viewer/src/webmcp-api.mjs`
 - `apps/viewer/src/server.mjs`
 - `apps/viewer/public/app.js`
 - `design/webmcp.md`
