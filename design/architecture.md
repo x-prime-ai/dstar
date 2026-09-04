@@ -34,8 +34,6 @@ There is no new MCP service, workflow backend, projection renderer or public SDK
 - `scripts/dstar.mjs`: repository launcher, including `serve`.
 - `skills/dstar-documents`: agent operating instructions and format references.
 
-Legacy modules remain unchanged and are not dependencies of the new Engine.
-
 ## Directory storage
 
 The portable artifact remains an ordinary directory, with no SQLite or Git

@@ -32,9 +32,9 @@ The demo proves one loop on the Slides document itself:
 
 > D-star means document star. D is document; star is the wildcard: any form an agent can create. Underneath, it's one HTML-based format. It can be a traditional document, a rich explainer, a slide deck, or a UI design spec. And comments and versions work the same way across all four.
 
-### 0:40–1:00 — Create with xPrime
+### 0:40–1:00 — Create with an external agent
 
-**Screen:** Show Slide 5. In Documents, start a new document with a title, format, and brief. Copy the handoff, switch to xPrime Chat, and show only the completed WebMCP result. Return to DSTAR and open the created document.
+**Screen:** Show Slide 5. In Documents, start a new document with a title, format, and brief. Copy the handoff, switch to a compatible external agent, and show only the completed WebMCP result. Return to DSTAR and open the created document.
 
 **Prepared fields:**
 
@@ -48,11 +48,11 @@ The demo proves one loop on the Slides document itself:
 
 **Narration:**
 
-> Here, I give DSTAR a title, a format, and a brief. Then I ask xPrime, my external agent, to create it. Through WebMCP, xPrime reads the exact request and returns the complete artifact, straight into the review space. I never copy generated HTML through chat.
+> Here, I give DSTAR a title, a format, and a brief. Then I ask my external agent to create it. Through WebMCP, the agent reads the exact request and returns the complete artifact, straight into the review space. I never copy generated HTML through chat.
 
 ### 1:00–1:16 — Draft a comment on the Slides document
 
-**Screen:** Show Slide 6. In the real Slides Viewer, select the prepared sentence and choose **Comment → Ask agent**. Cut to xPrime Chat after its WebMCP calls complete; keep Trajectory closed. Return to DSTAR, show the editable draft, and explicitly click **Post comment**.
+**Screen:** Show Slide 6. In the real Slides Viewer, select the prepared sentence and choose **Comment → Ask agent**. Cut to a compatible external agent after its WebMCP calls complete. Return to DSTAR, show the editable draft, and explicitly click **Post comment**.
 
 **Agent instruction:**
 
@@ -60,11 +60,11 @@ The demo proves one loop on the Slides document itself:
 
 **Narration:**
 
-> Now I select the exact text on this slide and ask xPrime to draft a comment. The page gives the agent two things: the live selection, and what I'm trying to do. The draft comes back to DSTAR. I can edit it, and I decide whether to post it.
+> Now I select the exact text on this slide and ask my agent to draft a comment. The page gives the agent two things: the live selection, and what I'm trying to do. The draft comes back to DSTAR. I can edit it, and I decide whether to post it.
 
 ### 1:16–1:35 — Revise the same Slides document
 
-**Screen:** Show Slide 7. Focus the posted thread and choose **Ask agent**. In xPrime Chat, show the completed `get_review_context`, `read_document`, and `propose_revision` result without opening Trajectory. Return to DSTAR, open the linked pending version, review the changed slide, and click **Accept change**. Resolve the thread in a separate action.
+**Screen:** Show Slide 7. Focus the posted thread and choose **Ask agent**. In a compatible external agent, show the completed `get_review_context`, `read_document`, and `propose_revision` result without exposing internal traces. Return to DSTAR, open the linked pending version, review the changed slide, and click **Accept change**. Resolve the thread in a separate action.
 
 **Agent instruction:**
 
@@ -72,7 +72,7 @@ The demo proves one loop on the Slides document itself:
 
 **Narration:**
 
-> Next, I ask xPrime to address that feedback. It reads the accepted Slides document, then submits a linked revision. The current version doesn't change until the Owner reviews and accepts it. And resolving the discussion? That's a separate decision.
+> Next, I ask the agent to address that feedback. It reads the accepted Slides document, then submits a linked revision. The current version doesn't change until the Owner reviews and accepts it. And resolving the discussion? That's a separate decision.
 
 ### 1:35–1:52 — Why WebMCP
 
@@ -85,7 +85,7 @@ The demo proves one loop on the Slides document itself:
 ## Recording rules
 
 - Use the Slides document for both the explanation and the live comment/revision flow.
-- Keep xPrime on **Chat**. Never show Trajectory in the main video.
+- Show only the compatible agent's prompt and completed result, not internal traces.
 - Cut generation delays, but show the successful tool names or the final result long enough to verify the action.
 - Keep private handoff URLs, credentials, tokens, local filesystem paths, and unrelated tabs off camera. Paste the handoff before the shot or crop the user prompt; show the agent result, not the credential-bearing input.
 - Record at 1280×720 or 1920×1080. Use the same framing throughout.
@@ -98,5 +98,5 @@ The demo proves one loop on the Slides document itself:
 - All four document formats appear once and remain visually distinct.
 - Comment drafting returns an editable draft and never posts automatically.
 - The proposed revision is linked to the focused comment and does not alter the current version before Owner acceptance.
-- The xPrime frame shows Chat only; no Trajectory, token, or local path is visible.
+- The external-agent frame shows only the interaction result; no trace, token, or local path is visible.
 - The final export is below 1:55, has readable text at normal playback size, audible pauses, no black frames, and no copyrighted music.

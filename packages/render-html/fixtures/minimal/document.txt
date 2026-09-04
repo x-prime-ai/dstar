@@ -1,4 +1,0 @@
-Hello DSTAR
-Tools propose. Humans review and decide.
-Read the DSTAR specification for details.
-Image: DSTAR review loop connecting a proposal to canonical content after a human decision.

@@ -1,7 +1,7 @@
 # HTML-first MVP contract
 
-Development format: `dstar-html-0.2-dev`. No claim of compatibility with
-`spec/0.1` or a stable external SDK. See [architecture](architecture.md).
+Development format: `dstar-html-0.2-dev`. This is not yet a stable external
+format or SDK contract. See [architecture](architecture.md).
 
 ## Portable state
 

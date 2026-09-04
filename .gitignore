@@ -22,4 +22,3 @@ submission/demo-assets/generate-cloned-narration.py
 submission/demo-assets/make-*.py
 submission/demo-assets/narration/07.txt
 submission/demo-output/*
-!submission/demo-output/dstar-demo.mp4

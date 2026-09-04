@@ -135,13 +135,10 @@ and fonts, linear history, element/single-element text comments, replies,
 fixed Owner/Reviewer identities and Owner decisions. It does not yet offer
 arbitrary scripts/SVG, an identity provider or arbitrary users, auto-merge,
 garbage collection, assignment, advanced slide
-scaling, or migration from the legacy JSON format.
+scaling, or migration from earlier pre-HTML formats.
 
 [Vision](VISION.md), [current architecture](design/architecture.md) and
 [implementation/limits](design/html-mvp.md) describe the new path.
-The previous `spec/0.1`, `packages/core`, `packages/node`, `render-html`,
-MCP server and older apps remain intact as legacy implementation; do not use
-them to open HTML-first packages or infer the new format.
 
 ## Checks
 
@@ -155,8 +152,8 @@ pnpm typecheck
 pnpm check:links
 ```
 
-Viewer tests need permission to listen on loopback. The broader `pnpm verify`
-also covers the retained legacy implementation.
+Viewer tests need permission to listen on loopback. `pnpm verify` runs the
+current HTML-first checks.
 
 See the [integration validation record](design/integration-validation.md) for
 the tested browser/HTTP flows and the remaining native Chrome/container/TLS

@@ -40,8 +40,8 @@ Package-authored executable scripts are outside the initial safe subset.
 Trusted viewer behavior, such as slide navigation, is selected declaratively
 and version-bound through the manifest.
 
-This decision affects portable interoperability and requires replacement of
-the current `spec/0.1` schemas, fixtures, conformance roles, and implementation.
+This decision replaces the earlier semantic-JSON schemas, fixtures,
+conformance roles and implementation.
 
 ## Consequences
 
@@ -59,8 +59,7 @@ Negative consequences:
 - export to non-HTML formats is no longer guaranteed by a shared semantic tree;
 - stable IDs must survive agent edits to preserve comments;
 - arbitrary active web applications remain out of scope; and
-- the existing pre-draft implementation requires a deliberate migration or
-  replacement rather than an incremental schema extension.
+- earlier pre-draft packages are unsupported by the HTML-first Engine.
 
 ## Alternatives considered
 

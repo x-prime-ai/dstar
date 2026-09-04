@@ -1,23 +1,10 @@
 # DSTAR packages
 
-The public SDK surface is intentionally small and uses explicit package exports.
+`@dstar/engine` is the TypeScript implementation behind the HTML-first CLI,
+Viewer and workspace services. It validates complete HTML/CSS/asset candidates,
+stores exact revisions and compact history, and records proposals and comments.
 
-- `@dstar/core` is platform-neutral and may be imported by browsers, workers,
-  Node.js, and other TypeScript runtimes.
-- `@dstar/node` owns Node-specific integration and depends inward on
-  `@dstar/core`.
-- `@dstar/render-html` owns deterministic canonical/projection rendering and
-  safe package-asset response policy. It depends on the core and immutable Node
-  package snapshots, and has no canonical write path.
-
-Every documented export has a stability label:
-
-- **experimental** — public in 0.x, but may change with a documented release;
-- **stable** — compatibility is maintained within the declared major version;
-- **testing** — public only for conformance and fixture infrastructure; and
-- **internal** — not exported from a package and may change without notice.
-
-Only paths listed in a package's `exports` map are public. Importing `src/`,
-`dist/`, or another undeclared deep path is unsupported. The MCP SDK, filesystem,
-network, React, and provider dependencies must never be reachable from
-`@dstar/core`.
+The package is currently private to this workspace. Its exports are an internal
+integration boundary, not a published or compatibility-stable SDK. External
+hosts should use the documented CLI or host the Engine and Viewer together until
+a concrete SDK contract is defined.

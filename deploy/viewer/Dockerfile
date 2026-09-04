@@ -1,5 +1,5 @@
 # Build from the repository root. The allowlisted context excludes documents,
-# credentials, Git state and the legacy workspace server.
+# credentials or Git state.
 FROM node:22-bookworm-slim AS build
 WORKDIR /build
 RUN npm install --global pnpm@10.28.2

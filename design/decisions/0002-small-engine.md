@@ -11,6 +11,5 @@ Borrow exact-base deltas, content addressing and checkpoints from Git-like
 designs without depending on Git or requiring a repository. Do not introduce a
 new MCP layer or publish an SDK until a concrete integration needs it.
 
-The new development format is separate from legacy `spec/0.1`. Preserve the old
-implementation during this transition; do not silently load old JSON packages
-under the HTML-first contract. See [implemented limits](../html-mvp.md).
+The HTML-first Engine does not silently load earlier JSON packages under its
+contract. See [implemented limits](../html-mvp.md).

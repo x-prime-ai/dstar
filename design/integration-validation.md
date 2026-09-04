@@ -1,8 +1,8 @@
 # HTML-first integration validation
 
-This record covers the HTML-first Engine and Viewer on the integration branch,
-not the retained JSON/MCP implementation. No deployment, public service, demo,
-or browser setting change is part of this validation.
+This record covers the HTML-first Engine and Viewer on the integration branch.
+No deployment, public service, demo or browser setting change is part of this
+validation.
 
 ## Baseline and independent fix
 
@@ -99,7 +99,7 @@ Checked on 2026-08-28 in `codex/dstar-integrated-review`, without merging main.
 Integration resolved README, server and server-test conflicts while preserving
 both suites. Agent dispatch is after trusted request authority, Bearer and
 existing-Origin checks; its own exact POST Origin/content-type validation is
-also retained. Neither the legacy server nor main was changed.
+also retained. Main was not changed.
 
 The integration follow-up also:
 
@@ -117,12 +117,10 @@ The integration follow-up also:
 
 ### Automated checks actually run on the integrated tree
 
-`pnpm verify` passed: Node check, format, lint, dependency boundaries, schema
-drift, spec fixtures, local Markdown links, build, conformance, security
-corpus, portable reopen, release packaging, type checking, all tests and the
-consumer build. Total: 198 tests, including **30 Engine** and **76 Viewer**
-tests. The remaining tests cover the retained legacy workspace as regression
-protection, not as the new implementation.
+The then-current `pnpm verify` passed, including Node, formatting, lint, links,
+build, type checking and all workspace tests. The integration snapshot included
+**30 Engine** and **76 Viewer** tests. The verification command has since been
+reduced to the HTML-first workspace.
 
 `docker compose ... config --quiet` and `git diff --check` passed. Compose was
 only parsed; no container or public service was started.

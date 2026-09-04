@@ -1,9 +1,8 @@
 # Viewer WebMCP collaboration
 
-This implements the HTML-first path on `dstar-html-0.2-dev`. It does not use
-the legacy MCP server, JSON document format, an MCP transport, an agent chat
-backend or a page-injected WebMCP polyfill. The canonical artifact remains the
-complete HTML/CSS/local asset file set.
+This implements the HTML-first path on `dstar-html-0.2-dev`. It does not use an
+MCP transport, agent chat backend or page-injected WebMCP polyfill. The canonical
+artifact remains the complete HTML/CSS/local asset file set.
 
 ## Browser API and support
 

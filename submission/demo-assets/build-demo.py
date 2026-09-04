@@ -35,7 +35,6 @@ SEGMENTS = {
     4: [
         ("slides-06.png", 4.0),
         ("slides-selection.png", 3.0),
-        ("slides-xprime-comment-result.png", 4.0),
         ("slides-agent-comment-draft.png", 3.0),
         ("slides-comment-posted.png", 2.0),
     ],

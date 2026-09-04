@@ -20,8 +20,6 @@ This 1:47 demo shows:
 
 Live project: https://www.thinkofu.ai/dstar/
 
-Source code: https://github.com/x-prime-ai/dstar
-
 Built for the WebMCP Challenge. Licensed under Apache-2.0.
 
 ## Upload file

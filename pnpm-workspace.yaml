@@ -1,7 +1,6 @@
 packages:
   - apps/*
   - packages/*
-  - tests/consumer
 
 catalog:
   typescript: ^5.9.2

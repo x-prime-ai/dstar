@@ -17,16 +17,6 @@ Start here:
 - [ADR 0002](decisions/0002-small-engine.md): no Git dependency, no required MCP/SDK,
   and version/delta generation during agent proposal submission.
 
-Earlier design notes remain for context: [package runtime](package-runtime.md),
-[renderer](renderer.md), [change applier](change-applier.md),
-[review client](review-client.md), [evidence/assets](evidence-assets.md),
-[security](security.md), [MCP](mcp-server.md), and
-[xPrime integration](xprime-integration-request.md).
-They describe broader or superseded plans, not the shipped contract.
-In particular, their manifest layout, normalized-text rules, MCP/SDK roadmap and
-assignment features are not implemented by the new path.
-
-The older `spec/0.1`, JSON schemas, fixtures and legacy applications remain
-separate. New packages are not claimed conformant to those schemas. The concrete
-MVP document and code take precedence for implementation behavior; the Vision
-defines product intent.
+The concrete MVP document and code define implementation behavior; the Vision
+defines product intent. Superseded JSON-schema, renderer, MCP and application
+designs have been removed so they cannot be mistaken for supported interfaces.

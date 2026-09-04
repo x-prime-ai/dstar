@@ -118,7 +118,6 @@ sample state in the visitor's browser.
 
 - Devpost submission: https://devpost.com/software/dstar
 - Live project: https://www.thinkofu.ai/dstar/
-- Public source: https://github.com/x-prime-ai/dstar
 - Demo video: https://youtu.be/v66wnIOBoZU
 
 ## Judge testing instructions

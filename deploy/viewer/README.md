@@ -1,9 +1,9 @@
 # Persistent HTML-first Viewer
 
 Deployment preparation only; no hosted service or production security claim.
-This runs the new Engine/Viewer on Node 22, with **one fixed document package
-and separate Owner/Reviewer credentials per instance**. It does not run the legacy
-workspace server. Do not autoscale it or mount one package into multiple servers.
+This runs the Engine/Viewer on Node 22, with **one fixed document package and
+separate Owner/Reviewer credentials per instance**. Do not autoscale it or mount
+one package into multiple servers.
 
 ## Local compatibility and service startup
 
@@ -125,7 +125,7 @@ a host administrator from deliberately reusing credentials/directories.
 
 The [Dockerfile](Dockerfile) builds only Engine/Viewer and assembles production
 dependencies using [pnpm deploy](https://pnpm.io/10.x/cli/deploy). Its `--legacy`
-flag selects pnpm's packaging implementation, not DSTAR's legacy server.
+flag selects pnpm's packaging implementation.
 The final image runs as UID/GID 1000 (`node`), with Node 22 and no built-in
 credential or external origin. `.dockerignore` allowlists source/manifests so
 document packages and private files cannot accidentally enter the build.

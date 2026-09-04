@@ -26,8 +26,6 @@ out-of-band changes and unsafe HTML/CSS.
 Viewer HTTP tests cover session authentication, origin checks, immutable
 sandboxed previews, comments and exact decisions. Browser verification checks
 actual presentation, selecting text, adding comments and review controls.
-The retained legacy test suite is separate and must keep passing.
-
 ## Next work, not silently part of this MVP
 
 - Publish a normative schema and independent revision/delta vectors.
@@ -38,7 +36,7 @@ The retained legacy test suite is separate and must keep passing.
 - Search/pagination for large histories and bounded streamed materialization.
 - Rich CSS/property diff, comment highlight navigation and cross-element ranges.
 - Better slide sizing/fullscreen/accessibility and review ergonomics.
-- Explicit retention/GC/compaction, plus legacy format migration if needed.
+- Explicit retention/GC/compaction.
 
 No new MCP server or public SDK is on the critical path. Add an integration
 only when a concrete consumer cannot use the CLI.

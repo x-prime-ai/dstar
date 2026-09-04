@@ -1,1 +1,1 @@
-Here, I give DSTAR a title, a format, and a brief. Then I ask xPrime, my external agent, to create it. Through WebMCP, xPrime reads the exact request and returns the complete artifact, straight into the review space. I never copy generated HTML through chat.
+Here, I give DSTAR a title, a format, and a brief. Then I ask my external agent to create it. Through WebMCP, the agent reads the exact request and returns the complete artifact, straight into the review space. I never copy generated HTML through chat.
