@@ -30,8 +30,8 @@ browser ─────> host-owned UI / @dstar/viewer ────────�
 ```
 
 `@dstar/mcp` is only the server-side MCP adapter. WebMCP belongs to Viewer: the
-Viewer registers its own tools in supporting browsers and owns the restricted
-HTTP bridge behind them. It is not implemented by `@dstar/mcp` and is not a
+Viewer registers its own tools in supporting browsers and maps them onto its
+normal document-scoped API. It is not implemented by `@dstar/mcp` and is not a
 separate package or service. Both surfaces call the same Core API.
 
 ## Complete self-host path

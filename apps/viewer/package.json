@@ -21,7 +21,7 @@
   "files": [
     "public",
     "src/access-control.mjs",
-    "src/webmcp-api.mjs",
+    "src/document-api.mjs",
     "src/file-diff.mjs",
     "src/preview-cache.mjs",
     "src/runtime-config.mjs",

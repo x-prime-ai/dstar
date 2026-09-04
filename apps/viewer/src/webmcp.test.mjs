@@ -3,6 +3,9 @@ import { createTools, registerWebMCP } from "../public/webmcp.js";
 
 const callbacks = () => ({
   api: vi.fn().mockResolvedValue({ revision: "exact" }),
+  getDocumentId: vi
+    .fn()
+    .mockReturnValue("11111111-1111-4111-8111-111111111111"),
   getReviewContext: vi.fn().mockReturnValue({ review: null, selection: null }),
   onMutation: vi.fn(),
   onDraftComment: vi.fn().mockReturnValue(true),
@@ -37,7 +40,7 @@ it("defines page-context, draft and proposal tools with the current WebMCP signa
     expect(JSON.parse(await tool.execute({}, { signal })).ok).toBe(true);
   expect(cb.api.mock.calls.every((call) => call[2] === signal)).toBe(true);
   expect(cb.api.mock.calls[0]).toEqual([
-    "webmcp/context",
+    "documents/11111111-1111-4111-8111-111111111111/review-context",
     { review: null, selection: null },
     signal,
   ]);
@@ -128,7 +131,7 @@ it("captures current context when called, not when registered, and preserves suc
   });
   await contextTool.execute({});
   expect(cb.api).toHaveBeenLastCalledWith(
-    "webmcp/context",
+    "documents/11111111-1111-4111-8111-111111111111/review-context",
     cb.getReviewContext(),
     undefined,
   );

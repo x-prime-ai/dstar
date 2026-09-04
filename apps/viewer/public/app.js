@@ -116,6 +116,16 @@ function setAgentStatus(state, message = "") {
   status.hidden = !message;
 }
 const api = (path, body, signal) => session.request(path, body, signal);
+const documentApi = (path, body, signal) => {
+  const documentId = current?.state?.id;
+  if (!/^[a-f0-9-]{36}$/.test(documentId ?? ""))
+    throw new Error("The Viewer document is not ready");
+  return api(
+    `documents/${encodeURIComponent(documentId)}/${path}`,
+    body,
+    signal,
+  );
+};
 const safely =
   (fn) =>
   async (...args) => {
@@ -591,7 +601,7 @@ async function preview(id) {
   }
   let loaded;
   try {
-    loaded = await api(`preview/${id}`);
+    loaded = await documentApi(`preview/${id}`);
   } catch (error) {
     if (serial === previewSerial) previewState.fail();
     throw error;
@@ -782,7 +792,7 @@ async function loadDiffFile(path) {
   diffController = new AbortController();
   $("diff").replaceChildren(el("p", "Loading changes…", "diff-notice"));
   try {
-    const data = await api(
+    const data = await documentApi(
       `diff/${proposal.id}?file=${encodeURIComponent(path)}`,
       undefined,
       diffController.signal,
@@ -863,7 +873,7 @@ async function syncAnnotations() {
   annotationState = "loading";
   comments();
   try {
-    const result = await api(
+    const result = await documentApi(
       `annotations/${showingBase ? selected.parent : selected.id}`,
     );
     if (
@@ -1037,6 +1047,7 @@ function openReplyDraft(comment, body = "") {
     commentId: comment.id,
     body,
     expectedStateId: current.stateId,
+    key: crypto.randomUUID(),
   };
   focusComment(comment.id, false);
   comments();
@@ -1082,9 +1093,10 @@ function replyComposer(comment) {
     postingReply = true;
     comments();
     try {
-      await api(`comments/${comment.id}/reply`, {
+      await documentApi(`comments/${comment.id}/replies`, {
         body: replyDraft.body,
         stateId: replyDraft.expectedStateId,
+        key: replyDraft.key,
       });
       commentAgentStates.set(comment.id, "idle");
       replyDraft = null;
@@ -1228,7 +1240,9 @@ function commentThread(thread, expanded = false) {
   if (c.status === "open" && session.can("resolve")) {
     const resolve = el("button", "Resolve");
     resolve.onclick = safely(async () => {
-      await api(`comments/${c.id}/resolve`, { stateId: current.stateId });
+      await documentApi(`comments/${c.id}/resolve`, {
+        stateId: current.stateId,
+      });
       await refresh();
     });
     actions.append(resolve);
@@ -1438,7 +1452,7 @@ for (const action of ["accept", "reject"])
       return;
     if (action === "accept" && (serial !== previewSerial || !canAccept()))
       return;
-    await api(`proposals/${proposal.id}/${action}`, {
+    await documentApi(`proposals/${proposal.id}/${action}`, {
       revision: proposal.revision,
       stateId,
     });
@@ -1539,7 +1553,10 @@ $("comment-form").onsubmit = safely(async (event) => {
   $("cancel-comment").disabled = true;
   $("add-comment").textContent = "Posting…";
   try {
-    const created = await api("comments", { target: submittedTarget, body });
+    const created = await documentApi("comments", {
+      target: submittedTarget,
+      body,
+    });
     if (commentTarget === submittedTarget && $("body").value === body) {
       $("body").value = "";
       resetTarget();
@@ -1571,7 +1588,7 @@ $("suggestion-form").onsubmit = safely(async (event) => {
   $("cancel-suggestion").disabled = true;
   $("add-suggestion").textContent = "Submitting…";
   try {
-    const result = await api("suggestions", {
+    const result = await documentApi("suggestions", {
       target: submittedTarget,
       replacement,
       key,
@@ -1796,6 +1813,7 @@ async function connectTools() {
     document,
     api,
     can: (capability) => session.can(capability),
+    getDocumentId: () => current?.state.id,
     getReviewContext: () =>
       incomingHandoff?.context ??
       reviewContext(

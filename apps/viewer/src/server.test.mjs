@@ -14,7 +14,11 @@ import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDocument, revision } from "@dstar/core";
-import { WEBMCP_LIMITS, decodeCandidate, webmcpRoute } from "./webmcp-api.mjs";
+import {
+  DOCUMENT_API_LIMITS,
+  decodeCandidate,
+  documentRoute,
+} from "./document-api.mjs";
 import { startViewer } from "./server.mjs";
 import { viewerConfigFromEnv } from "./runtime-config.mjs";
 
@@ -79,6 +83,10 @@ function wire(viewer, path, { headers = {}, method = "GET", body } = {}) {
     req.end(body);
   });
 }
+function documentApi(viewer, path) {
+  const basePath = new URL(viewer.baseUrl).pathname.replace(/\/$/, "");
+  return `${basePath}/api/documents/${viewer.documentId}/${path}`;
+}
 
 it("mounts a Viewer at a canonical document path", async () => {
   const { root, proposal } = fixture(),
@@ -103,7 +111,7 @@ it("mounts a Viewer at a canonical document path", async () => {
     (await wire(viewer, "/documents/dstar-doc/api/state", { headers })).status,
   ).toBe(200);
   const preview = (
-    await wire(viewer, `/documents/dstar-doc/api/preview/${proposal.id}`, {
+    await wire(viewer, documentApi(viewer, `preview/${proposal.id}`), {
       headers,
     })
   ).json();
@@ -124,7 +132,9 @@ it("serves immutable isolated previews and requires session credentials for deci
   expect((await fetch(viewer.origin + "/api/state")).status).toBe(401);
   const state = await (await request("/api/state")).json();
   expect(state.revision).toBeNull();
-  const preview = await (await request(`/api/preview/${proposal.id}`)).json();
+  const preview = await (
+    await request(documentApi(viewer, `preview/${proposal.id}`))
+  ).json();
   const frame = await fetch(viewer.origin + preview.url);
   expect(frame.headers.get("content-security-policy")).toContain(
     "sandbox allow-scripts",
@@ -144,7 +154,7 @@ it("serves immutable isolated previews and requires session credentials for deci
     revision: proposal.revision,
     stateId: state.stateId,
   });
-  const endpoint = `/api/proposals/${proposal.id}/accept`;
+  const endpoint = documentApi(viewer, `proposals/${proposal.id}/accept`);
   expect(
     (
       await request(endpoint, {
@@ -173,7 +183,7 @@ it("serves immutable isolated previews and requires session credentials for deci
     ).status,
   ).toBe(200);
   expect(engine.snapshot().revision).toBe(proposal.revision);
-  const comment = await request("/api/comments", {
+  const comment = await request(documentApi(viewer, "comments"), {
     method: "POST",
     headers: {
       ...headers,
@@ -294,33 +304,43 @@ it("uses a short-lived scoped handoff to return an agent draft", async () => {
   expect(
     (await wire(viewer, "/api/state", { headers: scopedHeaders })).status,
   ).toBe(200);
-  const toolContext = await wire(viewer, "/api/webmcp/context", {
-    headers: scopedHeaders,
-    method: "POST",
-    body: JSON.stringify(context),
-  });
+  const toolContext = await wire(
+    viewer,
+    documentApi(viewer, "review-context"),
+    {
+      headers: scopedHeaders,
+      method: "POST",
+      body: JSON.stringify(context),
+    },
+  );
   expect(toolContext.status).toBe(200);
   expect(toolContext.json().action).toMatchObject({
     kind: "comment",
     target,
   });
-  const document = await wire(viewer, "/api/webmcp/document", {
-    headers: scopedHeaders,
-    method: "POST",
-    body: JSON.stringify({ revision: proposal.revision }),
-  });
+  const document = await wire(
+    viewer,
+    documentApi(viewer, `revisions/${proposal.revision}/files`),
+    {
+      headers: scopedHeaders,
+    },
+  );
   expect(document.status).toBe(200);
   expect(document.json().files[0].content).toContain("Hello 🌍");
   expect(
     (
-      await wire(viewer, `/api/proposals/${proposal.id}/reject`, {
-        headers: scopedHeaders,
-        method: "POST",
-        body: JSON.stringify({
-          revision: proposal.revision,
-          stateId: engine.snapshot().stateId,
-        }),
-      })
+      await wire(
+        viewer,
+        documentApi(viewer, `proposals/${proposal.id}/reject`),
+        {
+          headers: scopedHeaders,
+          method: "POST",
+          body: JSON.stringify({
+            revision: proposal.revision,
+            stateId: engine.snapshot().stateId,
+          }),
+        },
+      )
     ).status,
   ).toBe(403);
   const returned = await wire(viewer, `/api/handoffs/${id}/draft`, {
@@ -404,7 +424,7 @@ it("binds an existing-comment handoff to an editable reply or linked pending pro
     "reply",
     "propose",
   ]);
-  const read = await post("/api/webmcp/context", context);
+  const read = await post(documentApi(viewer, "review-context"), context);
   expect(read.status).toBe(200);
   expect(read.json()).toMatchObject({
     focusedComment: { id: comment.id, status: "open" },
@@ -427,10 +447,10 @@ it("binds an existing-comment handoff to an editable reply or linked pending pro
   });
   expect(
     (
-      await post("/api/webmcp/reply", {
-        commentId: comment.id,
+      await post(documentApi(viewer, `comments/${comment.id}/replies`), {
         body: "Do not post this",
         key: "forbidden-direct-reply",
+        stateId: engine.snapshot().stateId,
       })
     ).status,
   ).toBe(403);
@@ -443,20 +463,22 @@ it("binds an existing-comment handoff to an editable reply or linked pending pro
   };
   expect(
     (
-      await post("/api/webmcp/proposals", {
+      await post(documentApi(viewer, "proposals"), {
         ...request,
         commentIds: ["44444444-4444-4444-8444-444444444444"],
       })
     ).status,
   ).toBe(403);
-  const proposed = await post("/api/webmcp/proposals", request);
+  const proposed = await post(documentApi(viewer, "proposals"), request);
   expect(proposed.status).toBe(200);
   expect(proposed.json().proposal.motivatedBy).toEqual([comment.id]);
   expect(engine.snapshot().state.comments[0].status).toBe("open");
-  expect((await post("/api/webmcp/context", context)).status).toBe(409);
+  expect(
+    (await post(documentApi(viewer, "review-context"), context)).status,
+  ).toBe(409);
   const linked = engine.snapshot().state.proposals.at(-1);
   const accepted = await post(
-    `/api/proposals/${linked.id}/accept`,
+    documentApi(viewer, `proposals/${linked.id}/accept`),
     { revision: linked.revision, stateId: engine.snapshot().stateId },
     ownerHeaders,
   );
@@ -472,7 +494,7 @@ it("resolves comment markers against the viewed revision without changing canoni
     Origin: viewer.origin,
     "Content-Type": "application/json",
   };
-  await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
+  await wire(viewer, documentApi(viewer, `proposals/${proposal.id}/accept`), {
     headers,
     method: "POST",
     body: JSON.stringify({
@@ -507,7 +529,7 @@ it("resolves comment markers against the viewed revision without changing canoni
     author: "agent",
     key: "update",
   });
-  const diffPath = `/api/diff/${updated.id}?file=document.html`;
+  const diffPath = documentApi(viewer, `diff/${updated.id}?file=document.html`);
   expect((await wire(viewer, diffPath)).status).toBe(401);
   expect(
     (
@@ -534,19 +556,27 @@ it("resolves comment markers against the viewed revision without changing canoni
   });
   expect(
     (
-      await wire(viewer, `/api/diff/${updated.id}?file=.dstar/state.json`, {
-        headers,
-      })
+      await wire(
+        viewer,
+        documentApi(viewer, `diff/${updated.id}?file=.dstar/state.json`),
+        {
+          headers,
+        },
+      )
     ).status,
   ).toBe(404);
   const initialDiff = (
-    await wire(viewer, `/api/diff/${proposal.id}?file=document.html`, {
-      headers,
-    })
+    await wire(
+      viewer,
+      documentApi(viewer, `diff/${proposal.id}?file=document.html`),
+      {
+        headers,
+      },
+    )
   ).json();
   expect(initialDiff.base).toBeNull();
   expect(initialDiff.before.exists).toBe(false);
-  const path = `/api/annotations/${updated.id}`;
+  const path = documentApi(viewer, `annotations/${updated.id}`);
   expect((await wire(viewer, path)).status).toBe(401);
   expect(
     (
@@ -556,7 +586,9 @@ it("resolves comment markers against the viewed revision without changing canoni
     ).status,
   ).toBe(403);
   const before = (
-    await wire(viewer, `/api/annotations/${proposal.id}`, { headers })
+    await wire(viewer, documentApi(viewer, `annotations/${proposal.id}`), {
+      headers,
+    })
   ).json();
   const after = (await wire(viewer, path, { headers })).json();
   expect(before.revision).toBe(proposal.revision);
@@ -585,7 +617,9 @@ it("resolves comment markers against the viewed revision without changing canoni
     key: "remove",
   });
   const missing = (
-    await wire(viewer, `/api/annotations/${removed.id}`, { headers })
+    await wire(viewer, documentApi(viewer, `annotations/${removed.id}`), {
+      headers,
+    })
   ).json();
   expect(missing.anchors[comment.id]).toEqual({ status: "orphaned" });
   expect(
@@ -628,22 +662,28 @@ it("uses only the configured external authority while preserving opaque-origin f
   expect(reviewerState.session.role).toBe("reviewer");
   expect(
     (
-      await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
-        method: "POST",
-        headers: {
-          ...reviewerHeaders,
-          Origin: externalOrigin,
-          "Content-Type": "application/json",
+      await wire(
+        viewer,
+        documentApi(viewer, `proposals/${proposal.id}/accept`),
+        {
+          method: "POST",
+          headers: {
+            ...reviewerHeaders,
+            Origin: externalOrigin,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            revision: proposal.revision,
+            stateId: reviewerState.stateId,
+          }),
         },
-        body: JSON.stringify({
-          revision: proposal.revision,
-          stateId: reviewerState.stateId,
-        }),
-      })
+      )
     ).status,
   ).toBe(403);
   const preview = (
-    await wire(viewer, `/api/preview/${proposal.id}`, { headers })
+    await wire(viewer, documentApi(viewer, `preview/${proposal.id}`), {
+      headers,
+    })
   ).json();
   const frame = await wire(viewer, preview.url, {
     headers: { Origin: "null" },
@@ -664,18 +704,22 @@ it("uses only the configured external authority while preserving opaque-origin f
   expect(frame.text).toContain(`"origin":"${externalOrigin}"`);
   expect(frame.text).not.toContain(token);
   expect(frame.text).not.toContain(reviewerToken);
-  const result = await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
-    method: "POST",
-    headers: {
-      ...headers,
-      Origin: externalOrigin,
-      "Content-Type": "application/json",
+  const result = await wire(
+    viewer,
+    documentApi(viewer, `proposals/${proposal.id}/accept`),
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        Origin: externalOrigin,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        revision: proposal.revision,
+        stateId: state.stateId,
+      }),
     },
-    body: JSON.stringify({
-      revision: proposal.revision,
-      stateId: state.stateId,
-    }),
-  });
+  );
   expect(result.status).toBe(200);
   expect(engine.snapshot().revision).toBe(proposal.revision);
 });
@@ -742,7 +786,7 @@ it("requires exact Origin and JSON for every mutation without accepting tokens f
   const viewer = await start(root),
     token = new URL(viewer.ownerUrl).hash.slice(1);
   const state = engine.snapshot();
-  const path = `/api/proposals/${proposal.id}/accept`,
+  const path = documentApi(viewer, `proposals/${proposal.id}/accept`),
     body = JSON.stringify({
       revision: proposal.revision,
       stateId: state.stateId,
@@ -801,12 +845,17 @@ it("keeps roots, credentials and preview capabilities separate between configure
     ).status,
   ).toBe(403);
   const preview = (
-    await wire(first, `/api/preview/${a.proposal.id}`, { headers: authA })
+    await wire(first, documentApi(first, `preview/${a.proposal.id}`), {
+      headers: authA,
+    })
   ).json();
   expect((await wire(second, preview.url)).status).toBe(404);
   expect(
-    (await wire(second, `/api/preview/${a.proposal.id}`, { headers: authB }))
-      .status,
+    (
+      await wire(second, documentApi(second, `preview/${a.proposal.id}`), {
+        headers: authB,
+      })
+    ).status,
   ).toBe(409);
   const state = (
     await wire(first, `/api/state?root=${encodeURIComponent(b.root)}`, {
@@ -845,7 +894,7 @@ it("retains accepted versions, comments and pending work across restart; refresh
   const state = engine.snapshot();
   expect(
     (
-      await wire(first, `/api/proposals/${proposal.id}/accept`, {
+      await wire(first, documentApi(first, `proposals/${proposal.id}/accept`), {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -857,7 +906,7 @@ it("retains accepted versions, comments and pending work across restart; refresh
   ).toBe(200);
   expect(
     (
-      await wire(first, "/api/comments", {
+      await wire(first, documentApi(first, "comments"), {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -884,7 +933,9 @@ it("retains accepted versions, comments and pending work across restart; refresh
   });
   const before = engine.snapshot();
   const preview = (
-    await wire(first, `/api/preview/${proposal.id}`, { headers })
+    await wire(first, documentApi(first, `preview/${proposal.id}`), {
+      headers,
+    })
   ).json();
   await close(first.server);
   const second = await start(root, port, options);
@@ -893,7 +944,11 @@ it("retains accepted versions, comments and pending work across restart; refresh
   );
   expect((await wire(second, preview.url)).status).toBe(404);
   expect(
-    (await wire(second, `/api/preview/${pending.id}`, { headers })).status,
+    (
+      await wire(second, documentApi(second, `preview/${pending.id}`), {
+        headers,
+      })
+    ).status,
   ).toBe(200);
   expect(readFileSync(join(root, "document.html"), "utf8")).toContain(
     "Hello 🌍",
@@ -975,27 +1030,35 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
 
   expect(
     (
-      await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
-        method: "POST",
-        headers: reviewer,
-        body: JSON.stringify({
-          revision: proposal.revision,
-          stateId: reviewerState.stateId,
-        }),
-      })
+      await wire(
+        viewer,
+        documentApi(viewer, `proposals/${proposal.id}/accept`),
+        {
+          method: "POST",
+          headers: reviewer,
+          body: JSON.stringify({
+            revision: proposal.revision,
+            stateId: reviewerState.stateId,
+          }),
+        },
+      )
     ).status,
   ).toBe(403);
   expect(engine.snapshot().revision).toBeNull();
   expect(
     (
-      await wire(viewer, `/api/proposals/${proposal.id}/accept`, {
-        method: "POST",
-        headers: owner,
-        body: JSON.stringify({
-          revision: proposal.revision,
-          stateId: ownerState.stateId,
-        }),
-      })
+      await wire(
+        viewer,
+        documentApi(viewer, `proposals/${proposal.id}/accept`),
+        {
+          method: "POST",
+          headers: owner,
+          body: JSON.stringify({
+            revision: proposal.revision,
+            stateId: ownerState.stateId,
+          }),
+        },
+      )
     ).status,
   ).toBe(200);
   expect(engine.snapshot().state.proposals[0].decision.actor).toEqual({
@@ -1006,7 +1069,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
 
   expect(
     (
-      await wire(viewer, "/api/webmcp/proposals", {
+      await wire(viewer, documentApi(viewer, "proposals"), {
         method: "POST",
         headers: reviewer,
         body: "{}",
@@ -1021,7 +1084,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
   };
   expect(
     (
-      await wire(viewer, "/api/comments", {
+      await wire(viewer, documentApi(viewer, "comments"), {
         method: "POST",
         headers: reviewer,
         body: JSON.stringify({
@@ -1033,7 +1096,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
     ).status,
   ).toBe(409);
   const posted = (
-    await wire(viewer, "/api/comments", {
+    await wire(viewer, documentApi(viewer, "comments"), {
       method: "POST",
       headers: reviewer,
       body: JSON.stringify({ target, body: "Reviewer comment" }),
@@ -1046,7 +1109,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
   });
   expect(
     (
-      await wire(viewer, `/api/comments/${posted.id}/resolve`, {
+      await wire(viewer, documentApi(viewer, `comments/${posted.id}/resolve`), {
         method: "POST",
         headers: reviewer,
         body: JSON.stringify({ stateId: engine.snapshot().stateId }),
@@ -1054,16 +1117,17 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
     ).status,
   ).toBe(403);
   const replied = (
-    await wire(viewer, `/api/comments/${posted.id}/reply`, {
+    await wire(viewer, documentApi(viewer, `comments/${posted.id}/replies`), {
       method: "POST",
       headers: reviewer,
       body: JSON.stringify({
         body: "Reviewer reply",
         stateId: engine.snapshot().stateId,
+        key: "reviewer-reply",
       }),
     })
   ).json();
-  expect(replied.replies[0].author).toEqual({
+  expect(replied.comment.replies[0].author).toEqual({
     id: "reviewer",
     displayName: "Ravi Reviewer",
     role: "reviewer",
@@ -1121,7 +1185,7 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
       Origin: viewer.origin,
       "Content-Type": "application/json",
     },
-    toolContext = await wire(viewer, "/api/webmcp/context", {
+    toolContext = await wire(viewer, documentApi(viewer, "review-context"), {
       method: "POST",
       headers: scopedHeaders,
       body: JSON.stringify(context),
@@ -1146,19 +1210,23 @@ it("separates owner and reviewer authority, binds trusted identities and scopes 
   ).toBe(403);
   expect(
     (
-      await wire(viewer, `/api/proposals/${pending.id}/reject`, {
-        method: "POST",
-        headers: scopedHeaders,
-        body: JSON.stringify({
-          revision: pending.revision,
-          stateId: engine.snapshot().stateId,
-        }),
-      })
+      await wire(
+        viewer,
+        documentApi(viewer, `proposals/${pending.id}/reject`),
+        {
+          method: "POST",
+          headers: scopedHeaders,
+          body: JSON.stringify({
+            revision: pending.revision,
+            stateId: engine.snapshot().stateId,
+          }),
+        },
+      )
     ).status,
   ).toBe(403);
 
   const resolved = (
-    await wire(viewer, `/api/comments/${posted.id}/resolve`, {
+    await wire(viewer, documentApi(viewer, `comments/${posted.id}/resolve`), {
       method: "POST",
       headers: owner,
       body: JSON.stringify({ stateId: engine.snapshot().stateId }),
@@ -1271,19 +1339,22 @@ it("runs the service entrypoint, suppresses secret/path logging, and reopens the
       };
       expect(
         (
-          await fetch(`${origin}/api/proposals/${proposal.id}/accept`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              revision: proposal.revision,
-              stateId: state.stateId,
-            }),
-          })
+          await fetch(
+            `${origin}/api/documents/${state.state.id}/proposals/${proposal.id}/accept`,
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                revision: proposal.revision,
+                stateId: state.stateId,
+              }),
+            },
+          )
         ).status,
       ).toBe(200);
       expect(
         (
-          await fetch(`${origin}/api/comments`, {
+          await fetch(`${origin}/api/documents/${state.state.id}/comments`, {
             method: "POST",
             headers,
             body: JSON.stringify({
@@ -1326,7 +1397,7 @@ const candidateFiles = (text) => [
   },
 ];
 async function agentFixture() {
-  const temp = mkdtempSync(join(tmpdir(), "dstar-webmcp-test-"));
+  const temp = mkdtempSync(join(tmpdir(), "dstar-api-test-"));
   cleanup.push(() => rmSync(temp, { recursive: true, force: true }));
   const root = join(temp, "document"),
     engine = openDocument(root);
@@ -1346,27 +1417,26 @@ async function agentFixture() {
   const viewer = await startViewer(root);
   cleanup.push(() => new Promise((resolve) => viewer.server.close(resolve)));
   const token = new URL(viewer.ownerUrl).hash.slice(1);
-  const request = (route, body, extraHeaders = {}) =>
-    fetch(`${viewer.origin}/api/${route}`, {
-      method: "POST",
+  const request = (route, body, extraHeaders = {}, method = "POST") =>
+    fetch(`${viewer.origin}${documentApi(viewer, route)}`, {
+      method,
       headers: {
         Authorization: `Bearer ${token}`,
         Origin: viewer.origin,
         "Content-Type": "application/json",
         ...extraHeaders,
       },
-      body: JSON.stringify(body),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-  const api = async (route, body) => {
-    const response = await request(route, body),
+  const api = async (route, body, method) => {
+    const response = await request(route, body, {}, method),
       result = await response.json();
-    if (route.startsWith("webmcp/")) expect(result).not.toHaveProperty("key");
     expect(JSON.stringify(result)).not.toContain(token);
     expect(JSON.stringify(result)).not.toContain(temp);
     return { ...result, status: response.status };
   };
   const propose = (key, base = null, text = "Hello 🌍") =>
-    api("webmcp/proposals", {
+    api("proposals", {
       base,
       request: `Edit ${text}`,
       key,
@@ -1389,7 +1459,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   expect(p).not.toHaveProperty("command");
   expect(p).not.toHaveProperty("changes");
   expect(engine.snapshot().revision).toBeNull();
-  const read = await api("webmcp/document", { revision: p.revision });
+  const read = await api(`revisions/${p.revision}/files`, undefined, "GET");
   expect(read.files).toEqual(
     candidateFiles().sort((a, b) => a.path.localeCompare(b.path)),
   );
@@ -1420,7 +1490,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
     selection: target,
     focusedCommentId: c.id,
   };
-  const context = await api("webmcp/context", contextArgs);
+  const context = await api("review-context", contextArgs);
   expect(context.head).toBeNull();
   expect(context.selection).toEqual(target);
   expect(context.focusedComment).toMatchObject({
@@ -1433,7 +1503,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   expect(context.resolutionRevision).toBe(p.revision);
   expect(
     (
-      await api("webmcp/context", {
+      await api("review-context", {
         ...contextArgs,
         action: { kind: "suggest", target, draft: "Make it friendlier" },
       })
@@ -1441,7 +1511,7 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   ).toBe("invalid_input");
   expect(
     (
-      await api("webmcp/context", {
+      await api("review-context", {
         ...contextArgs,
         action: {
           kind: "comment",
@@ -1452,33 +1522,39 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   ).toBe("invalid_input");
   expect(
     (
-      await api("webmcp/context", {
+      await api("review-context", {
         ...contextArgs,
         focusedCommentId: "22222222-2222-4222-8222-222222222222",
       })
     ).code,
   ).toBe("invalid_input");
   const replyArgs = {
-    commentId: c.id,
     body: "I will propose a revision",
     key: "reply-one",
+    stateId: engine.snapshot().stateId,
   };
-  const reply = await api("webmcp/reply", replyArgs);
+  const reply = await api(`comments/${c.id}/replies`, replyArgs);
   expect(reply.comment.status).toBe("open");
   expect(reply.comment.replies).toHaveLength(1);
   expect(reply.comment.replies[0].author).toEqual({
-    id: "agent",
-    displayName: "Agent",
-    role: "agent",
+    id: "owner",
+    displayName: "Owner",
+    role: "owner",
   });
   expect(reply.comment.replies[0]).not.toHaveProperty("key");
   const stateId = engine.snapshot().stateId;
-  expect((await api("webmcp/reply", replyArgs)).comment.replies).toHaveLength(
-    1,
-  );
+  expect(
+    (await api(`comments/${c.id}/replies`, replyArgs)).comment.replies,
+  ).toHaveLength(1);
   expect(openDocument(root).snapshot().stateId).toBe(stateId);
   expect(
-    (await api("webmcp/reply", { ...replyArgs, body: "Changed reply" })).code,
+    (
+      await api(`comments/${c.id}/replies`, {
+        ...replyArgs,
+        body: "Changed reply",
+        stateId: engine.snapshot().stateId,
+      })
+    ).code,
   ).toBe("idempotency_conflict");
   expect((await decide(p)).status).toBe(200);
   expect((await propose("genesis")).proposal.id).toBe(p.id);
@@ -1489,13 +1565,13 @@ it("completes agent propose/read/selection/reply and explicit human decisions wi
   expect(next.diff.elementChangeCount).toBe(1);
   expect(engine.snapshot().revision).toBe(p.revision);
   // Both the viewed base and its selection stay pinned to the original revision.
-  const comparing = await api("webmcp/context", {
+  const comparing = await api("review-context", {
     ...contextArgs,
     review: { ...contextArgs.review, proposalId: next.id, showingBase: true },
   });
   expect(comparing.selection.revision).toBe(p.revision);
   expect((await decide(next, "reject")).status).toBe(200);
-  const final = await api("webmcp/context", {});
+  const final = await api("review-context", {});
   expect(final.proposals.map((p) => p.status)).toEqual([
     "accepted",
     "rejected",
@@ -1542,7 +1618,7 @@ it("rejects stale bases, mismatched selections and stale human review states; pr
     showingBase: false,
     previewStatus: "ready",
   };
-  expect((await api("webmcp/context", { review })).review.stale).toBe(true);
+  expect((await api("review-context", { review })).review.stale).toBe(true);
   for (const [r, target] of [
     [
       review,
@@ -1576,35 +1652,55 @@ it("rejects stale bases, mismatched selections and stale human review states; pr
     ],
   ])
     expect(
-      (await api("webmcp/context", { review: r, selection: target })).status,
+      (await api("review-context", { review: r, selection: target })).status,
     ).toBeGreaterThanOrEqual(400);
   expect(
     (
-      await api("webmcp/context", {
+      await api("review-context", {
         review: { ...review, revision: genesis.revision },
       })
     ).status,
   ).toBe(400);
-  expect((await api("webmcp/document", { revision: "head" })).status).toBe(400);
+  expect((await api("revisions/head/files", undefined, "GET")).status).toBe(
+    404,
+  );
   expect(
-    (await api("webmcp/document", { revision: `sha256:${"f".repeat(64)}` }))
+    (await api(`revisions/sha256:${"f".repeat(64)}/files`, undefined, "GET"))
       .code,
   ).toBe("not_found");
 });
 
-it("limits WebMCP routes, authority, input shapes, byte sizes and capabilities", async () => {
+it("limits document API routes, authority, input shapes, byte sizes and capabilities", async () => {
   const { viewer, request, api, engine } = await agentFixture();
   const stateId = engine.snapshot().stateId;
+  const token = new URL(viewer.ownerUrl).hash.slice(1),
+    authenticated = { Authorization: `Bearer ${token}` };
   expect(
-    (await request("webmcp/context", {}, { Authorization: "Bearer wrong" }))
+    (await wire(viewer, "/api/webmcp/context", { headers: authenticated }))
+      .status,
+  ).toBe(404);
+  expect(
+    (await wire(viewer, "/api/comments", { headers: authenticated })).status,
+  ).toBe(404);
+  expect(
+    (
+      await wire(
+        viewer,
+        "/api/documents/99999999-9999-4999-8999-999999999999/review-context",
+        { headers: authenticated },
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (await request("review-context", {}, { Authorization: "Bearer wrong" }))
       .status,
   ).toBe(401);
   expect(
-    (await request("webmcp/context", {}, { Origin: "http://evil.invalid" }))
+    (await request("review-context", {}, { Origin: "http://evil.invalid" }))
       .status,
   ).toBe(403);
   expect(
-    (await request("webmcp/context", {}, { "Content-Type": "text/plain" }))
+    (await request("review-context", {}, { "Content-Type": "text/plain" }))
       .status,
   ).toBe(403);
   for (const route of [
@@ -1623,13 +1719,13 @@ it("limits WebMCP routes, authority, input shapes, byte sizes and capabilities",
     { url: "https://example.com" },
     { command: "ls" },
   ])
-    expect((await api("webmcp/proposals", body)).status).toBe(400);
-  const raw = await request("webmcp/context", { huge: "x".repeat(65536) });
+    expect((await api("proposals", body)).status).toBe(400);
+  const raw = await request("review-context", { huge: "x".repeat(65536) });
   expect(raw.status).toBe(413);
   expect(
     (
-      await request("webmcp/proposals", {
-        huge: "x".repeat(WEBMCP_LIMITS.requestBytes),
+      await request("proposals", {
+        huge: "x".repeat(DOCUMENT_API_LIMITS.requestBytes),
       })
     ).status,
   ).toBe(413);
@@ -1724,12 +1820,12 @@ it("validates complete candidate content without accepting paths, scripts, remot
       {
         path: "document.html",
         encoding: "utf8",
-        content: "x".repeat(WEBMCP_LIMITS.fileBytes + 1),
+        content: "x".repeat(DOCUMENT_API_LIMITS.fileBytes + 1),
       },
     ],
   ];
   for (const files of invalid) {
-    const result = await api("webmcp/proposals", {
+    const result = await api("proposals", {
       base: null,
       request: "Invalid",
       key: "invalid",
@@ -1769,10 +1865,11 @@ it("cleans private staging after an Engine failure and never returns host error 
       yield Buffer.from(JSON.stringify(body));
     },
   };
-  await webmcpRoute({
+  await documentRoute({
     req,
     origin,
-    path: "/api/webmcp/proposals",
+    documentId: "11111111-1111-4111-8111-111111111111",
+    path: "/api/documents/11111111-1111-4111-8111-111111111111/proposals",
     json: (status, data) => {
       response = { status, data };
     },
@@ -1785,6 +1882,7 @@ it("cleans private staging after an Engine failure and never returns host error 
         );
       },
     },
+    principal: { identity: "agent" },
   });
   expect(response.status).toBe(422);
   expect(JSON.stringify(response)).not.toContain("secret-location");
@@ -1806,7 +1904,7 @@ it("allows identical retries after a busy Engine without leaking the lock path",
   expect((await propose("busy-retry")).proposal.status).toBe("pending");
 });
 
-it("keeps all WebMCP routes inside configured authority and persists retries across restart", async () => {
+it("keeps document API routes inside configured authority and persists retries across restart", async () => {
   const { root, temp, engine, proposal } = fixture();
   const token = "integration-test-credential-" + "x".repeat(48);
   const tokenFile = join(temp, "viewer-token");
@@ -1834,7 +1932,7 @@ it("keeps all WebMCP routes inside configured authority and persists retries acr
     expect(response.text).not.toContain(tokenFile);
     return response.json();
   };
-  await api(`/api/proposals/${proposal.id}/accept`, {
+  await api(documentApi(viewer, `proposals/${proposal.id}/accept`), {
     revision: proposal.revision,
     stateId: engine.snapshot().stateId,
   });
@@ -1850,7 +1948,10 @@ it("keeps all WebMCP routes inside configured authority and persists retries acr
     },
   };
   const comment = (
-    await post("/api/comments", { target: selection, body: "Keep the globe" })
+    await post(documentApi(viewer, "comments"), {
+      target: selection,
+      body: "Keep the globe",
+    })
   ).json();
   const review = {
     proposalId: proposal.id,
@@ -1858,13 +1959,20 @@ it("keeps all WebMCP routes inside configured authority and persists retries acr
     showingBase: false,
     previewStatus: "ready",
   };
-  const context = await api("/api/webmcp/context", { review, selection });
+  const context = await api(documentApi(viewer, "review-context"), {
+    review,
+    selection,
+  });
   expect(context.selection).toEqual(selection);
   expect(context.comments[0].target.revision).toBe(proposal.revision);
   expect(context.head.revision).toBe(proposal.revision);
-  const document = await api("/api/webmcp/document", {
-    revision: proposal.revision,
-  });
+  const documentResponse = await wire(
+    viewer,
+    documentApi(viewer, `revisions/${proposal.revision}/files`),
+    { headers },
+  );
+  expect(documentResponse.status).toBe(200);
+  const document = documentResponse.json();
   // Exceeds the ordinary 64 KiB POST cap, proving the agent body reader is used.
   const request = {
     base: proposal.revision,
@@ -1877,43 +1985,61 @@ it("keeps all WebMCP routes inside configured authority and persists retries acr
         " ".repeat(70000),
     })),
   };
-  const pending = (await api("/api/webmcp/proposals", request)).proposal;
+  const pending = (await api(documentApi(viewer, "proposals"), request))
+    .proposal;
   expect(engine.snapshot().revision).toBe(proposal.revision);
   const reply = {
-    commentId: comment.id,
     body: "Candidate is ready",
     key: "configured-reply",
+    stateId: engine.snapshot().stateId,
   };
-  await api("/api/webmcp/reply", reply);
+  await api(documentApi(viewer, `comments/${comment.id}/replies`), reply);
   const before = engine.snapshot().stateId;
-  for (const route of ["context", "document", "proposals", "reply"])
+  for (const route of [
+    documentApi(viewer, "review-context"),
+    documentApi(viewer, `revisions/${proposal.revision}/files`),
+    documentApi(viewer, "proposals"),
+    documentApi(viewer, `comments/${comment.id}/replies`),
+  ])
     for (const denied of [
       { Authorization: "Bearer wrong" },
       { Host: "evil.example.test" },
       { Origin: "https://evil.example.test" },
       { "X-Forwarded-Host": "review.example.test:8443" },
     ]) {
-      const result = await post(`/api/webmcp/${route}`, {}, denied);
+      const result = await post(route, {}, denied);
       expect(result.status).toBe(denied.Authorization ? 401 : 403);
     }
   expect(engine.snapshot().stateId).toBe(before);
   const preview = (
-    await wire(viewer, `/api/preview/${pending.id}`, { headers })
+    await wire(viewer, documentApi(viewer, `preview/${pending.id}`), {
+      headers,
+    })
   ).json();
   await close(viewer.server);
   viewer = await start(root, 0, options);
   expect((await wire(viewer, preview.url)).status).toBe(404);
-  expect((await api("/api/webmcp/proposals", request)).proposal.id).toBe(
-    pending.id,
-  );
-  expect((await api("/api/webmcp/reply", reply)).comment.replies).toHaveLength(
-    1,
-  );
-  const reopened = await api("/api/webmcp/context", { review, selection });
+  expect(
+    (await api(documentApi(viewer, "proposals"), request)).proposal.id,
+  ).toBe(pending.id);
+  expect(
+    (await api(documentApi(viewer, `comments/${comment.id}/replies`), reply))
+      .comment.replies,
+  ).toHaveLength(1);
+  const reopened = await api(documentApi(viewer, "review-context"), {
+    review,
+    selection,
+  });
   expect(reopened.stateId).toBe(before);
   expect(reopened.head.revision).toBe(proposal.revision);
   expect(reopened.comments[0].status).toBe("open");
   expect(
-    (await api("/api/webmcp/document", { revision: pending.revision })).files,
+    (
+      await wire(
+        viewer,
+        documentApi(viewer, `revisions/${pending.revision}/files`),
+        { headers },
+      )
+    ).json().files,
   ).toEqual(request.files);
 });

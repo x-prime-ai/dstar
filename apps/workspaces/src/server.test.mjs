@@ -122,6 +122,10 @@ function access(result, role = "owner") {
   return { host: url.host, origin: url.origin, token: url.hash.slice(1) };
 }
 
+function documentApi(state, path) {
+  return `/api/documents/${state.state.id}/${path}`;
+}
+
 describe("online workspace service", () => {
   it("creates isolated viewers and never crosses tokens, state, previews, or handoffs", async () => {
     const managementUrls = [];
@@ -180,7 +184,7 @@ describe("online workspace service", () => {
     };
     expect(
       (
-        await wire(service, one.host, "/api/comments", {
+        await wire(service, one.host, documentApi(state, "comments"), {
           method: "POST",
           token: one.token,
           origin: one.origin,
@@ -198,9 +202,14 @@ describe("online workspace service", () => {
     ).toHaveLength(0);
 
     const preview = (
-      await wire(service, one.host, `/api/preview/${proposal.id}`, {
-        token: one.token,
-      })
+      await wire(
+        service,
+        one.host,
+        documentApi(state, `preview/${proposal.id}`),
+        {
+          token: one.token,
+        },
+      )
     ).json();
     expect((await wire(service, one.host, preview.url)).status).toBe(200);
     expect((await wire(service, two.host, preview.url)).status).toBe(404);
@@ -253,9 +262,14 @@ describe("online workspace service", () => {
       await wire(service, old.host, "/api/state", { token: old.token })
     ).json();
     const preview = (
-      await wire(service, old.host, `/api/preview/${proposal.id}`, {
-        token: old.token,
-      })
+      await wire(
+        service,
+        old.host,
+        documentApi(state, `preview/${proposal.id}`),
+        {
+          token: old.token,
+        },
+      )
     ).json();
     const target = {
       revision: state.revision,
@@ -277,15 +291,20 @@ describe("online workspace service", () => {
     ).json();
     expect(reviewerState.session.role).toBe("reviewer");
     expect(reviewerState).not.toHaveProperty("workspaceManagementUrl");
-    const commentResponse = await wire(service, old.host, "/api/comments", {
-      method: "POST",
-      token: oldReviewer.token,
-      origin: oldReviewer.origin,
-      body: JSON.stringify({
-        body: "Will be reset",
-        target,
-      }),
-    });
+    const commentResponse = await wire(
+      service,
+      old.host,
+      documentApi(state, "comments"),
+      {
+        method: "POST",
+        token: oldReviewer.token,
+        origin: oldReviewer.origin,
+        body: JSON.stringify({
+          body: "Will be reset",
+          target,
+        }),
+      },
+    );
     expect(commentResponse.status).toBe(201);
     const comment = commentResponse.json();
     const handoffId = "22222222-2222-4222-8222-222222222222";
@@ -327,7 +346,7 @@ describe("online workspace service", () => {
     };
     expect(
       (
-        await wire(service, old.host, "/api/webmcp/context", {
+        await wire(service, old.host, documentApi(state, "review-context"), {
           method: "POST",
           token: handoffToken,
           origin: old.origin,
@@ -444,9 +463,9 @@ describe("online workspace service", () => {
       ["GET", `/api/handoffs/${handoffId}`],
       ["POST", `/api/handoffs/${handoffId}/reply-draft`],
       ["POST", `/api/handoffs/${handoffId}/revoke`],
-      ["POST", "/api/webmcp/context"],
-      ["POST", "/api/webmcp/document"],
-      ["POST", "/api/webmcp/proposals"],
+      ["POST", documentApi(state, "review-context")],
+      ["GET", documentApi(state, `revisions/${state.revision}/files`)],
+      ["POST", documentApi(state, "proposals")],
     ])
       expect(
         (
@@ -493,15 +512,20 @@ describe("online workspace service", () => {
     ).toMatchObject({ session: { role: "reviewer" } });
     const nextTarget = { ...target, revision: nextState.revision };
     const nextComment = (
-      await wire(service, nextReviewer.host, "/api/comments", {
-        method: "POST",
-        token: nextReviewer.token,
-        origin: nextReviewer.origin,
-        body: JSON.stringify({
-          target: nextTarget,
-          body: "New generation comment",
-        }),
-      })
+      await wire(
+        service,
+        nextReviewer.host,
+        documentApi(nextState, "comments"),
+        {
+          method: "POST",
+          token: nextReviewer.token,
+          origin: nextReviewer.origin,
+          body: JSON.stringify({
+            target: nextTarget,
+            body: "New generation comment",
+          }),
+        },
+      )
     ).json();
     const nextHandoffId = "33333333-3333-4333-8333-333333333333";
     const nextHandoffToken = "k".repeat(64);
@@ -711,6 +735,9 @@ describe("online workspace service", () => {
     });
     const created = await create(service);
     const owner = access(created);
+    const ownerState = (
+      await wire(service, owner.host, "/api/state", { token: owner.token })
+    ).json();
     const address = service.server.address();
     let finishSlow;
     const slowResponse = new Promise((resolve, reject) => {
@@ -718,7 +745,7 @@ describe("online workspace service", () => {
         {
           host: "127.0.0.1",
           port: address.port,
-          path: "/api/comments",
+          path: documentApi(ownerState, "comments"),
           method: "POST",
           agent: false,
           headers: {

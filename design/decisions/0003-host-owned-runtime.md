@@ -31,8 +31,8 @@ DSTAR integrations are host-owned by default.
   dependency.
 - The reference container is a deployable composition of those packages, not a
   requirement to use DSTAR infrastructure.
-- WebMCP is part of Viewer. Its page registers the browser tools and Viewer owns
-  their restricted HTTP bridge. It is not part of `@dstar/mcp` and is not a
+- WebMCP is part of Viewer. Its page registers the browser tools and maps them
+  onto Viewer's normal document-scoped API. It is not part of `@dstar/mcp` and is not a
   separate package or service.
 
 Each package and browser origin has one clear owner. The host owns routing,

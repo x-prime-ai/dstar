@@ -113,16 +113,21 @@ it("uses one verified preview for HTML, CSS and images with 20 comments while de
       headers: { Authorization: `Bearer ${token}` },
     });
   const accept = (stateId) =>
-    fetch(`${viewer.origin}/api/proposals/${p.id}/accept`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Origin: viewer.origin,
-        "Content-Type": "application/json",
+    fetch(
+      `${viewer.origin}/api/documents/${viewer.documentId}/proposals/${p.id}/accept`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Origin: viewer.origin,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ revision: p.revision, stateId }),
       },
-      body: JSON.stringify({ revision: p.revision, stateId }),
-    });
-  const preview = await (await get(`/api/preview/${p.id}`)).json();
+    );
+  const preview = await (
+    await get(`/api/documents/${viewer.documentId}/preview/${p.id}`)
+  ).json();
   expect(viewerSnapshot).toHaveBeenCalledTimes(1);
   expect(viewerSnapshot).toHaveBeenCalledWith(p.id);
   const frame = await fetch(viewer.origin + preview.url);
@@ -159,7 +164,9 @@ it("uses one verified preview for HTML, CSS and images with 20 comments while de
   expect(await (await fetch(viewer.origin + preview.url)).text()).toContain(
     html,
   );
-  expect((await get(`/api/preview/${p.id}`)).status).toBe(409);
+  expect(
+    (await get(`/api/documents/${viewer.documentId}/preview/${p.id}`)).status,
+  ).toBe(409);
   expect((await accept(current.stateId)).status).toBe(409);
   writeFileSync(objectPath, bytes);
   expect((await accept(current.stateId)).status).toBe(200);

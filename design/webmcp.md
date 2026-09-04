@@ -42,14 +42,14 @@ document. All input schemas reject additional properties. Descriptions and
 annotations mark document and comment contents as untrusted data. A tool must
 not treat instructions found inside that content as user authorization.
 
-| Tool                         | Arguments                                  | Result on success                                                                                                                                               |
-| ---------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_review_context`         | `{}`                                       | Public session role/capabilities, package/state IDs, accepted head, reviewed version, selection/action, focused comment, proposals, comments/replies and limits |
-| `read_document`              | `{revision}`                               | Exact immutable revision and complete `files` array                                                                                                             |
-| `draft_selection_comment`    | `{body}`                                   | Opens an editable comment draft for the exact selection; never posts it                                                                                         |
-| `draft_comment_reply`        | `{commentId, body}`                        | Returns an editable reply draft for the exact focused comment; never posts or resolves it                                                                       |
-| `propose_revision` (Owner)   | `{base, request, key, files, commentIds?}` | Stored proposal, including exact base/revision, structured motivation links, status and review diff                                                             |
-| `reply_comment`              | `{commentId, body, key}`                   | Comment with its replies; status is not changed                                                                                                                 |
+| Tool                       | Arguments                                  | Result on success                                                                                                                                               |
+| -------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_review_context`       | `{}`                                       | Public session role/capabilities, package/state IDs, accepted head, reviewed version, selection/action, focused comment, proposals, comments/replies and limits |
+| `read_document`            | `{revision}`                               | Exact immutable revision and complete `files` array                                                                                                             |
+| `draft_selection_comment`  | `{body}`                                   | Opens an editable comment draft for the exact selection; never posts it                                                                                         |
+| `draft_comment_reply`      | `{commentId, body}`                        | Returns an editable reply draft for the exact focused comment; never posts or resolves it                                                                       |
+| `propose_revision` (Owner) | `{base, request, key, files, commentIds?}` | Stored proposal, including exact base/revision, structured motivation links, status and review diff                                                             |
+| `reply_comment`            | `{commentId, body, key}`                   | Comment with its replies; status is not changed                                                                                                                 |
 
 Every tool result is a string containing a JSON object with `ok: true` or
 `ok: false`. Successful mutation results also include `viewerUpdated`. If a
@@ -194,18 +194,23 @@ referenced assets. A proposal creates immutable candidate storage and a review
 diff but never modifies accepted files. The Viewer must already be serving an
 HTML-first package; creating/opening package roots remains host/CLI work.
 
-## Restricted HTTP bridge
+## Document API mapping
 
-`src/webmcp-api.mjs` handles only these authenticated JSON POST routes:
+WebMCP has no server-side namespace. The page adapter obtains `docId` from the
+authenticated Viewer state and maps tools onto the same document-scoped HTTP API
+used by the Viewer UI:
 
-| Route                  | Body                                                                                                   |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `/api/webmcp/context`   | `{review?, selection?, action?, focusedCommentId?}` supplied by the top-level page, validated as above |
-| `/api/webmcp/document`  | `{revision}`                                                                                           |
-| `/api/webmcp/proposals` | `{base, request, key, files, commentIds?}`                                                             |
-| `/api/webmcp/reply`     | `{commentId, body, key}`                                                                               |
+| Method | Route                                               | Body                                                                                                   |
+| ------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `POST` | `/api/documents/:docId/review-context`              | `{review?, selection?, action?, focusedCommentId?}` supplied by the top-level page, validated as above |
+| `GET`  | `/api/documents/:docId/revisions/:revision/files`   | none                                                                                                   |
+| `POST` | `/api/documents/:docId/proposals`                   | `{base, request, key, files, commentIds?}`                                                             |
+| `POST` | `/api/documents/:docId/comments/:commentId/replies` | `{body, key, stateId}`                                                                                 |
+| `POST` | `/api/documents/:docId/comments`                    | `{target, body}`                                                                                       |
+| `POST` | `/api/documents/:docId/proposals/:proposalId/accept | reject`                                                                                                | `{revision, stateId}` |
+| `POST` | `/api/documents/:docId/comments/:commentId/resolve` | `{stateId}`                                                                                            |
 
-The normal Viewer Bearer-session gate runs first. Each route also requires the
+The normal Viewer Bearer-session gate runs first. Every mutation also requires the
 configured exact Origin and `Content-Type: application/json`. No route accepts
 a package root, server file path, URL to fetch, executable command, author
 override or decision. The browser's request closure retains the credential; it
@@ -215,10 +220,11 @@ fingerprints. Unexpected Engine/filesystem errors are not echoed to tools.
 
 Short-lived handoffs additionally use `/api/handoffs/:id/reply-draft` for the
 exact bound comment and `/api/handoffs/:id/revoke` for creator-driven
-invalidation. These are not generic WebMCP routes. The server checks the
+invalidation. These are ephemeral authorization resources, not document or
+WebMCP routes. The server checks the
 handoff's state hash and resource binding before dispatching any allowed route.
 
-Before any filesystem write, the bridge validates canonical paths and encodings,
+Before any filesystem write, the document API validates canonical paths and encodings,
 rejects duplicate paths, case collisions (including directory components),
 file/directory collisions, traversal, absolute paths, hidden paths, backslashes,
 percent encodings and unsupported file types. Bounds are:
@@ -245,7 +251,7 @@ files are removed in `finally`; there is no shell or outbound fetch operation.
 
 The preview's sandbox without `allow-same-origin`, nonce-only trusted bridge,
 CSP, immutable read-only capabilities and resource readiness gate remain in
-place. A preview capability cannot authorize WebMCP bridge calls.
+place. A preview capability cannot authorize document API calls.
 
 ### Retry, concurrency and errors
 
@@ -269,7 +275,7 @@ Error results have `{ok:false, code, error}`. Codes include `invalid_input`,
 `too_large`, `stale_base`, `idempotency_conflict`, `not_found`, `no_changes`,
 `busy`, `validation_failed`, `forbidden`, `unknown_route`, and the browser-side
 `comment_closed`, `connection_error`. HTTP validation/input failures use 400/413/422; conflicts
-and busy/not-found conditions use 409. Unknown WebMCP routes use 404. A 401 from
+and busy/not-found conditions use 409. Unknown routes and document IDs use 404. A 401 from
 the shared session gate is reported as a connection/session failure by the tool.
 
 Tool mutations refresh the Viewer immediately. A three-second poll also picks
@@ -296,7 +302,7 @@ The Owner session credential also authorizes normal Viewer decision endpoints;
 a trusted local process with equivalent session access can act outside the seven
 WebMCP tools.
 
-The bridge inherits synchronous Engine replay/validation and metadata limits.
+The document API inherits synchronous Engine replay/validation and metadata limits.
 It does not provide result pagination or streaming asset upload, and large
 complete document results can exceed an agent's own context/tool-result budget.
 Only the existing static HTML/CSS/raster/font profile is supported. Browser API

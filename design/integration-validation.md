@@ -104,7 +104,7 @@ also retained. Main was not changed.
 The integration follow-up also:
 
 - Extends the existing server suite with a configured HTTPS-origin/Host test
-  for all four WebMCP routes. It reads a Unicode selection and exact document,
+  for the four document API operations exercised by WebMCP. It reads a Unicode selection and exact document,
   submits a candidate larger than the ordinary 64 KiB API limit, verifies head
   is unchanged, rejects bad authority/credentials on every route, and checks
   persisted proposal/reply retries after restart. Old preview capabilities
@@ -112,7 +112,7 @@ The integration follow-up also:
 - Raises Compose's temporary filesystem from 16 to 64 MiB, allowing the
   agent's permitted 32 MiB decoded staging set. Adds the proxy's explicit
   48 MiB request cap so Nginx's smaller default does not reject allowed
-  candidates before the agent route. These are reviewed configuration fixes,
+  candidates before the proposal route. These are reviewed configuration fixes,
   not claims of a running container or tested production capacity.
 
 ### Automated checks actually run on the integrated tree
@@ -150,7 +150,7 @@ HTTP server and filesystem Engine, with no injected modelContext API:
   `failed` and disabled Accept. Explicit rejection recorded the rejected
   proposal without changing accepted head.
 - Page reload re-registered callable tools and retained two accepted versions,
-  one rejected proposal, the original comment and its one agent reply. Browser
+  one rejected proposal, the original comment and its one authenticated reply. Browser
   error/warning logs were empty at the end of these interactions. Tool results
   were checked against the local fixture credential; no credential appeared.
 

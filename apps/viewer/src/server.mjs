@@ -7,7 +7,11 @@ import {
   resolveTarget,
   validateTarget,
 } from "@dstar/core";
-import { webmcpRoute } from "./webmcp-api.mjs";
+import {
+  documentErrorResult,
+  documentRoute,
+  publicComment,
+} from "./document-api.mjs";
 import { createPreviewCache } from "./preview-cache.mjs";
 import { fileDiff } from "./file-diff.mjs";
 import {
@@ -47,7 +51,8 @@ export async function startViewer(root, port = 0, options = {}) {
   const document = openDocument(config.root),
     engine = document,
     review = document;
-  engine.snapshot();
+  const documentId = engine.snapshot().state.id,
+    documentBase = `/api/documents/${documentId}`;
   const capabilities = createPreviewCache(),
     handoffs = new Map();
   const getHandoff = (id) => {
@@ -279,6 +284,11 @@ export async function startViewer(root, port = 0, options = {}) {
         return json(401, { error: "Viewer authorization required" });
       if (req.headers.origin !== undefined && req.headers.origin !== origin)
         return json(403, { error: "Invalid review origin" });
+      if (
+        path.startsWith("/api/documents/") &&
+        !path.startsWith(`${documentBase}/`)
+      )
+        return json(404, { error: "Unknown document" });
       if (scoped && engine.snapshot().stateId !== scoped.handoff.stateId) {
         handoffs.delete(scoped.id);
         return json(409, {
@@ -286,7 +296,9 @@ export async function startViewer(root, port = 0, options = {}) {
         });
       }
       const scopedRevisionRead = scoped
-        ? /^\/api\/(?:preview|annotations)\/([a-f0-9-]{36})$/.exec(path)
+        ? new RegExp(
+            `^${documentBase}/(?:preview|annotations)/([a-f0-9-]{36})$`,
+          ).exec(path)
         : null;
       if (scopedRevisionRead) {
         const proposal = engine
@@ -305,13 +317,19 @@ export async function startViewer(root, port = 0, options = {}) {
         !(
           (req.method === "GET" &&
             (path === "/api/state" ||
-              /^\/api\/preview\/[a-f0-9-]{36}$/.test(path) ||
-              /^\/api\/annotations\/[a-f0-9-]{36}$/.test(path) ||
+              new RegExp(
+                `^${documentBase}/revisions/sha256:[a-f0-9]{64}/files$`,
+              ).test(path) ||
+              new RegExp(`^${documentBase}/preview/[a-f0-9-]{36}$`).test(
+                path,
+              ) ||
+              new RegExp(`^${documentBase}/annotations/[a-f0-9-]{36}$`).test(
+                path,
+              ) ||
               path === `/api/handoffs/${scoped.id}`)) ||
           (req.method === "POST" &&
-            (path === "/api/webmcp/context" ||
-              path === "/api/webmcp/document" ||
-              (path === "/api/webmcp/proposals" &&
+            (path === `${documentBase}/review-context` ||
+              (path === `${documentBase}/proposals` &&
                 scoped.handoff.context.action.kind === "address-comment") ||
               (path === `/api/handoffs/${scoped.id}/draft` &&
                 scoped.handoff.context.action.kind !== "address-comment") ||
@@ -323,8 +341,9 @@ export async function startViewer(root, port = 0, options = {}) {
       const needed = routeCapability(req.method, path);
       if (needed) requireCapability(principal, needed);
       if (
-        await webmcpRoute({
+        await documentRoute({
           engine,
+          documentId,
           req,
           json,
           path,
@@ -372,7 +391,9 @@ export async function startViewer(root, port = 0, options = {}) {
             : json(403, { error: "Agent handoff resource mismatch" })
           : json(404, { error: "Agent handoff expired or was not found" });
       }
-      const diff = /^\/api\/diff\/([a-f0-9-]{36})$/.exec(path);
+      const diff = new RegExp(`^${documentBase}/diff/([a-f0-9-]{36})$`).exec(
+        path,
+      );
       if (req.method === "GET" && diff) {
         const after = engine.snapshot(diff[1]);
         const proposal = after.state.proposals.find((p) => p.id === diff[1]);
@@ -386,7 +407,9 @@ export async function startViewer(root, port = 0, options = {}) {
           : null;
         return json(200, fileDiff(before, after, proposal, file));
       }
-      const annotations = /^\/api\/annotations\/([a-f0-9-]{36})$/.exec(path);
+      const annotations = new RegExp(
+        `^${documentBase}/annotations/([a-f0-9-]{36})$`,
+      ).exec(path);
       if (req.method === "GET" && annotations) {
         const s = engine.snapshot(annotations[1]);
         return json(200, {
@@ -409,7 +432,9 @@ export async function startViewer(root, port = 0, options = {}) {
           ),
         });
       }
-      const preview = /^\/api\/preview\/([a-f0-9-]{36})$/.exec(path);
+      const preview = new RegExp(
+        `^${documentBase}/preview/([a-f0-9-]{36})$`,
+      ).exec(path);
       if (req.method === "GET" && preview) {
         const s = engine.snapshot(preview[1]),
           capability = secret();
@@ -434,7 +459,7 @@ export async function startViewer(root, port = 0, options = {}) {
         chunks.push(chunk);
       }
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      if (path === "/api/comments") {
+      if (path === `${documentBase}/comments`) {
         exactBody(body, ["target", "body"]);
         return json(
           201,
@@ -547,32 +572,37 @@ export async function startViewer(root, port = 0, options = {}) {
         handoffs.delete(revoke[1]);
         return json(200, { revoked: true });
       }
-      const comment =
-        /^\/api\/comments\/([a-f0-9-]{36})\/(reply|resolve)$/.exec(path);
+      const comment = new RegExp(
+        `^${documentBase}/comments/([a-f0-9-]{36})/(replies|resolve)$`,
+      ).exec(path);
       if (comment) {
-        exactBody(
-          body,
-          comment[2] === "reply" ? ["body", "stateId"] : ["stateId"],
-        );
-        return json(
-          200,
-          comment[2] === "reply"
-            ? engine.reply(
+        const reply = comment[2] === "replies";
+        exactBody(body, reply ? ["body", "stateId", "key"] : ["stateId"]);
+        if (!reply)
+          return json(
+            200,
+            review.resolveComment(comment[1], body.stateId, principal.identity),
+          );
+        try {
+          return json(200, {
+            comment: publicComment(
+              engine.reply(
                 comment[1],
                 body.body,
                 principal.identity,
-                undefined,
+                body.key,
                 body.stateId,
-              )
-            : review.resolveComment(
-                comment[1],
-                body.stateId,
-                principal.identity,
               ),
-        );
+            ),
+          });
+        } catch (error) {
+          const { status, ...result } = documentErrorResult(error);
+          return json(status, result);
+        }
       }
-      const decision =
-        /^\/api\/proposals\/([a-f0-9-]{36})\/(accept|reject)$/.exec(path);
+      const decision = new RegExp(
+        `^${documentBase}/proposals/([a-f0-9-]{36})/(accept|reject)$`,
+      ).exec(path);
       if (decision) {
         exactBody(body, ["revision", "stateId"]);
         return json(
@@ -612,6 +642,7 @@ export async function startViewer(root, port = 0, options = {}) {
     server,
     origin,
     baseUrl,
+    documentId,
     ownerUrl,
     ...(reviewerUrl ? { reviewerUrl } : {}),
   };

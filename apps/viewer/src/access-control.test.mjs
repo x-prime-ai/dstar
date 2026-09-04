@@ -30,7 +30,9 @@ it("keeps document updates, decisions, resolution and sharing owner-only", () =>
 });
 
 it("classifies current and integration routes through one reusable gate", () => {
-  expect(routeCapability("POST", "/api/webmcp/proposals")).toBe("propose");
+  const document = "/api/documents/22222222-2222-4222-8222-222222222222";
+  expect(routeCapability("POST", `${document}/proposals`)).toBe("propose");
+  expect(routeCapability("POST", `${document}/comments`)).toBe("comment");
   expect(routeCapability("POST", "/api/handoffs")).toBe("handoff");
   expect(
     routeCapability(
@@ -47,15 +49,23 @@ it("classifies current and integration routes through one reusable gate", () => 
   expect(
     routeCapability(
       "POST",
-      "/api/comments/11111111-1111-4111-8111-111111111111/resolve",
+      `${document}/comments/11111111-1111-4111-8111-111111111111/replies`,
+    ),
+  ).toBe("reply");
+  expect(
+    routeCapability(
+      "POST",
+      `${document}/comments/11111111-1111-4111-8111-111111111111/resolve`,
     ),
   ).toBe("resolve");
   expect(
     routeCapability(
       "POST",
-      "/api/proposals/11111111-1111-4111-8111-111111111111/accept",
+      `${document}/proposals/11111111-1111-4111-8111-111111111111/accept`,
     ),
   ).toBe("decide");
+  expect(routeCapability("POST", "/api/comments")).toBeUndefined();
+  expect(routeCapability("POST", "/api/webmcp/reply")).toBeUndefined();
 });
 
 it("intersects handoff authority and exposes no credentials", () => {

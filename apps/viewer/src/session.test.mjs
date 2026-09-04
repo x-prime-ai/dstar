@@ -85,6 +85,7 @@ it("supports a stored credential and recovers from expiry without leaking it to 
   );
   const tools = createTools({
     api: (...args) => f.session.request(...args),
+    getDocumentId: () => "11111111-1111-4111-8111-111111111111",
     getReviewContext: () => ({}),
     onMutation: vi.fn(),
   });
@@ -202,16 +203,23 @@ it("does not authenticate network errors or forbidden origins, and propagates ab
   expect(f.session.authorized).toBe(false);
   expect(f.onAuthorization).not.toHaveBeenCalled();
   const signal = new AbortController().signal;
-  await f.session.request("webmcp/context", {}, signal);
-  expect(f.fetch).toHaveBeenLastCalledWith(`${origin}/api/webmcp/context`, {
+  await f.session.request(
+    "documents/11111111-1111-4111-8111-111111111111/review-context",
+    {},
     signal,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  );
+  expect(f.fetch).toHaveBeenLastCalledWith(
+    `${origin}/api/documents/11111111-1111-4111-8111-111111111111/review-context`,
+    {
+      signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      body: "{}",
     },
-    method: "POST",
-    body: "{}",
-  });
+  );
   expect(f.session.authorized).toBe(false);
 });
 

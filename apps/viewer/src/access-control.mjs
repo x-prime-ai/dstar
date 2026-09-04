@@ -28,21 +28,41 @@ const roleCapabilities = Object.freeze({
 
 const routeRules = Object.freeze([
   ["GET", /^\/api\//, CAPABILITIES.READ],
-  ["POST", /^\/api\/comments$/, CAPABILITIES.COMMENT],
+  ["POST", /^\/api\/documents\/[a-f0-9-]{36}\/comments$/, CAPABILITIES.COMMENT],
   ["POST", /^\/api\/handoffs$/, CAPABILITIES.HANDOFF],
   ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/draft$/, CAPABILITIES.HANDOFF],
   ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/revoke$/, CAPABILITIES.HANDOFF],
   ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/reply-draft$/, CAPABILITIES.REPLY],
-  ["POST", /^\/api\/comments\/[a-f0-9-]{36}\/reply$/, CAPABILITIES.REPLY],
-  ["POST", /^\/api\/comments\/[a-f0-9-]{36}\/resolve$/, CAPABILITIES.RESOLVE],
   [
     "POST",
-    /^\/api\/proposals\/[a-f0-9-]{36}\/(accept|reject)$/,
+    /^\/api\/documents\/[a-f0-9-]{36}\/comments\/[a-f0-9-]{36}\/replies$/,
+    CAPABILITIES.REPLY,
+  ],
+  [
+    "POST",
+    /^\/api\/documents\/[a-f0-9-]{36}\/comments\/[a-f0-9-]{36}\/resolve$/,
+    CAPABILITIES.RESOLVE,
+  ],
+  [
+    "POST",
+    /^\/api\/documents\/[a-f0-9-]{36}\/proposals\/[a-f0-9-]{36}\/(accept|reject)$/,
     CAPABILITIES.DECIDE,
   ],
-  ["POST", /^\/api\/webmcp\/(context|document)$/, CAPABILITIES.READ],
-  ["POST", /^\/api\/webmcp\/proposals$/, CAPABILITIES.PROPOSE],
-  ["POST", /^\/api\/webmcp\/reply$/, CAPABILITIES.REPLY],
+  [
+    "POST",
+    /^\/api\/documents\/[a-f0-9-]{36}\/review-context$/,
+    CAPABILITIES.READ,
+  ],
+  [
+    "GET",
+    /^\/api\/documents\/[a-f0-9-]{36}\/revisions\/sha256:[a-f0-9]{64}\/files$/,
+    CAPABILITIES.READ,
+  ],
+  [
+    "POST",
+    /^\/api\/documents\/[a-f0-9-]{36}\/proposals$/,
+    CAPABILITIES.PROPOSE,
+  ],
 ]);
 
 export function capabilitiesForRole(role) {

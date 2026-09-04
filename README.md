@@ -95,7 +95,7 @@ and [comment commands](skills/dstar-documents/references/comments.md).
 
 When the browser supports WebMCP, the top-level Viewer registers role-scoped
 document/review tools for browser agents. Both roles can read exact versions,
-prepare editable comment/reply drafts and post an explicit keyed agent reply;
+prepare editable comment/reply drafts and post an explicit authenticated keyed reply;
 only the Owner receives the tool that proposes complete HTML/CSS/assets.
 Acceptance, human reply posting and resolution remain explicit Viewer actions. **Ask
 agent** copies a private, short-lived scoped handoff URL that contains no

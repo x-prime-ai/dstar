@@ -17,6 +17,7 @@ export interface StartedViewer {
   server: Server;
   origin: string;
   baseUrl: string;
+  documentId: string;
   ownerUrl: string;
   reviewerUrl?: string;
 }
