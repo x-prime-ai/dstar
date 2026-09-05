@@ -23,6 +23,7 @@ import {
 import {
   feedbackDrift,
   proposalChangeDestination,
+  requestableRevisionComments,
   revisionComposerState,
   revisionRequestStatus,
 } from "./review-rounds.js";
@@ -924,15 +925,8 @@ function diffOverview() {
         commentFilter = comment.status;
         comments();
       }
-      setPanel("comments-panel", true);
-      const thread = document.querySelector(
-        `.comment[data-comment="${commentId}"]`,
-      );
-      if (thread) {
-        thread.closest("details").open = true;
-        thread.focus({ preventScroll: true });
-        thread.scrollIntoView({ block: "nearest" });
-      } else note("The affected discussion is not part of this version.");
+      if (!focusThreadInPanel(commentId))
+        note("The affected discussion is not part of this version.");
     };
     warning.append(review, document.createTextNode("."));
     $("diff-warnings").append(warning);
@@ -1041,6 +1035,15 @@ async function loadDiffFile(path, focusTarget = false) {
 function located(comment) {
   return ["exact", "recovered"].includes(
     annotations?.anchors[comment.id]?.status,
+  );
+}
+function revisionRequestLocationsReady() {
+  return (
+    annotationState === "ready" &&
+    selected?.id === current?.state.head &&
+    !showingBase &&
+    annotations?.revision === frame?.revision &&
+    annotations?.stateId === current?.stateId
   );
 }
 function sendAnnotations(focus = null) {
@@ -1200,13 +1203,27 @@ function focusComment(id, announce = true) {
   updateReviewFocus();
   sendAnnotations(announce && located(comment) ? activeGroup : null);
   if (announce) {
-    if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
+    if (document.documentElement.clientWidth <= 760) {
+      if (located(comment)) setPanel(activeTab, false);
+      else focusThreadInPanel(comment.id);
+    }
     note(
       located(comment)
         ? "Thread selected in the document."
         : "This thread cannot be located in the open version.",
     );
   }
+}
+function focusThreadInPanel(commentId) {
+  setPanel("comments-panel", true);
+  const thread = document.querySelector(
+    `.comment[data-comment="${commentId}"]`,
+  );
+  if (!thread) return false;
+  thread.closest("details").open = true;
+  thread.focus({ preventScroll: true });
+  thread.scrollIntoView({ block: "nearest" });
+  return true;
 }
 async function openCommentInDocument(id) {
   const comment = current?.state.comments.find((entry) => entry.id === id);
@@ -1226,7 +1243,10 @@ async function openCommentInDocument(id) {
     sendAnnotations(comment.id);
   }
   if (ready && !located(comment)) pendingCommentFocus = null;
-  if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
+  if (document.documentElement.clientWidth <= 760) {
+    if (located(comment)) setPanel(activeTab, false);
+    else focusThreadInPanel(comment.id);
+  }
   note(
     !ready
       ? "Opening thread in the document…"
@@ -1278,9 +1298,9 @@ function commentLocation(comment) {
       status === "recovered"
         ? "The exact quotation moved within its stable element. Check the highlighted recovery before deciding."
         : status === "ambiguous"
-          ? "The original quotation occurs more than once here, so DSTAR will not choose one location."
+          ? "The original quotation occurs more than once here, so DSTAR will not choose one location. Create a new comment on current text before adding this feedback to a revision request."
           : status === "orphaned"
-            ? "The original target is absent from this version. The discussion remains open and attached to its original revision."
+            ? "The original target is absent from this version. The discussion remains open and attached to its original revision; create a new comment on current text before adding it to a revision request."
             : status === "unavailable"
               ? "DSTAR could not read locations for this version. The original discussion remains available."
               : "",
@@ -1377,15 +1397,19 @@ function replyComposer(comment) {
 }
 function updateRevisionComposer() {
   if (!current) return;
-  const state = revisionComposerState({
-      comments: current.state.comments,
+  const locationsReady = revisionRequestLocationsReady(),
+    eligibleComments = locationsReady
+      ? requestableRevisionComments(current.state.comments, annotations.anchors)
+      : current.state.comments,
+    state = revisionComposerState({
+      comments: eligibleComments,
       selectedIds: [...selectedRevisionCommentIds],
       instruction: $("revision-instruction").value,
       canCompose: canComposeRevision(),
       submitting: submittingRevisionRequest,
     }),
     summary = $("revision-selection-summary");
-  selectedRevisionCommentIds = new Set(state.commentIds);
+  if (locationsReady) selectedRevisionCommentIds = new Set(state.commentIds);
   $("revision-selection-count").textContent =
     `${state.commentIds.length} ${state.commentIds.length === 1 ? "comment" : "comments"}`;
   summary.replaceChildren();
@@ -1408,14 +1432,18 @@ function updateRevisionComposer() {
     }
     summary.append(list);
   }
-  $("submit-revision-request").disabled = !state.canSubmit;
+  $("submit-revision-request").disabled =
+    !state.canSubmit ||
+    (!locationsReady && selectedRevisionCommentIds.size > 0);
   $("submit-revision-request").textContent = submittingRevisionRequest
     ? "Saving…"
     : "Save revision request";
   $("revision-instruction").disabled = submittingRevisionRequest;
   $("revision-composer-hint").textContent =
-    state.reason ||
-    "The exact accepted version and selected feedback will be frozen before any agent is invoked.";
+    !locationsReady && selectedRevisionCommentIds.size
+      ? "Wait for comment locations before saving this request."
+      : state.reason ||
+        "The exact accepted version and selected feedback will be frozen before any agent is invoked.";
 }
 function requestActionButton(label, fn, className) {
   const button = el("button", label, className);
@@ -1554,8 +1582,16 @@ $("revision-instruction").oninput = updateRevisionComposer;
 $("revision-request-form").onsubmit = safely(async (event) => {
   event.preventDefault();
   if (!current || submittingRevisionRequest) return;
+  const locationsReady = revisionRequestLocationsReady();
+  if (selectedRevisionCommentIds.size && !locationsReady) {
+    updateRevisionComposer();
+    note("Wait for comment locations before saving this request.");
+    return;
+  }
   const composer = revisionComposerState({
-    comments: current.state.comments,
+    comments: selectedRevisionCommentIds.size
+      ? requestableRevisionComments(current.state.comments, annotations.anchors)
+      : current.state.comments,
     selectedIds: [...selectedRevisionCommentIds],
     instruction: $("revision-instruction").value,
     canCompose: canComposeRevision(),
@@ -1620,7 +1656,8 @@ function commentThread(thread, expanded = false) {
     c.status === "open" &&
     canComposeRevision() &&
     selected?.id === current.state.head &&
-    !showingBase
+    !showingBase &&
+    ["exact", "recovered"].includes(location.status)
   ) {
     const selectLabel = el("label", undefined, "comment-revision-select"),
       checkbox = el("input");

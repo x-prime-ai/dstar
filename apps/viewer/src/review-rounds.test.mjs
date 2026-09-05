@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   feedbackDrift,
   proposalChangeDestination,
+  requestableRevisionComments,
   revisionComposerState,
   revisionRequestStatus,
   revisionSelection,
@@ -63,6 +64,27 @@ describe("revision request selection", () => {
       canSubmit: false,
       reason: "Only the Owner can request a revision.",
     });
+  });
+
+  it("only offers open feedback with an interpretable current location", () => {
+    expect(
+      requestableRevisionComments(
+        [
+          ...comments,
+          { id: "recovered", status: "open" },
+          { id: "ambiguous", status: "open" },
+          { id: "orphaned", status: "open" },
+        ],
+        {
+          "open-a": { status: "exact" },
+          "open-b": { status: "exact" },
+          recovered: { status: "recovered" },
+          resolved: { status: "exact" },
+          ambiguous: { status: "ambiguous" },
+          orphaned: { status: "orphaned" },
+        },
+      ).map((comment) => comment.id),
+    ).toEqual(["open-b", "open-a", "recovered"]);
   });
 });
 

@@ -83,8 +83,10 @@ Engine terminology do not change.
   without reducing text contrast.
 - The Comments panel defaults to Open and offers an Open / Resolved filter with
   counts. Each filter contains only threads that belong to the viewed version
-  or a located descendant; unresolved historical, declined or orphaned anchors
-  do not leak into the current-version list.
+  or an applicable descendant; unrelated declined or historical threads do not
+  leak into the current-version list. Ambiguous and orphaned threads remain
+  visible with their original context, but cannot be selected for a revision
+  request until the Owner creates interpretable feedback on the current text.
 - Agent work uses one local status region with `idle`, `waiting`, `returned` and
   `expired` states. Returned text is always an editable draft; it is never
   posted or accepted automatically.

@@ -16,6 +16,14 @@ export function revisionSelection(comments, selectedIds = []) {
   return [...new Set(selectedIds)].filter((id) => open.has(id)).sort();
 }
 
+export function requestableRevisionComments(comments, anchors = {}) {
+  return (comments ?? []).filter(
+    (comment) =>
+      comment?.status === "open" &&
+      ["exact", "recovered"].includes(anchors?.[comment.id]?.status),
+  );
+}
+
 export function revisionComposerState({
   comments,
   selectedIds,
