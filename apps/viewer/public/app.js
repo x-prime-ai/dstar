@@ -384,13 +384,6 @@ function updateResponsivePanel() {
   const sidebar = $("review-sidebar"),
     overlay = document.documentElement.clientWidth <= 1100 && !sidebar.hidden;
   document.querySelector(".workspace").inert = overlay;
-  if (overlay) {
-    sidebar.setAttribute("role", "dialog");
-    sidebar.setAttribute("aria-modal", "true");
-  } else {
-    sidebar.removeAttribute("role");
-    sidebar.removeAttribute("aria-modal");
-  }
 }
 for (const [panel, tab] of [
   ["comments-panel", "tab-comments"],

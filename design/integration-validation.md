@@ -40,10 +40,11 @@ An isolated copied DSTAR fixture was exercised in an actual Chromium session at
 accepted anchor and two candidate anchors were missing; selected `styles.css`
 for a linked CSS-only proposal; focused a removed linked target in the HTML
 Before / After diff; opened the affected unlocated thread from the warning; and
-reported no horizontal overflow at 390 px. The narrow activity panel was modal
-with the review workspace inert, then closed before the linked diff received
-focus. Arrow-key checks switched activity tabs and Before / After, with Accept
-disabled on Before and enabled only on the ready After preview.
+reported no horizontal overflow at 390 px. The narrow activity drawer kept its
+header tabs and options available while the covered review workspace was inert,
+then closed before the linked diff received focus. Arrow-key checks switched
+activity tabs and Before / After, with Accept disabled on Before and enabled
+only on the ready After preview.
 
 The installed Chromium build reported only its expected unsupported `tools`
 Permissions-Policy warnings; no page errors were reported. This was a controlled
