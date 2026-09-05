@@ -50,6 +50,22 @@ The installed Chromium build reported only its expected unsupported `tools`
 Permissions-Policy warnings; no page errors were reported. This was a controlled
 local package and no provider ran, so it is not milestone 3 exit evidence.
 
+### Final verification and independent review
+
+On the final implementation commit `869dd52`, `pnpm verify` passed under Node
+22.22.3 and pnpm 10.28.2: formatting, lint, links, builds, package checks,
+static-demo checks, type checking and every workspace test completed. The test
+totals were 73 Core, 181 Viewer, 1 MCP, 2 example-library, 11 workspace and 1
+TypeScript-host test.
+
+An independent reviewer repeated the narrow-screen acceptance in a fresh
+Chromium context at 390×844. All four discussions remained open and visible;
+ambiguous/orphaned threads retained focus, original quotation and explanation,
+while only the two exact comments in that accepted fixture exposed request
+checkboxes. The reviewer also confirmed no horizontal overflow and no modal
+ARIA claim on the non-modal drawer, then reported no remaining findings. This
+review remains controlled-fixture and repository evidence only.
+
 ### Read-only xPrime fit assessment
 
 xPrime was inspected without changing its repository or invoking its data or

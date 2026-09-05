@@ -7,9 +7,10 @@ claim a real model provider, production host deployment or completed milestone 3
 
 ## Current delivery batch: embedding readiness and inspection
 
-Status: in progress, 2026-09-04. This batch begins from integrated commit
-`d8c99b5`. It does not reopen the completed request lifecycle or host-agent
-callback work.
+Status: repository scope implemented, verified and independently reviewed,
+2026-09-04. This batch begins from integrated commit `d8c99b5`. It does not
+reopen the completed request lifecycle or host-agent callback work, and it does
+not claim the real-host exit evidence required by milestone 3.
 
 The independently executable DSTAR scope is:
 
@@ -70,6 +71,14 @@ Repository test success is sufficient to mark this implementation delivery
 verified. It is not sufficient to claim real provider behavior, billing
 deduplication, production process recovery, native browser/provider integration,
 container/TLS deployment or real-host embedding.
+
+For the embedding-readiness and inspection batch, the final repository suite
+passed with 73 Core, 181 Viewer, 1 MCP, 2 example-library, 11 workspace and 1
+TypeScript-host test. A fresh Chromium session at 390×844 independently
+confirmed that ambiguous and orphaned threads remain visible and focusable,
+only exact/recovered feedback can enter a revision request, the narrow drawer
+uses non-modal semantics, and the page has no horizontal overflow. This is
+controlled-fixture evidence, not real-host evidence.
 
 ## Remaining delivery
 

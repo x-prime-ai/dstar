@@ -57,12 +57,14 @@ storage and deployment effort. Choose the embedding mechanism from that evidence
 before publishing an independent overlay package. An in-repository controlled
 agent or compile-checked example cannot satisfy this milestone.
 
-Current batch plan: document and exercise the smallest existing Viewer mount
-contract, including base-path routing, host identity handoff, readiness and the
-optional invocation callback. This lowers adapter work but does not change the
-milestone status until a selected real host supplies the exit evidence above.
+Repository readiness delivered: the existing Viewer mount contract now includes
+base-path-safe health/readiness and host-facing integration guidance. The
+optional invocation callback and identity/origin boundaries are documented and
+tested with controlled fixtures. This lowers adapter work but does not change
+the milestone status until a selected real host supplies the exit evidence
+above.
 
-### 4. Deepen comment-to-change inspection
+### 4. Deepen comment-to-change inspection — repository slice implemented
 
 The first navigation slice is implemented. Continue only from observed review
 friction:
@@ -72,11 +74,13 @@ friction:
   proof; and
 - validate narrow screens and keyboard movement in the real-host scenario.
 
-Current batch plan: improve the fallback explanation and navigation for missing
-anchors, CSS/layout changes and assets; make Before / After state and local
-change destinations explicit; then run browser checks at desktop and 390 px
-with keyboard-only traversal. These are repository-level usability findings
-until repeated in the selected real host.
+Current repository evidence: missing/ambiguous anchors, CSS/layout changes,
+assets and generic fallbacks now have explicit, non-semantic navigation;
+Before/After and changed-file focus are keyboard-operable; and controlled
+browser checks passed at desktop and 390 px. Unlocated discussions remain
+inspectable without being submitted as uninterpretable revision feedback.
+These remain repository-level usability findings until repeated in the selected
+real host.
 
 Exit evidence: reviewers can connect the three comments, changes, decision and
 remaining discussion without source inspection. Acceptance and resolution stay
