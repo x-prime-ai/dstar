@@ -53,6 +53,22 @@ const exactBody = (body, keys) => {
   )
     throw new Error("Unknown or missing request fields");
 };
+const safeRouteError = (error) => {
+  const known = {
+    forbidden: "This session is not allowed to perform that action.",
+    not_found: "The configured host agent or revision request was not found.",
+    attempt_conflict:
+      "A revision request attempt is already active or has been superseded.",
+  };
+  if (
+    error?.code in known &&
+    Number.isInteger(error?.status) &&
+    error.status >= 400 &&
+    error.status < 500
+  )
+    return { status: error.status, code: error.code, error: known[error.code] };
+  return documentErrorResult(error);
+};
 export async function startViewer(root, port = 0, options = {}) {
   const configuredInvocation =
     options && typeof options === "object" && !Array.isArray(options)
@@ -137,12 +153,20 @@ export async function startViewer(root, port = 0, options = {}) {
       // A newer attempt or returned proposal owns the durable request now.
     }
   };
+  const discardHandoff = (id, expire = false) => {
+    const handoff = handoffs.get(id);
+    if (!handoff) return null;
+    handoffs.delete(id);
+    if (handoff.expirationTimer)
+      globalThis.clearTimeout(handoff.expirationTimer);
+    if (expire) expireRevisionHandoff(handoff);
+    return handoff;
+  };
   const getHandoff = (id) => {
     const handoff = handoffs.get(id);
     if (!handoff) return null;
     if (handoff.expiresAt <= Date.now()) {
-      handoffs.delete(id);
-      expireRevisionHandoff(handoff);
+      discardHandoff(id, true);
       return null;
     }
     return handoff;
@@ -532,7 +556,7 @@ export async function startViewer(root, port = 0, options = {}) {
               request.attemptId !== scoped.handoff.context.action.attemptId ||
               current.revision !== request.base))
         ) {
-          handoffs.delete(scoped.id);
+          discardHandoff(scoped.id);
           if (batch && request?.status === "submitted") {
             try {
               engine.updateRevisionRequest(request.id, {
@@ -749,60 +773,74 @@ export async function startViewer(root, port = 0, options = {}) {
           throw new Error("Agent handoff credential must be unique");
         const existing = getHandoff(body.id);
         if (existing) throw new Error("Agent handoff already exists");
-        let validated = validateHandoffContext(body.context);
-        if (validated.context.action.kind === "revision-request") {
-          requireCapability(principal, CAPABILITIES.REQUEST);
-          const existingRequest = engine
-            .snapshot()
-            .state.revisionRequests.find(
-              (entry) => entry.id === validated.context.action.requestId,
+        try {
+          let validated = validateHandoffContext(body.context);
+          if (validated.context.action.kind === "revision-request") {
+            requireCapability(principal, CAPABILITIES.REQUEST);
+            const existingRequest = engine
+              .snapshot()
+              .state.revisionRequests.find(
+                (entry) => entry.id === validated.context.action.requestId,
+              );
+            if (
+              existingRequest?.attemptId !== undefined &&
+              existingRequest.attemptId !==
+                validated.context.action.attemptId &&
+              ["submitted", "running"].includes(existingRequest.status)
+            )
+              throw Object.assign(
+                new Error("A revision request attempt is already active"),
+                { status: 409, code: "attempt_conflict" },
+              );
+            const request = engine.updateRevisionRequest(
+              validated.context.action.requestId,
+              {
+                status: "submitted",
+                attemptId: validated.context.action.attemptId,
+              },
             );
-          if (
-            existingRequest?.attemptId !== undefined &&
-            existingRequest.attemptId !== validated.context.action.attemptId &&
-            ["submitted", "running"].includes(existingRequest.status)
-          )
-            throw Object.assign(
-              new Error("A revision request attempt is already active"),
-              { status: 409, code: "attempt_conflict" },
-            );
-          const request = engine.updateRevisionRequest(
-            validated.context.action.requestId,
-            {
-              status: "submitted",
-              attemptId: validated.context.action.attemptId,
-            },
-          );
-          const refreshed = engine.snapshot();
-          validated = {
-            ...validated,
-            stateId: refreshed.stateId,
-            headRevision: request.base,
-          };
-        }
-        const action = validated.context.action,
-          record = {
-            ...validated,
-            draft: null,
-            replyDraft: null,
-            expiresAt: Date.now() + HANDOFF_TTL,
-            accessToken: body.accessToken,
-            creator: principal.identity,
-            principal: handoffPrincipal(
-              principal,
-              action.kind === "address-comment"
-                ? [CAPABILITIES.READ, CAPABILITIES.REPLY, CAPABILITIES.PROPOSE]
-                : action.kind === "revision-request"
-                  ? [CAPABILITIES.READ, CAPABILITIES.PROPOSE]
-                  : [
+            const refreshed = engine.snapshot();
+            validated = {
+              ...validated,
+              stateId: refreshed.stateId,
+              headRevision: request.base,
+            };
+          }
+          const action = validated.context.action,
+            record = {
+              ...validated,
+              draft: null,
+              replyDraft: null,
+              expiresAt: Date.now() + HANDOFF_TTL,
+              accessToken: body.accessToken,
+              creator: principal.identity,
+              principal: handoffPrincipal(
+                principal,
+                action.kind === "address-comment"
+                  ? [
                       CAPABILITIES.READ,
-                      CAPABILITIES.COMMENT,
-                      CAPABILITIES.HANDOFF,
-                    ],
-            ),
-          };
-        handoffs.set(body.id, record);
-        return json(201, publicHandoff(record));
+                      CAPABILITIES.REPLY,
+                      CAPABILITIES.PROPOSE,
+                    ]
+                  : action.kind === "revision-request"
+                    ? [CAPABILITIES.READ, CAPABILITIES.PROPOSE]
+                    : [
+                        CAPABILITIES.READ,
+                        CAPABILITIES.COMMENT,
+                        CAPABILITIES.HANDOFF,
+                      ],
+              ),
+            };
+          handoffs.set(body.id, record);
+          record.expirationTimer = globalThis.setTimeout(() => {
+            discardHandoff(body.id, true);
+          }, HANDOFF_TTL);
+          record.expirationTimer.unref?.();
+          return json(201, publicHandoff(record));
+        } catch (error) {
+          const { status, ...result } = safeRouteError(error);
+          return json(status, result);
+        }
       }
       const handoffDraft = /^\/api\/handoffs\/([a-f0-9-]{36})\/draft$/.exec(
         path,
@@ -865,8 +903,7 @@ export async function startViewer(root, port = 0, options = {}) {
           JSON.stringify(record.creator) !== JSON.stringify(principal.identity)
         )
           return json(403, { error: "Only the handoff creator can revoke it" });
-        handoffs.delete(revoke[1]);
-        expireRevisionHandoff(record);
+        discardHandoff(revoke[1], true);
         return json(200, { revoked: true });
       }
       const invocation = new RegExp(
@@ -875,8 +912,13 @@ export async function startViewer(root, port = 0, options = {}) {
       if (invocation) {
         exactBody(body, ["attemptId"]);
         if (!uuid(body.attemptId)) throw new Error("Invalid attempt ID");
-        const result = startHostInvocation(invocation[1], body.attemptId);
-        return json(result.status, result.body);
+        try {
+          const result = startHostInvocation(invocation[1], body.attemptId);
+          return json(result.status, result.body);
+        } catch (error) {
+          const { status, ...result } = safeRouteError(error);
+          return json(status, result);
+        }
       }
       const comment = new RegExp(
         `^${documentBase}/comments/([a-f0-9-]{36})/(replies|resolve)$`,
@@ -932,7 +974,7 @@ export async function startViewer(root, port = 0, options = {}) {
   });
   server.once("close", () => {
     capabilities.clear();
-    handoffs.clear();
+    for (const id of handoffs.keys()) discardHandoff(id);
     for (const invocation of activeInvocations.values())
       invocation.interrupted = true;
     for (const invocation of activeInvocations.values())

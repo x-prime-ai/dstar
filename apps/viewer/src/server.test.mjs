@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   mkdtempSync,
   mkdirSync,
@@ -1907,6 +1907,85 @@ it("allows identical retries after a busy Engine without leaking the lock path",
   expect((await propose("busy-retry")).proposal.status).toBe("pending");
 });
 
+it("does not leak a package path when batch execution meets a busy Engine", async () => {
+  const { root, engine, proposal } = fixture();
+  engine.decide(
+    proposal.id,
+    "accept",
+    proposal.revision,
+    engine.snapshot().stateId,
+    "owner",
+  );
+  const request = engine.createRevisionRequest({
+      base: proposal.revision,
+      instruction: "Revise without exposing host details.",
+      requester: "owner",
+      key: "busy-batch-request",
+    }),
+    viewer = await start(root, 0, {
+      agentInvocation: {
+        identity: {
+          id: "test-agent",
+          displayName: "Controlled Test Agent",
+          role: "agent",
+        },
+        async invoke() {
+          throw new Error("The busy request must not invoke the test agent");
+        },
+      },
+    }),
+    headers = {
+      Authorization: `Bearer ${new URL(viewer.ownerUrl).hash.slice(1)}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    post = (path, body) =>
+      wire(viewer, path, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      }),
+    lock = join(root, ".dstar/write.lock"),
+    invocationAttempt = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  writeFileSync(lock, "test-only lock");
+  try {
+    const invoked = await post(
+      documentApi(viewer, `revision-requests/${request.id}/invoke`),
+      { attemptId: invocationAttempt },
+    );
+    expect(invoked.status).toBe(409);
+    expect(invoked.json().code).toBe("busy");
+    expect(invoked.text).not.toContain(root);
+    expect(invoked.text).not.toContain("write.lock");
+
+    const handoffAttempt = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      handoff = await post("/api/handoffs", {
+        id: handoffAttempt,
+        accessToken: "s".repeat(64),
+        context: {
+          review: null,
+          selection: null,
+          focusedCommentId: null,
+          action: {
+            kind: "revision-request",
+            requestId: request.id,
+            attemptId: handoffAttempt,
+          },
+        },
+      });
+    expect(handoff.status).toBe(409);
+    expect(handoff.json().code).toBe("busy");
+    expect(handoff.text).not.toContain(root);
+    expect(handoff.text).not.toContain("write.lock");
+  } finally {
+    rmSync(lock);
+  }
+  expect(engine.snapshot().state.revisionRequests[0]).toMatchObject({
+    status: "submitted",
+    attempt: 0,
+  });
+});
+
 it("keeps document API routes inside configured authority and persists retries across restart", async () => {
   const { root, temp, engine, proposal } = fixture();
   const token = "integration-test-credential-" + "x".repeat(48);
@@ -2178,6 +2257,99 @@ it("persists an Owner batch request and scopes its external handoff to one attem
   expect(
     engine.snapshot().state.comments.every((c) => c.status === "open"),
   ).toBe(true);
+});
+
+it("expires an abandoned external batch handoff without requiring another handoff read", async () => {
+  const { root, engine, proposal } = fixture(),
+    ownerToken = "o".repeat(64),
+    viewer = await start(root, 0, { ownerToken }),
+    headers = {
+      Authorization: `Bearer ${ownerToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    post = (path, body) =>
+      wire(viewer, path, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+  await post(documentApi(viewer, `proposals/${proposal.id}/accept`), {
+    revision: proposal.revision,
+    stateId: engine.snapshot().stateId,
+  });
+  const created = (
+      await post(documentApi(viewer, "revision-requests"), {
+        base: proposal.revision,
+        instruction: "Tighten the opening.",
+        commentIds: [],
+        key: "abandoned-external-request",
+      })
+    ).json().revisionRequest,
+    originalSetTimeout = globalThis.setTimeout;
+  let expire;
+  const timer = vi
+    .spyOn(globalThis, "setTimeout")
+    .mockImplementation((callback, timeout, ...args) => {
+      if (timeout === 15 * 60 * 1000) expire = () => callback(...args);
+      return originalSetTimeout(callback, timeout, ...args);
+    });
+  const firstAttempt = "88888888-8888-4888-8888-888888888888";
+  try {
+    expect(
+      (
+        await post("/api/handoffs", {
+          id: firstAttempt,
+          accessToken: "s".repeat(64),
+          context: {
+            review: null,
+            selection: null,
+            focusedCommentId: null,
+            action: {
+              kind: "revision-request",
+              requestId: created.id,
+              attemptId: firstAttempt,
+            },
+          },
+        })
+      ).status,
+    ).toBe(201);
+  } finally {
+    timer.mockRestore();
+  }
+  expect(expire).toBeTypeOf("function");
+  expire();
+  expect(engine.snapshot().state.revisionRequests[0]).toMatchObject({
+    status: "expired",
+    attempt: 1,
+    attemptId: firstAttempt,
+    error: "external_handoff_expired",
+  });
+
+  const retryAttempt = "99999999-9999-4999-8999-999999999999";
+  expect(
+    (
+      await post("/api/handoffs", {
+        id: retryAttempt,
+        accessToken: "t".repeat(64),
+        context: {
+          review: null,
+          selection: null,
+          focusedCommentId: null,
+          action: {
+            kind: "revision-request",
+            requestId: created.id,
+            attemptId: retryAttempt,
+          },
+        },
+      })
+    ).status,
+  ).toBe(201);
+  expect(engine.snapshot().state.revisionRequests[0]).toMatchObject({
+    status: "submitted",
+    attempt: 2,
+    attemptId: retryAttempt,
+  });
 });
 
 it("runs the optional trusted-host hook in durable attempts with timeout and retry", async () => {
