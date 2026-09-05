@@ -50,6 +50,32 @@ separate package or service. Both surfaces call the same Core API.
    stronger host-owned session adapter.
 7. Back up and restore the complete package while all writers are stopped.
 
+## Smallest working Viewer mount
+
+A host can mount the complete review surface without adopting a UI component
+or exposing package paths:
+
+1. Select one absolute, persistent package root in trusted server
+   configuration; never derive it from the browser request.
+2. Start one Viewer for that package with an exact `externalOrigin` and
+   canonical `basePath`, for example `/documents/quarterly-review`.
+3. Issue separate 48–256 character Owner and Reviewer bearer credentials from
+   host-owned secret storage. The built-in adapter maps them to fixed host
+   identities; a custom identity model belongs above Core.
+4. Reverse-proxy the complete base path without rewriting it. Preserve the
+   public Host and Origin, strip forwarding headers, and check
+   `<basePath>/healthz` with the same Host authority.
+5. Optionally provide one trusted `agentInvocation` callback. It receives only
+   the durable request and exact encoded base files, and returns a complete
+   candidate. Keep provider credentials and operation recovery in the host.
+6. Privately deliver the fragment-bearing access URL. Never log `ownerUrl`,
+   `reviewerUrl`, handoff URLs or preview capabilities.
+
+The returned `baseUrl`, `healthUrl` and `documentId` let the host wire routing
+and monitoring without parsing private access URLs. This mount contract uses
+the existing reference Viewer at the host's origin; it is not an iframe/overlay
+SDK and does not satisfy the real-host milestone by itself.
+
 The runnable container, environment contract, proxy rules and backup checklist
 are in the [self-hosting guide](../deploy/viewer/README.md). The
 [`@dstar/core` SDK guide](../packages/core/README.md) covers custom servers, and

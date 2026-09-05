@@ -444,6 +444,8 @@ export async function startViewer(root, port = 0, options = {}) {
       const path = config.basePath
         ? url.pathname.slice(config.basePath.length)
         : url.pathname;
+      if (req.method === "GET" && path === "/healthz")
+        return json(200, { status: "ready" });
       if (
         req.method === "GET" &&
         [
@@ -987,6 +989,7 @@ export async function startViewer(root, port = 0, options = {}) {
   });
   origin = viewerOrigin(config, server.address().port);
   const baseUrl = `${origin}${config.basePath}`,
+    healthUrl = `${baseUrl}/healthz`,
     ownerUrl = `${baseUrl}/#${config.ownerToken}`,
     reviewerUrl = config.reviewerToken
       ? `${baseUrl}/#${config.reviewerToken}`
@@ -995,6 +998,7 @@ export async function startViewer(root, port = 0, options = {}) {
     server,
     origin,
     baseUrl,
+    healthUrl,
     documentId,
     ownerUrl,
     ...(reviewerUrl ? { reviewerUrl } : {}),

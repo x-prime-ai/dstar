@@ -203,7 +203,12 @@ export function commentAppliesToVersion(
   anchors,
 ) {
   const resolution = anchors?.[comment.id];
-  if (!["exact", "recovered"].includes(resolution?.status)) return false;
+  if (
+    !["exact", "recovered", "ambiguous", "orphaned"].includes(
+      resolution?.status,
+    )
+  )
+    return false;
   const origins = new Set(
       proposals
         .filter((proposal) => proposal.revision === comment.target.revision)

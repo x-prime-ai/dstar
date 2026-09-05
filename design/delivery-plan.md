@@ -5,6 +5,31 @@ This status applies to roadmap milestones 1 and 2 only. Verification uses real
 Core persistence, loopback Viewer HTTP and a controlled test agent; it does not
 claim a real model provider, production host deployment or completed milestone 3.
 
+## Current delivery batch: embedding readiness and inspection
+
+Status: repository scope implemented, verified and independently reviewed,
+2026-09-04. This batch begins from integrated commit `d8c99b5`. It does not
+reopen the completed request lifecycle or host-agent callback work, and it does
+not claim the real-host exit evidence required by milestone 3.
+
+The independently executable DSTAR scope is:
+
+- turn the existing `basePath` support into a smallest-working mount contract
+  with a host-facing health/readiness check and an integration checklist;
+- reduce Before / After and comment-to-change review friction, especially when
+  an anchor is missing or the only observable changes are CSS/layout or assets;
+- verify the same tasks with keyboard-only operation and at a 390 px viewport;
+  and
+- keep exact revision, request-attempt, Owner-decision, comment-resolution and
+  iframe isolation boundaries unchanged.
+
+A read-only xPrime inspection may inform a minimal real-host adapter plan. It
+does not authorize changes to xPrime, use of its existing user data, or a live
+provider call. Milestone 3 remains incomplete unless a selected real host runs
+two rounds at its own origin with host-owned identity, data and provider
+execution. Repository fixtures, controlled callbacks and mount examples remain
+embedding-readiness evidence only.
+
 ## Delivered scope
 
 - A durable `RevisionRequest` collection in `records-v1`, including exact base,
@@ -46,6 +71,14 @@ Repository test success is sufficient to mark this implementation delivery
 verified. It is not sufficient to claim real provider behavior, billing
 deduplication, production process recovery, native browser/provider integration,
 container/TLS deployment or real-host embedding.
+
+For the embedding-readiness and inspection batch, the final repository suite
+passed with 73 Core, 181 Viewer, 1 MCP, 2 example-library, 11 workspace and 1
+TypeScript-host test. A fresh Chromium session at 390×844 independently
+confirmed that ambiguous and orphaned threads remain visible and focusable,
+only exact/recovered feedback can enter a revision request, the narrow drawer
+uses non-modal semantics, and the page has no horizontal overflow. This is
+controlled-fixture evidence, not real-host evidence.
 
 ## Remaining delivery
 

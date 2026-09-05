@@ -51,6 +51,7 @@ const viewer = await startViewer("/srv/dstar/brief.dstar", 3000, {
 
 console.log(viewer.origin);
 console.log(viewer.baseUrl);
+console.log(viewer.healthUrl);
 console.log(viewer.documentId);
 // Never log ownerUrl or reviewerUrl.
 ```
@@ -62,6 +63,7 @@ type StartedViewer = {
   server: import("node:http").Server;
   origin: string;
   baseUrl: string;
+  healthUrl: string;
   documentId: string;
   ownerUrl: string;
   reviewerUrl?: string;
@@ -78,6 +80,12 @@ backups and monitoring.
 Run one Viewer process per package. For a path-mounted instance, provide
 `basePath`; for stronger browser isolation, prefer a distinct origin per
 package. Never let a request choose `packageRoot`.
+
+The credential-free `GET <basePath>/healthz` readiness route returns only
+`{"status":"ready"}` after the package has opened and the listener is bound.
+It contains no document or identity metadata. Configure the health checker with
+the same public Host authority as `externalOrigin`; forwarded headers and a
+different Host are rejected like every other Viewer request.
 
 `agentInvocation` is optional and trusted-host-only. Viewer supplies the
 durable revision request plus the exact base files, and the callback returns one

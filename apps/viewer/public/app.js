@@ -23,6 +23,7 @@ import {
 import {
   feedbackDrift,
   proposalChangeDestination,
+  requestableRevisionComments,
   revisionComposerState,
   revisionRequestStatus,
 } from "./review-rounds.js";
@@ -375,9 +376,15 @@ function setPanel(panel, open, focus = false) {
     $(tab).tabIndex = id === panel ? 0 : -1;
   }
   $("selection-actions").hidden = true;
+  updateResponsivePanel();
   if (focus)
     $(panel === "comments-panel" ? "tab-comments" : "tab-versions").focus();
   sendAnnotations();
+}
+function updateResponsivePanel() {
+  const sidebar = $("review-sidebar"),
+    overlay = document.documentElement.clientWidth <= 1100 && !sidebar.hidden;
+  document.querySelector(".workspace").inert = overlay;
 }
 for (const [panel, tab] of [
   ["comments-panel", "tab-comments"],
@@ -646,6 +653,7 @@ $("delete-suggestion").onclick = () => {
 };
 addEventListener("resize", () => {
   $("selection-actions").hidden = true;
+  updateResponsivePanel();
 });
 addEventListener(
   "scroll",
@@ -745,6 +753,9 @@ async function select(id, { keepPreview = false, focusCommentId = null } = {}) {
   $("before-after").hidden = !reviewing || !selected?.parent;
   $("show-before").setAttribute("aria-pressed", String(showingBase));
   $("show-after").setAttribute("aria-pressed", String(!showingBase));
+  $("preview").title = reviewing
+    ? `${showingBase ? "Before" : "After"}: ${current.title}`
+    : `Document: ${current.title}`;
   $("version-detail").hidden = !selected;
   $("accept").disabled = !canAccept();
   $("stale").hidden =
@@ -773,6 +784,9 @@ async function select(id, { keepPreview = false, focusCommentId = null } = {}) {
         : null;
     $("version-change-scope").hidden = !destination;
     $("version-change-scope").textContent = destination?.message ?? "";
+    $("inspect-changes-label").textContent = destination
+      ? "View linked changes"
+      : "View changes";
     const bytes = selected.changes.reduce(
         (sum, c) => sum + (c.storage?.size ?? 0),
         0,
@@ -834,12 +848,23 @@ $("inspect-changes").onclick = () => {
     destination = comment
       ? proposalChangeDestination(selected, comment)
       : { path: selected?.diff.files[0]?.path };
+  if (destination.path) diffFile = destination.path;
   setView("changes");
-  if (destination.path && destination.path !== diffFile)
-    loadDiffFile(destination.path);
+  if (destination.path)
+    loadDiffFile(destination.path, Boolean(destination.element));
   if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
+  $("diff-title").focus({ preventScroll: true });
 };
-$("close-changes").onclick = () => setView("preview");
+$("close-changes").onclick = () => {
+  setView("preview");
+  $(
+    document.documentElement.clientWidth <= 760
+      ? showingBase
+        ? "show-before"
+        : "show-after"
+      : "inspect-changes",
+  ).focus();
+};
 function diffOverview() {
   if (!selected) return;
   $("diff-title").textContent = selected.request;
@@ -848,6 +873,15 @@ function diffOverview() {
       ? "Before → After"
       : "Changes introduced in this version";
   $("diff-revisions").textContent = technicalVersion(selected);
+  const comment = changeFocusCommentId
+      ? current?.state.comments.find(
+          (entry) => entry.id === changeFocusCommentId,
+        )
+      : null,
+    destination = comment ? proposalChangeDestination(selected, comment) : null;
+  $("diff-context").hidden = !destination;
+  $("diff-context").textContent = destination?.message ?? "";
+  $("diff-preview-actions").hidden = !selected.parent;
   $("diff-stats").replaceChildren();
   for (const [kind, label] of [
     ["added", "added"],
@@ -874,13 +908,29 @@ function diffOverview() {
     ),
   );
   $("diff-warnings").replaceChildren();
-  if (selected.diff.anchorRisks.length)
-    $("diff-warnings").append(
-      el(
-        "p",
-        `${selected.diff.anchorRisks.length} comment locations may be affected. Check Comments before accepting.`,
+  if (selected.diff.anchorRisks.length) {
+    const warning = el("p");
+    warning.append(
+      document.createTextNode(
+        `${selected.diff.anchorRisks.length} comment locations may be affected. `,
       ),
     );
+    const review = el("button", "Review affected comments");
+    review.onclick = () => {
+      const commentId = selected.diff.anchorRisks[0]?.comment,
+        comment = current?.state.comments.find(
+          (entry) => entry.id === commentId,
+        );
+      if (comment && comment.status !== commentFilter) {
+        commentFilter = comment.status;
+        comments();
+      }
+      if (!focusThreadInPanel(commentId))
+        note("The affected discussion is not part of this version.");
+    };
+    warning.append(review, document.createTextNode("."));
+    $("diff-warnings").append(warning);
+  }
   if (selected.diff.rewriteRatio > 0)
     $("diff-warnings").append(
       el(
@@ -903,10 +953,36 @@ function diffOverview() {
     button.setAttribute("aria-pressed", String(file.path === diffFile));
     button.dataset.diffFile = file.path;
     button.onclick = () => loadDiffFile(file.path);
+    button.onkeydown = (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+        return;
+      event.preventDefault();
+      const buttons = [...$("diff-files").querySelectorAll("button")],
+        position = buttons.indexOf(button),
+        next =
+          event.key === "Home"
+            ? buttons[0]
+            : event.key === "End"
+              ? buttons.at(-1)
+              : buttons[
+                  (position +
+                    (event.key === "ArrowLeft" ? -1 : 1) +
+                    buttons.length) %
+                    buttons.length
+                ];
+      const nextPath = next?.dataset.diffFile;
+      if (!nextPath) return;
+      safely(async () => {
+        await loadDiffFile(nextPath);
+        [...$("diff-files").querySelectorAll("button")]
+          .find((candidate) => candidate.dataset.diffFile === nextPath)
+          ?.focus();
+      })();
+    };
     $("diff-files").append(button);
   }
 }
-async function loadDiffFile(path) {
+async function loadDiffFile(path, focusTarget = false) {
   const proposal = selected;
   diffController?.abort();
   const serial = ++diffSerial;
@@ -934,7 +1010,18 @@ async function loadDiffFile(path) {
       data.path !== path
     )
       throw new Error("The diff does not match the selected version.");
-    renderFileDiff($("diff"), data);
+    const comment = changeFocusCommentId
+        ? current?.state.comments.find(
+            (entry) => entry.id === changeFocusCommentId,
+          )
+        : null,
+      destination = comment
+        ? proposalChangeDestination(selected, comment)
+        : null;
+    renderFileDiff($("diff"), data, {
+      focusElement: path === "document.html" ? destination?.element : null,
+      focusTarget,
+    });
   } catch (error) {
     if (serial !== diffSerial || selected?.id !== proposal.id) return;
     $("diff").replaceChildren(
@@ -948,6 +1035,15 @@ async function loadDiffFile(path) {
 function located(comment) {
   return ["exact", "recovered"].includes(
     annotations?.anchors[comment.id]?.status,
+  );
+}
+function revisionRequestLocationsReady() {
+  return (
+    annotationState === "ready" &&
+    selected?.id === current?.state.head &&
+    !showingBase &&
+    annotations?.revision === frame?.revision &&
+    annotations?.stateId === current?.stateId
   );
 }
 function sendAnnotations(focus = null) {
@@ -1107,13 +1203,27 @@ function focusComment(id, announce = true) {
   updateReviewFocus();
   sendAnnotations(announce && located(comment) ? activeGroup : null);
   if (announce) {
-    if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
+    if (document.documentElement.clientWidth <= 760) {
+      if (located(comment)) setPanel(activeTab, false);
+      else focusThreadInPanel(comment.id);
+    }
     note(
       located(comment)
         ? "Thread selected in the document."
         : "This thread cannot be located in the open version.",
     );
   }
+}
+function focusThreadInPanel(commentId) {
+  setPanel("comments-panel", true);
+  const thread = document.querySelector(
+    `.comment[data-comment="${commentId}"]`,
+  );
+  if (!thread) return false;
+  thread.closest("details").open = true;
+  thread.focus({ preventScroll: true });
+  thread.scrollIntoView({ block: "nearest" });
+  return true;
 }
 async function openCommentInDocument(id) {
   const comment = current?.state.comments.find((entry) => entry.id === id);
@@ -1133,7 +1243,10 @@ async function openCommentInDocument(id) {
     sendAnnotations(comment.id);
   }
   if (ready && !located(comment)) pendingCommentFocus = null;
-  if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
+  if (document.documentElement.clientWidth <= 760) {
+    if (located(comment)) setPanel(activeTab, false);
+    else focusThreadInPanel(comment.id);
+  }
   note(
     !ready
       ? "Opening thread in the document…"
@@ -1161,6 +1274,38 @@ function messageHeader(actor, createdAt) {
   );
   header.append(el("span", undefined, "message-user-icon"), byline);
   return header;
+}
+function commentLocation(comment) {
+  const status = annotations?.anchors[comment.id]?.status ?? "unavailable",
+    labels = {
+      exact: "Exact location",
+      recovered: "Location recovered",
+      ambiguous: "Location ambiguous",
+      orphaned: "Location not found",
+      unavailable: "Location unavailable",
+    },
+    selector = comment.target.selector,
+    original =
+      selector.type === "text-range"
+        ? selector.exact
+        : selector.type === "text-ranges"
+          ? selector.ranges.map((range) => range.exact).join(" … ")
+          : null;
+  return {
+    status,
+    label: labels[status],
+    message:
+      status === "recovered"
+        ? "The exact quotation moved within its stable element. Check the highlighted recovery before deciding."
+        : status === "ambiguous"
+          ? "The original quotation occurs more than once here, so DSTAR will not choose one location. Create a new comment on current text before adding this feedback to a revision request."
+          : status === "orphaned"
+            ? "The original target is absent from this version. The discussion remains open and attached to its original revision; create a new comment on current text before adding it to a revision request."
+            : status === "unavailable"
+              ? "DSTAR could not read locations for this version. The original discussion remains available."
+              : "",
+    original: original ? [...original].slice(0, 240).join("") : null,
+  };
 }
 function openReplyDraft(comment, body = "") {
   if (replyDraft?.commentId === comment.id) {
@@ -1252,15 +1397,19 @@ function replyComposer(comment) {
 }
 function updateRevisionComposer() {
   if (!current) return;
-  const state = revisionComposerState({
-      comments: current.state.comments,
+  const locationsReady = revisionRequestLocationsReady(),
+    eligibleComments = locationsReady
+      ? requestableRevisionComments(current.state.comments, annotations.anchors)
+      : current.state.comments,
+    state = revisionComposerState({
+      comments: eligibleComments,
       selectedIds: [...selectedRevisionCommentIds],
       instruction: $("revision-instruction").value,
       canCompose: canComposeRevision(),
       submitting: submittingRevisionRequest,
     }),
     summary = $("revision-selection-summary");
-  selectedRevisionCommentIds = new Set(state.commentIds);
+  if (locationsReady) selectedRevisionCommentIds = new Set(state.commentIds);
   $("revision-selection-count").textContent =
     `${state.commentIds.length} ${state.commentIds.length === 1 ? "comment" : "comments"}`;
   summary.replaceChildren();
@@ -1283,14 +1432,18 @@ function updateRevisionComposer() {
     }
     summary.append(list);
   }
-  $("submit-revision-request").disabled = !state.canSubmit;
+  $("submit-revision-request").disabled =
+    !state.canSubmit ||
+    (!locationsReady && selectedRevisionCommentIds.size > 0);
   $("submit-revision-request").textContent = submittingRevisionRequest
     ? "Saving…"
     : "Save revision request";
   $("revision-instruction").disabled = submittingRevisionRequest;
   $("revision-composer-hint").textContent =
-    state.reason ||
-    "The exact accepted version and selected feedback will be frozen before any agent is invoked.";
+    !locationsReady && selectedRevisionCommentIds.size
+      ? "Wait for comment locations before saving this request."
+      : state.reason ||
+        "The exact accepted version and selected feedback will be frozen before any agent is invoked.";
 }
 function requestActionButton(label, fn, className) {
   const button = el("button", label, className);
@@ -1380,6 +1533,7 @@ function renderRevisionRequestCard(request) {
         async () => {
           await select(request.proposalId);
           setPanel("navigation", true);
+          focusVersionButton(request.proposalId);
         },
         "primary",
       ),
@@ -1428,8 +1582,16 @@ $("revision-instruction").oninput = updateRevisionComposer;
 $("revision-request-form").onsubmit = safely(async (event) => {
   event.preventDefault();
   if (!current || submittingRevisionRequest) return;
+  const locationsReady = revisionRequestLocationsReady();
+  if (selectedRevisionCommentIds.size && !locationsReady) {
+    updateRevisionComposer();
+    note("Wait for comment locations before saving this request.");
+    return;
+  }
   const composer = revisionComposerState({
-    comments: current.state.comments,
+    comments: selectedRevisionCommentIds.size
+      ? requestableRevisionComments(current.state.comments, annotations.anchors)
+      : current.state.comments,
     selectedIds: [...selectedRevisionCommentIds],
     instruction: $("revision-instruction").value,
     canCompose: canComposeRevision(),
@@ -1472,7 +1634,8 @@ function commentThread(thread, expanded = false) {
   const c = thread.comment,
     card = el("details", undefined, "comment-thread"),
     article = el("article", undefined, "comment"),
-    commentActor = actorCopy(c.author);
+    commentActor = actorCopy(c.author),
+    location = commentLocation(c);
   card.dataset.thread = c.id;
   card.open = expanded;
   card.classList.toggle("active", c.id === activeCommentId);
@@ -1484,13 +1647,17 @@ function commentThread(thread, expanded = false) {
       c.status === "open" ? "Open" : "Resolved",
       `thread-status ${c.status}`,
     ),
+    ...(location.status !== "exact"
+      ? [el("span", location.label, `thread-location ${location.status}`)]
+      : []),
     el("span", "⌄", "thread-chevron"),
   );
   if (
     c.status === "open" &&
     canComposeRevision() &&
     selected?.id === current.state.head &&
-    !showingBase
+    !showingBase &&
+    ["exact", "recovered"].includes(location.status)
   ) {
     const selectLabel = el("label", undefined, "comment-revision-select"),
       checkbox = el("input");
@@ -1511,7 +1678,7 @@ function commentThread(thread, expanded = false) {
   }
   summary.setAttribute(
     "aria-label",
-    `${c.status === "open" ? "Open" : "Resolved"} comment by ${commentActor.name}, ${commentTime(c.createdAt)}`,
+    `${c.status === "open" ? "Open" : "Resolved"} comment by ${commentActor.name}, ${commentTime(c.createdAt)}${location.status === "exact" ? "" : `, ${location.label}`}`,
   );
   summary.onclick = (event) => {
     event.preventDefault();
@@ -1532,7 +1699,7 @@ function commentThread(thread, expanded = false) {
   article.setAttribute("aria-current", String(c.id === activeCommentId));
   article.setAttribute(
     "aria-label",
-    `${c.status === "open" ? "Open" : "Resolved"} thread by ${commentActor.name}: ${c.body.slice(0, 160)}`,
+    `${c.status === "open" ? "Open" : "Resolved"} thread by ${commentActor.name}${location.status === "exact" ? "" : `, ${location.label}`}: ${c.body.slice(0, 160)}`,
   );
   const agentState = commentAgentStates.get(c.id) ?? "idle";
   article.dataset.agentState = agentState;
@@ -1549,6 +1716,26 @@ function commentThread(thread, expanded = false) {
     event.preventDefault();
     safely(() => openCommentInDocument(c.id))();
   };
+  if (location.status !== "exact") {
+    const notice = el(
+      "section",
+      undefined,
+      `comment-location ${location.status}`,
+    );
+    notice.append(el("strong", location.label), el("p", location.message));
+    if (location.original)
+      notice.append(
+        el("blockquote", `Original selection: “${location.original}”`),
+      );
+    else
+      notice.append(
+        el(
+          "small",
+          "The original whole-element target is retained in review history.",
+        ),
+      );
+    article.append(notice);
+  }
   article.append(el("p", c.body));
   for (const r of c.replies) {
     const reply = el("div", undefined, "reply"),
@@ -1570,6 +1757,7 @@ function commentThread(thread, expanded = false) {
       link.onclick = safely(async () => {
         await select(proposal.id, { focusCommentId: c.id });
         setPanel("navigation", true);
+        focusVersionButton(proposal.id);
       });
       links.append(link);
     }
@@ -1716,6 +1904,11 @@ function versionTime(value) {
       date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
   }).format(date);
 }
+function focusVersionButton(proposalId) {
+  document
+    .querySelector(`[data-proposal="${proposalId}"]`)
+    ?.focus({ preventScroll: true });
+}
 function versionButton(proposal) {
   const button = el("button"),
     actor = actorCopy(proposal.author),
@@ -1801,11 +1994,29 @@ async function showComparison(before) {
   showingBase = before && !!selected.parent;
   $("show-before").setAttribute("aria-pressed", String(showingBase));
   $("show-after").setAttribute("aria-pressed", String(!showingBase));
+  $("preview").title = `${showingBase ? "Before" : "After"}: ${current.title}`;
   $("accept").disabled = !canAccept();
   await preview(showingBase ? selected.parent : selected.id);
 }
 $("show-before").onclick = safely(() => showComparison(true));
 $("show-after").onclick = safely(() => showComparison(false));
+for (const id of ["show-before", "show-after"])
+  $(id).onkeydown = (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const nextBefore = ["ArrowLeft", "Home"].includes(event.key);
+    safely(async () => {
+      await showComparison(nextBefore);
+      $(nextBefore ? "show-before" : "show-after").focus();
+    })();
+  };
+async function openFullComparison(before) {
+  await showComparison(before);
+  setView("preview");
+  $(before ? "show-before" : "show-after").focus();
+}
+$("open-before-preview").onclick = safely(() => openFullComparison(true));
+$("open-after-preview").onclick = safely(() => openFullComparison(false));
 $("exit-review").onclick = safely(async () => {
   if (!current?.state.head) return;
   setView("preview");

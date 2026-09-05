@@ -204,7 +204,13 @@ it("shows comments only on their version or a located descendant", () => {
     commentAppliesToVersion(old, proposals, "v2", {
       old: { status: "orphaned" },
     }),
-  ).toBe(false);
+  ).toBe(true);
+  expect(
+    commentAppliesToVersion(old, proposals, "v2", {
+      old: { status: "ambiguous" },
+    }),
+  ).toBe(true);
+  expect(commentAppliesToVersion(old, proposals, "v2", {})).toBe(false);
 });
 
 it("accepts annotation navigation only from the ready exact preview", () => {

@@ -413,7 +413,18 @@ export function reviewDiff(
       ? validateHtml(before).elements
       : Object.create(null),
     right = validateHtml(after).elements;
-  const elements: ReviewDiff["elements"] = [];
+  const commentTargets = new Set(
+      comments
+        .filter((comment) => comment.status === "open")
+        .flatMap((comment) => [
+          comment.target.element,
+          ...(comment.target.selector.type === "text-ranges"
+            ? comment.target.selector.ranges.map((range) => range.element)
+            : []),
+        ]),
+    ),
+    targetedElements: ReviewDiff["elements"] = [],
+    otherElements: ReviewDiff["elements"] = [];
   let elementChangeCount = 0;
   const preview = (e: ElementInfo | null) =>
     e
@@ -442,10 +453,15 @@ export function reviewDiff(
     }
     if (changes.length) {
       elementChangeCount++;
-      if (elements.length < 200)
-        elements.push({ id, changes, before: preview(a), after: preview(b) });
+      const bucket = commentTargets.has(id) ? targetedElements : otherElements;
+      if (bucket.length < 200)
+        bucket.push({ id, changes, before: preview(a), after: preview(b) });
     }
   }
+  // Keep comment targets inspectable even when a large document has more than
+  // the bounded 200 element summaries. This is navigation evidence only; the
+  // motivation link still does not prove that a change satisfied a comment.
+  const elements = [...targetedElements, ...otherElements].slice(0, 200);
   const paths = new Set([...before.keys(), ...after.keys()]);
   const files: ReviewDiff["files"] = [];
   for (const path of [...paths].sort()) {

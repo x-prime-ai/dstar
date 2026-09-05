@@ -12,7 +12,7 @@ import {
   revision,
 } from "./delta.js";
 import { readCandidate, Repository } from "./repository.js";
-import { resolveTarget, validateHtml } from "./html.js";
+import { resolveTarget, reviewDiff, validateHtml } from "./html.js";
 import type { Proposal, Target } from "./types.js";
 
 const temporary: string[] = [];
@@ -396,6 +396,50 @@ describe("canonical HTML workflow", () => {
     expect(f.repo.snapshot().state.comments[0]?.status).toBe("open");
     f.repo.resolveComment(c.id, f.repo.snapshot().stateId);
     expect(f.repo.snapshot().state.comments[0]?.target).toEqual(target);
+  });
+  it("keeps a changed comment target in the bounded element summary", () => {
+    const beforeBody = Array.from(
+        { length: 205 },
+        (_, i) => `<p data-dstar-id="item-${i}">Before ${i}</p>`,
+      ).join(""),
+      afterBody = Array.from(
+        { length: 205 },
+        (_, i) => `<p data-dstar-id="item-${i}">After ${i}</p>`,
+      ).join(""),
+      before = new Map([
+        [
+          "document.html",
+          Buffer.from(
+            `<!doctype html><html><head><title>Before</title></head><body>${beforeBody}</body></html>`,
+          ),
+        ],
+      ]),
+      after = new Map([
+        [
+          "document.html",
+          Buffer.from(
+            `<!doctype html><html><head><title>After</title></head><body>${afterBody}</body></html>`,
+          ),
+        ],
+      ]),
+      diff = reviewDiff(before, after, [
+        {
+          id: "comment-late",
+          target: {
+            revision: `sha256:${"a".repeat(64)}`,
+            element: "item-204",
+            selector: { type: "element" },
+          },
+          body: "Review the last item",
+          author: "human",
+          createdAt: "2026-09-04T00:00:00.000Z",
+          status: "open",
+          replies: [],
+        },
+      ]);
+    expect(diff.elementChangeCount).toBeGreaterThan(200);
+    expect(diff.elements).toHaveLength(200);
+    expect(diff.elements[0]?.id).toBe("item-204");
   });
   it("recovers an interrupted checkout using the authoritative old or new head", () => {
     const f = setup(),
