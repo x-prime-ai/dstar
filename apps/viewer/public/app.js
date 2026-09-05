@@ -983,8 +983,14 @@ function diffOverview() {
                     buttons.length) %
                     buttons.length
                 ];
-      next?.focus();
-      next?.click();
+      const nextPath = next?.dataset.diffFile;
+      if (!nextPath) return;
+      safely(async () => {
+        await loadDiffFile(nextPath);
+        [...$("diff-files").querySelectorAll("button")]
+          .find((candidate) => candidate.dataset.diffFile === nextPath)
+          ?.focus();
+      })();
     };
     $("diff-files").append(button);
   }
