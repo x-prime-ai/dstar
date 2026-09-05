@@ -153,18 +153,85 @@ describe("comment to proposal changes navigation", () => {
     diff: {
       elements: [{ id: "intro" }],
       files: [{ path: "styles.css" }, { path: "document.html" }],
+      anchorRisks: [],
     },
   };
 
   it("prefers document.html when the comment target element changed", () => {
     expect(
       proposalChangeDestination(proposal, { target: { element: "intro" } }),
-    ).toMatchObject({ mapped: true, path: "document.html" });
+    ).toMatchObject({
+      mapped: true,
+      kind: "target-element",
+      path: "document.html",
+      element: "intro",
+      anchorStatus: "exact",
+    });
   });
 
-  it("labels the fallback when no exact local change is established", () => {
+  it("opens CSS with a non-semantic layout explanation when no local element changed", () => {
     expect(
       proposalChangeDestination(proposal, { target: { element: "other" } }),
-    ).toMatchObject({ mapped: false, path: "document.html" });
+    ).toMatchObject({
+      mapped: false,
+      kind: "css-layout",
+      path: "styles.css",
+      element: null,
+    });
+  });
+
+  it.each(["ambiguous", "orphaned"])(
+    "surfaces an %s After anchor before choosing a fallback file",
+    (status) => {
+      const result = proposalChangeDestination(
+        {
+          diff: {
+            ...proposal.diff,
+            anchorRisks: [{ comment: "comment-1", status }],
+          },
+        },
+        { id: "comment-1", target: { element: "other" } },
+      );
+      expect(result).toMatchObject({
+        mapped: false,
+        kind: "unlocated-anchor",
+        path: "document.html",
+        anchorStatus: status,
+      });
+      expect(result.message).toContain("review starting point");
+    },
+  );
+
+  it("labels recovered text while still focusing its changed target element", () => {
+    expect(
+      proposalChangeDestination(
+        {
+          diff: {
+            ...proposal.diff,
+            anchorRisks: [{ comment: "comment-1", status: "recovered" }],
+          },
+        },
+        { id: "comment-1", target: { element: "intro" } },
+      ),
+    ).toMatchObject({
+      mapped: true,
+      element: "intro",
+      anchorStatus: "recovered",
+    });
+  });
+
+  it("uses changed assets before a generic file fallback", () => {
+    expect(
+      proposalChangeDestination(
+        {
+          diff: {
+            elements: [],
+            files: [{ path: "assets/chart.png" }],
+            anchorRisks: [],
+          },
+        },
+        { target: { element: "chart" } },
+      ),
+    ).toMatchObject({ kind: "asset", path: "assets/chart.png" });
   });
 });

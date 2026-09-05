@@ -44,6 +44,8 @@ export interface StartedViewer {
   server: Server;
   origin: string;
   baseUrl: string;
+  /** Credential-free readiness endpoint containing no document metadata. */
+  healthUrl: string;
   documentId: string;
   ownerUrl: string;
   reviewerUrl?: string;

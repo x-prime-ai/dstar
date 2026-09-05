@@ -5,6 +5,30 @@ This status applies to roadmap milestones 1 and 2 only. Verification uses real
 Core persistence, loopback Viewer HTTP and a controlled test agent; it does not
 claim a real model provider, production host deployment or completed milestone 3.
 
+## Current delivery batch: embedding readiness and inspection
+
+Status: in progress, 2026-09-04. This batch begins from integrated commit
+`d8c99b5`. It does not reopen the completed request lifecycle or host-agent
+callback work.
+
+The independently executable DSTAR scope is:
+
+- turn the existing `basePath` support into a smallest-working mount contract
+  with a host-facing health/readiness check and an integration checklist;
+- reduce Before / After and comment-to-change review friction, especially when
+  an anchor is missing or the only observable changes are CSS/layout or assets;
+- verify the same tasks with keyboard-only operation and at a 390 px viewport;
+  and
+- keep exact revision, request-attempt, Owner-decision, comment-resolution and
+  iframe isolation boundaries unchanged.
+
+A read-only xPrime inspection may inform a minimal real-host adapter plan. It
+does not authorize changes to xPrime, use of its existing user data, or a live
+provider call. Milestone 3 remains incomplete unless a selected real host runs
+two rounds at its own origin with host-owned identity, data and provider
+execution. Repository fixtures, controlled callbacks and mount examples remain
+embedding-readiness evidence only.
+
 ## Delivered scope
 
 - A durable `RevisionRequest` collection in `records-v1`, including exact base,

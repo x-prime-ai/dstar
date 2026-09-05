@@ -121,7 +121,7 @@ const labels = {
   "attributes/style": "Style / attributes",
 };
 
-export function renderFileDiff(root, data) {
+export function renderFileDiff(root, data, options = {}) {
   root.replaceChildren();
   const controls = node("div", undefined, "file-diff-toolbar");
   controls.append(node("strong", data.path));
@@ -135,7 +135,8 @@ export function renderFileDiff(root, data) {
   controls.append(switches);
   const body = node("div", undefined, "file-diff-body");
   root.append(controls, body);
-  let fullContext = false;
+  let fullContext = false,
+    focusPending = Boolean(options.focusTarget);
   const show = (mode) => {
     body.replaceChildren();
     content.setAttribute("aria-pressed", String(mode === "content"));
@@ -155,8 +156,24 @@ export function renderFileDiff(root, data) {
             "diff-notice",
           ),
         );
-      for (const change of data.elements) {
+      const changes = options.focusElement
+        ? [
+            ...data.elements.filter(
+              (change) => change.id === options.focusElement,
+            ),
+            ...data.elements.filter(
+              (change) => change.id !== options.focusElement,
+            ),
+          ]
+        : data.elements;
+      for (const change of changes) {
         const card = node("section", undefined, "element-diff");
+        const focused = change.id === options.focusElement;
+        if (focused) {
+          card.classList.add("comment-target-diff");
+          card.tabIndex = -1;
+          card.setAttribute("aria-label", `Linked comment target ${change.id}`);
+        }
         const title = node("div", undefined, "element-diff-heading");
         title.append(
           node("code", change.id),
@@ -165,6 +182,8 @@ export function renderFileDiff(root, data) {
             change.changes.map((kind) => labels[kind] ?? kind).join(" · "),
           ),
         );
+        if (focused)
+          title.append(node("strong", "Linked comment target", "target-badge"));
         const comparison = node("div", undefined, "text-comparison");
         const parts = changedText(
           change.before?.text.trim() ?? "",
@@ -217,13 +236,19 @@ export function renderFileDiff(root, data) {
         card.append(title, comparison);
         body.append(card);
       }
+      if (focusPending) {
+        const target = body.querySelector(".comment-target-diff");
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView({ block: "start" });
+        focusPending = false;
+      }
       return;
     }
     if (!data.isText) {
       body.append(
         node(
           "p",
-          `Binary asset · ${data.before.bytes.toLocaleString()} → ${data.after.bytes.toLocaleString()} bytes. Check Preview to review the visual change.`,
+          `Binary asset · ${data.before.bytes.toLocaleString()} → ${data.after.bytes.toLocaleString()} bytes. The byte change is exact, but its rendered effect is not inferred. Compare the full Before and After previews.`,
           "diff-notice",
         ),
       );
@@ -239,6 +264,14 @@ export function renderFileDiff(root, data) {
       );
       return;
     }
+    if (data.path.endsWith(".css"))
+      body.append(
+        node(
+          "p",
+          "Stylesheet source changes are exact. Their layout and visual effects depend on the authored document and browser, so compare the full Before and After previews.",
+          "diff-guidance",
+        ),
+      );
     const diff = diffLines(data.before.text, data.after.text);
     const sourceSummary = node("div", undefined, "source-summary");
     const added = diff.rows.filter((row) => row.kind === "add").length;

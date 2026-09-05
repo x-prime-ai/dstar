@@ -375,9 +375,22 @@ function setPanel(panel, open, focus = false) {
     $(tab).tabIndex = id === panel ? 0 : -1;
   }
   $("selection-actions").hidden = true;
+  updateResponsivePanel();
   if (focus)
     $(panel === "comments-panel" ? "tab-comments" : "tab-versions").focus();
   sendAnnotations();
+}
+function updateResponsivePanel() {
+  const sidebar = $("review-sidebar"),
+    overlay = document.documentElement.clientWidth <= 1100 && !sidebar.hidden;
+  document.querySelector(".workspace").inert = overlay;
+  if (overlay) {
+    sidebar.setAttribute("role", "dialog");
+    sidebar.setAttribute("aria-modal", "true");
+  } else {
+    sidebar.removeAttribute("role");
+    sidebar.removeAttribute("aria-modal");
+  }
 }
 for (const [panel, tab] of [
   ["comments-panel", "tab-comments"],
@@ -646,6 +659,7 @@ $("delete-suggestion").onclick = () => {
 };
 addEventListener("resize", () => {
   $("selection-actions").hidden = true;
+  updateResponsivePanel();
 });
 addEventListener(
   "scroll",
@@ -745,6 +759,9 @@ async function select(id, { keepPreview = false, focusCommentId = null } = {}) {
   $("before-after").hidden = !reviewing || !selected?.parent;
   $("show-before").setAttribute("aria-pressed", String(showingBase));
   $("show-after").setAttribute("aria-pressed", String(!showingBase));
+  $("preview").title = reviewing
+    ? `${showingBase ? "Before" : "After"}: ${current.title}`
+    : `Document: ${current.title}`;
   $("version-detail").hidden = !selected;
   $("accept").disabled = !canAccept();
   $("stale").hidden =
@@ -773,6 +790,9 @@ async function select(id, { keepPreview = false, focusCommentId = null } = {}) {
         : null;
     $("version-change-scope").hidden = !destination;
     $("version-change-scope").textContent = destination?.message ?? "";
+    $("inspect-changes-label").textContent = destination
+      ? "View linked changes"
+      : "View changes";
     const bytes = selected.changes.reduce(
         (sum, c) => sum + (c.storage?.size ?? 0),
         0,
@@ -834,12 +854,23 @@ $("inspect-changes").onclick = () => {
     destination = comment
       ? proposalChangeDestination(selected, comment)
       : { path: selected?.diff.files[0]?.path };
+  if (destination.path) diffFile = destination.path;
   setView("changes");
-  if (destination.path && destination.path !== diffFile)
-    loadDiffFile(destination.path);
+  if (destination.path)
+    loadDiffFile(destination.path, Boolean(destination.element));
   if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
+  $("diff-title").focus({ preventScroll: true });
 };
-$("close-changes").onclick = () => setView("preview");
+$("close-changes").onclick = () => {
+  setView("preview");
+  $(
+    document.documentElement.clientWidth <= 760
+      ? showingBase
+        ? "show-before"
+        : "show-after"
+      : "inspect-changes",
+  ).focus();
+};
 function diffOverview() {
   if (!selected) return;
   $("diff-title").textContent = selected.request;
@@ -848,6 +879,15 @@ function diffOverview() {
       ? "Before → After"
       : "Changes introduced in this version";
   $("diff-revisions").textContent = technicalVersion(selected);
+  const comment = changeFocusCommentId
+      ? current?.state.comments.find(
+          (entry) => entry.id === changeFocusCommentId,
+        )
+      : null,
+    destination = comment ? proposalChangeDestination(selected, comment) : null;
+  $("diff-context").hidden = !destination;
+  $("diff-context").textContent = destination?.message ?? "";
+  $("diff-preview-actions").hidden = !selected.parent;
   $("diff-stats").replaceChildren();
   for (const [kind, label] of [
     ["added", "added"],
@@ -874,13 +914,36 @@ function diffOverview() {
     ),
   );
   $("diff-warnings").replaceChildren();
-  if (selected.diff.anchorRisks.length)
-    $("diff-warnings").append(
-      el(
-        "p",
-        `${selected.diff.anchorRisks.length} comment locations may be affected. Check Comments before accepting.`,
+  if (selected.diff.anchorRisks.length) {
+    const warning = el("p");
+    warning.append(
+      document.createTextNode(
+        `${selected.diff.anchorRisks.length} comment locations may be affected. `,
       ),
     );
+    const review = el("button", "Review affected comments");
+    review.onclick = () => {
+      const commentId = selected.diff.anchorRisks[0]?.comment,
+        comment = current?.state.comments.find(
+          (entry) => entry.id === commentId,
+        );
+      if (comment && comment.status !== commentFilter) {
+        commentFilter = comment.status;
+        comments();
+      }
+      setPanel("comments-panel", true);
+      const thread = document.querySelector(
+        `.comment[data-comment="${commentId}"]`,
+      );
+      if (thread) {
+        thread.closest("details").open = true;
+        thread.focus({ preventScroll: true });
+        thread.scrollIntoView({ block: "nearest" });
+      } else note("The affected discussion is not part of this version.");
+    };
+    warning.append(review, document.createTextNode("."));
+    $("diff-warnings").append(warning);
+  }
   if (selected.diff.rewriteRatio > 0)
     $("diff-warnings").append(
       el(
@@ -903,10 +966,30 @@ function diffOverview() {
     button.setAttribute("aria-pressed", String(file.path === diffFile));
     button.dataset.diffFile = file.path;
     button.onclick = () => loadDiffFile(file.path);
+    button.onkeydown = (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+        return;
+      event.preventDefault();
+      const buttons = [...$("diff-files").querySelectorAll("button")],
+        position = buttons.indexOf(button),
+        next =
+          event.key === "Home"
+            ? buttons[0]
+            : event.key === "End"
+              ? buttons.at(-1)
+              : buttons[
+                  (position +
+                    (event.key === "ArrowLeft" ? -1 : 1) +
+                    buttons.length) %
+                    buttons.length
+                ];
+      next?.focus();
+      next?.click();
+    };
     $("diff-files").append(button);
   }
 }
-async function loadDiffFile(path) {
+async function loadDiffFile(path, focusTarget = false) {
   const proposal = selected;
   diffController?.abort();
   const serial = ++diffSerial;
@@ -934,7 +1017,18 @@ async function loadDiffFile(path) {
       data.path !== path
     )
       throw new Error("The diff does not match the selected version.");
-    renderFileDiff($("diff"), data);
+    const comment = changeFocusCommentId
+        ? current?.state.comments.find(
+            (entry) => entry.id === changeFocusCommentId,
+          )
+        : null,
+      destination = comment
+        ? proposalChangeDestination(selected, comment)
+        : null;
+    renderFileDiff($("diff"), data, {
+      focusElement: path === "document.html" ? destination?.element : null,
+      focusTarget,
+    });
   } catch (error) {
     if (serial !== diffSerial || selected?.id !== proposal.id) return;
     $("diff").replaceChildren(
@@ -1161,6 +1255,38 @@ function messageHeader(actor, createdAt) {
   );
   header.append(el("span", undefined, "message-user-icon"), byline);
   return header;
+}
+function commentLocation(comment) {
+  const status = annotations?.anchors[comment.id]?.status ?? "unavailable",
+    labels = {
+      exact: "Exact location",
+      recovered: "Location recovered",
+      ambiguous: "Location ambiguous",
+      orphaned: "Location not found",
+      unavailable: "Location unavailable",
+    },
+    selector = comment.target.selector,
+    original =
+      selector.type === "text-range"
+        ? selector.exact
+        : selector.type === "text-ranges"
+          ? selector.ranges.map((range) => range.exact).join(" … ")
+          : null;
+  return {
+    status,
+    label: labels[status],
+    message:
+      status === "recovered"
+        ? "The exact quotation moved within its stable element. Check the highlighted recovery before deciding."
+        : status === "ambiguous"
+          ? "The original quotation occurs more than once here, so DSTAR will not choose one location."
+          : status === "orphaned"
+            ? "The original target is absent from this version. The discussion remains open and attached to its original revision."
+            : status === "unavailable"
+              ? "DSTAR could not read locations for this version. The original discussion remains available."
+              : "",
+    original: original ? [...original].slice(0, 240).join("") : null,
+  };
 }
 function openReplyDraft(comment, body = "") {
   if (replyDraft?.commentId === comment.id) {
@@ -1472,7 +1598,8 @@ function commentThread(thread, expanded = false) {
   const c = thread.comment,
     card = el("details", undefined, "comment-thread"),
     article = el("article", undefined, "comment"),
-    commentActor = actorCopy(c.author);
+    commentActor = actorCopy(c.author),
+    location = commentLocation(c);
   card.dataset.thread = c.id;
   card.open = expanded;
   card.classList.toggle("active", c.id === activeCommentId);
@@ -1484,6 +1611,9 @@ function commentThread(thread, expanded = false) {
       c.status === "open" ? "Open" : "Resolved",
       `thread-status ${c.status}`,
     ),
+    ...(location.status !== "exact"
+      ? [el("span", location.label, `thread-location ${location.status}`)]
+      : []),
     el("span", "⌄", "thread-chevron"),
   );
   if (
@@ -1511,7 +1641,7 @@ function commentThread(thread, expanded = false) {
   }
   summary.setAttribute(
     "aria-label",
-    `${c.status === "open" ? "Open" : "Resolved"} comment by ${commentActor.name}, ${commentTime(c.createdAt)}`,
+    `${c.status === "open" ? "Open" : "Resolved"} comment by ${commentActor.name}, ${commentTime(c.createdAt)}${location.status === "exact" ? "" : `, ${location.label}`}`,
   );
   summary.onclick = (event) => {
     event.preventDefault();
@@ -1532,7 +1662,7 @@ function commentThread(thread, expanded = false) {
   article.setAttribute("aria-current", String(c.id === activeCommentId));
   article.setAttribute(
     "aria-label",
-    `${c.status === "open" ? "Open" : "Resolved"} thread by ${commentActor.name}: ${c.body.slice(0, 160)}`,
+    `${c.status === "open" ? "Open" : "Resolved"} thread by ${commentActor.name}${location.status === "exact" ? "" : `, ${location.label}`}: ${c.body.slice(0, 160)}`,
   );
   const agentState = commentAgentStates.get(c.id) ?? "idle";
   article.dataset.agentState = agentState;
@@ -1549,6 +1679,26 @@ function commentThread(thread, expanded = false) {
     event.preventDefault();
     safely(() => openCommentInDocument(c.id))();
   };
+  if (location.status !== "exact") {
+    const notice = el(
+      "section",
+      undefined,
+      `comment-location ${location.status}`,
+    );
+    notice.append(el("strong", location.label), el("p", location.message));
+    if (location.original)
+      notice.append(
+        el("blockquote", `Original selection: “${location.original}”`),
+      );
+    else
+      notice.append(
+        el(
+          "small",
+          "The original whole-element target is retained in review history.",
+        ),
+      );
+    article.append(notice);
+  }
   article.append(el("p", c.body));
   for (const r of c.replies) {
     const reply = el("div", undefined, "reply"),
@@ -1570,6 +1720,9 @@ function commentThread(thread, expanded = false) {
       link.onclick = safely(async () => {
         await select(proposal.id, { focusCommentId: c.id });
         setPanel("navigation", true);
+        document
+          .querySelector(`[data-proposal="${proposal.id}"]`)
+          ?.focus({ preventScroll: true });
       });
       links.append(link);
     }
@@ -1801,11 +1954,29 @@ async function showComparison(before) {
   showingBase = before && !!selected.parent;
   $("show-before").setAttribute("aria-pressed", String(showingBase));
   $("show-after").setAttribute("aria-pressed", String(!showingBase));
+  $("preview").title = `${showingBase ? "Before" : "After"}: ${current.title}`;
   $("accept").disabled = !canAccept();
   await preview(showingBase ? selected.parent : selected.id);
 }
 $("show-before").onclick = safely(() => showComparison(true));
 $("show-after").onclick = safely(() => showComparison(false));
+for (const id of ["show-before", "show-after"])
+  $(id).onkeydown = (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const nextBefore = ["ArrowLeft", "Home"].includes(event.key);
+    safely(async () => {
+      await showComparison(nextBefore);
+      $(nextBefore ? "show-before" : "show-after").focus();
+    })();
+  };
+async function openFullComparison(before) {
+  await showComparison(before);
+  setView("preview");
+  $(before ? "show-before" : "show-after").focus();
+}
+$("open-before-preview").onclick = safely(() => openFullComparison(true));
+$("open-after-preview").onclick = safely(() => openFullComparison(false));
 $("exit-review").onclick = safely(async () => {
   if (!current?.state.head) return;
   setView("preview");

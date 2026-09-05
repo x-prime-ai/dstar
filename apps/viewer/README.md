@@ -28,6 +28,7 @@ const viewer = await startViewer("/srv/documents/brief.dstar", 3000, {
 });
 
 console.log(viewer.origin); // Never log ownerUrl or reviewerUrl.
+console.log(viewer.healthUrl); // Credential-free readiness; no document data.
 console.log(viewer.documentId); // API root: /api/documents/:docId/
 ```
 

@@ -9,7 +9,7 @@
   </head>
   <body>
     <header>
-      <a class="brand" href="/" aria-label="DSTAR home">DSTAR</a>
+      <a class="brand" href="./" aria-label="DSTAR review home">DSTAR</a>
       <div class="document">
         <strong id="title">Opening document…</strong>
         <span id="document-status" class="document-status" hidden></span>
@@ -189,8 +189,19 @@
           <div class="changes-heading">
             <button id="close-changes">← Back to document</button>
             <p class="eyebrow">WHAT CHANGED</p>
-            <h2 id="diff-title"></h2>
+            <h2 id="diff-title" tabindex="-1"></h2>
             <p id="diff-versions" class="diff-versions"></p>
+            <p id="diff-context" class="diff-context" hidden></p>
+            <div
+              id="diff-preview-actions"
+              class="diff-preview-actions"
+              role="group"
+              aria-label="Open full version"
+              hidden
+            >
+              <button id="open-before-preview">Open full Before</button>
+              <button id="open-after-preview">Open full After</button>
+            </div>
             <div id="diff-stats" class="diff-stats"></div>
           </div>
           <div id="diff-warnings" class="diff-warnings" hidden></div>
@@ -386,7 +397,8 @@
           <div id="versions" class="version-list"></div>
           <section id="version-detail" class="version-detail" hidden>
             <button id="inspect-changes" class="primary">
-              View changes <span aria-hidden="true">→</span>
+              <span id="inspect-changes-label">View changes</span>
+              <span aria-hidden="true">→</span>
             </button>
             <p
               id="version-change-scope"

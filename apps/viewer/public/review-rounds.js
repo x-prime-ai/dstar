@@ -162,21 +162,70 @@ export function feedbackDrift(snapshot, current) {
 export function proposalChangeDestination(proposal, comment) {
   const files = proposal?.diff?.files ?? [],
     element = comment?.target?.element,
+    anchorStatus =
+      (proposal?.diff?.anchorRisks ?? []).find(
+        (risk) => risk?.comment === comment?.id,
+      )?.status ?? "exact",
     mapped =
       typeof element === "string" &&
       (proposal?.diff?.elements ?? []).some((change) => change?.id === element),
     documentFile = files.find((file) => file.path === "document.html"),
+    stylesheet = files.find((file) => file.path.endsWith(".css")),
+    asset = files.find((file) => file.path.startsWith("assets/")),
     firstFile = files[0] ?? null;
   if (mapped && documentFile)
     return {
       mapped: true,
+      kind: "target-element",
       path: documentFile.path,
-      message: `Opening document.html because this suggestion changes the comment's target element (${element}).`,
+      element,
+      anchorStatus,
+      message:
+        anchorStatus === "exact"
+          ? `The comment's target element (${element}) changed. It will be shown first; this link does not prove the feedback was satisfied.`
+          : `The comment's target element (${element}) changed, but its text anchor is ${anchorStatus} in After. Inspect both sides; this link does not prove the feedback was satisfied.`,
+    };
+  if (["ambiguous", "orphaned"].includes(anchorStatus))
+    return {
+      mapped: false,
+      kind: "unlocated-anchor",
+      path:
+        documentFile?.path ??
+        stylesheet?.path ??
+        asset?.path ??
+        firstFile?.path ??
+        null,
+      element: null,
+      anchorStatus,
+      message: `The comment anchor is ${anchorStatus} in After, and no exact changed element can be established. The selected file is only a review starting point.`,
+    };
+  if (stylesheet)
+    return {
+      mapped: false,
+      kind: "css-layout",
+      path: stylesheet.path,
+      element: null,
+      anchorStatus,
+      message:
+        "No local HTML element change matches this comment. Opening the stylesheet because CSS can change layout or appearance; DSTAR cannot prove which rendered element it affected.",
+    };
+  if (asset)
+    return {
+      mapped: false,
+      kind: "asset",
+      path: asset.path,
+      element: null,
+      anchorStatus,
+      message:
+        "No local HTML element change matches this comment. Opening a changed asset as a review starting point; compare Before and After for its rendered effect.",
     };
   return {
     mapped: false,
+    kind: "file-fallback",
     path: documentFile?.path ?? firstFile?.path ?? null,
+    element: null,
+    anchorStatus,
     message:
-      "No exact changed element can be established for this comment. Review the available file or full-version comparison.",
+      "No exact changed element can be established for this comment. Review the selected file and the full Before / After versions; the link does not prove the feedback was satisfied.",
   };
 }

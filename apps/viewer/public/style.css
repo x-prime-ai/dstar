@@ -741,6 +741,25 @@ iframe {
   color: var(--muted);
   margin: 10px 0 14px;
 }
+.diff-context {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 7px;
+  background: #f4f7fb;
+  color: #4c617e;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.diff-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+.diff-preview-actions button {
+  font-size: 11px;
+}
 .diff-stats {
   display: flex;
   flex-wrap: wrap;
@@ -780,6 +799,14 @@ iframe {
 }
 .diff-warnings p {
   margin: 4px 0;
+}
+.diff-warnings button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 650;
+  text-decoration: underline;
 }
 .diff-files {
   display: flex;
@@ -884,6 +911,22 @@ iframe {
   font-size: 11px;
   overflow-wrap: anywhere;
 }
+.comment-target-diff {
+  scroll-margin-top: 12px;
+  box-shadow: inset 3px 0 #4f7fa8;
+}
+.comment-target-diff:focus-visible {
+  outline-offset: -3px;
+}
+.target-badge {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e8f0f8;
+  color: #365f82;
+  font-size: 9px;
+  font-weight: 650;
+}
 .text-comparison > div {
   padding: 16px;
   overflow-wrap: anywhere;
@@ -928,6 +971,15 @@ iframe {
   line-height: 1.7;
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+.diff-guidance {
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid #dbe4ef;
+  background: #f4f7fb;
+  color: #4c617e;
+  font-size: 11px;
+  line-height: 1.6;
 }
 .source-diff {
   overflow: auto;
@@ -1048,6 +1100,10 @@ iframe {
   .file-diff-toolbar {
     padding: 10px;
     flex-wrap: wrap;
+  }
+  .diff-preview-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -1219,6 +1275,21 @@ textarea {
   color: var(--muted);
   transition: transform 120ms ease;
 }
+.thread-location {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #fff4df;
+  color: #815d22;
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.thread-location.orphaned,
+.thread-location.ambiguous {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
 .comment-thread[open] .thread-chevron {
   transform: rotate(180deg);
 }
@@ -1244,6 +1315,37 @@ textarea {
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.7;
+}
+.comment-location {
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid #eadacb;
+  border-radius: 7px;
+  background: var(--warning-soft);
+  color: #6f533d;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.comment-location.recovered {
+  border-color: #e7dba8;
+  background: #fffbea;
+  color: #66592d;
+}
+.comment-location strong {
+  display: block;
+  color: inherit;
+}
+.comment-location p {
+  margin: 4px 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+.comment-location blockquote {
+  margin: 7px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid currentColor;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .comment-actions {
   display: flex;

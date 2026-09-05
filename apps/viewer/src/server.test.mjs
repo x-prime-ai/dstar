@@ -98,6 +98,7 @@ it("mounts a Viewer at a canonical document path", async () => {
     }),
     headers = { Authorization: `Bearer ${token}` };
   expect(viewer.baseUrl).toBe("http://localhost:8765/documents/dstar-doc");
+  expect(viewer.healthUrl).toBe(`${viewer.baseUrl}/healthz`);
   expect(viewer.ownerUrl).toBe(`${viewer.baseUrl}/#${token}`);
   expect((await wire(viewer, "/")).status).toBe(404);
   expect((await wire(viewer, "/documents/dstar-doc")).status).toBe(308);
@@ -106,7 +107,12 @@ it("mounts a Viewer at a canonical document path", async () => {
   expect(page.text).toContain(
     'name="dstar-base-path" content="/documents/dstar-doc"',
   );
+  expect(page.text).toContain('href="./" aria-label="DSTAR review home"');
   expect((await wire(viewer, "/documents/dstar-doc/app.js")).status).toBe(200);
+  const health = await wire(viewer, "/documents/dstar-doc/healthz");
+  expect(health.status).toBe(200);
+  expect(health.json()).toEqual({ status: "ready" });
+  expect(health.text).not.toContain(viewer.documentId);
   expect(
     (await wire(viewer, "/documents/dstar-doc/review-rounds.js")).status,
   ).toBe(200);

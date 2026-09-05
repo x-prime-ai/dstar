@@ -19,6 +19,65 @@ milestone 3—embedding the flow in one real host at its own origin—remains
 unverified and incomplete. Current test commands and outcomes should be recorded
 from the final integrated tree rather than inferred from older counts below.
 
+## Embedding-readiness and inspection follow-up (2026-09-04)
+
+This batch starts from merged baseline `d8c99b5`. It adds repository-level
+mount and review-inspection evidence without claiming a real-host integration:
+
+- a credential-free, metadata-free `<basePath>/healthz` readiness response and
+  returned `healthUrl`, covered by the real loopback server suite;
+- comment-target-first bounded diff summaries and linked-element focus;
+- distinct CSS/layout, asset, missing/ambiguous-anchor and generic file
+  fallbacks, each labeled as navigation or file evidence rather than proof that
+  feedback was satisfied;
+- visible recovered/unlocated discussions with their original quotation, plus
+  anchor-risk navigation back to the affected thread; and
+- keyboard movement and focus restoration for activity tabs, Before / After,
+  changed files and narrow-screen overlays.
+
+An isolated copied DSTAR fixture was exercised in an actual Chromium session at
+1280 px and 390×844. The browser retained all four open discussions when one
+accepted anchor and two candidate anchors were missing; selected `styles.css`
+for a linked CSS-only proposal; focused a removed linked target in the HTML
+Before / After diff; opened the affected unlocated thread from the warning; and
+reported no horizontal overflow at 390 px. The narrow activity panel was modal
+with the review workspace inert, then closed before the linked diff received
+focus. Arrow-key checks switched activity tabs and Before / After, with Accept
+disabled on Before and enabled only on the ready After preview.
+
+The installed Chromium build reported only its expected unsupported `tools`
+Permissions-Policy warnings; no page errors were reported. This was a controlled
+local package and no provider ran, so it is not milestone 3 exit evidence.
+
+### Read-only xPrime fit assessment
+
+xPrime was inspected without changing its repository or invoking its data or
+models. Its current `@xprime/ui-artifact` panel projects one inline Markdown or
+HTML string and renders HTML through a sandboxed `srcDoc`; it does not expose a
+DSTAR package/CSS/assets/review-storage contract. The UI is composed through a
+details-panel Plugin. The current Web Host is loopback-only and explicitly has
+no authentication, while model work is governed through the Harness identity,
+Authority and Effect path rather than a public arbitrary-model callback. The
+xPrime main checkout also contained unrelated user changes during inspection.
+
+If xPrime is selected and cross-repository work is authorized, the smallest
+credible integration is therefore:
+
+1. persist one DSTAR package outside inline Session artifact content and mount
+   the full Viewer at an xPrime-owned path/origin;
+2. add a small xPrime UI contribution that opens that review route, rather than
+   weakening Viewer's `frame-ancestors 'none'` boundary or inventing an overlay;
+3. derive Owner/Reviewer access from a real host identity layer (the present
+   unauthenticated local principal cannot establish the milestone's identity
+   evidence); and
+4. adapt `agentInvocation` to an admitted xPrime Harness operation keyed to the
+   exact DSTAR request/attempt, with provider result recovery kept in xPrime.
+   Calling a model adapter directly would bypass xPrime's execution boundary.
+
+That plan still requires explicit host selection, cross-repository scope and a
+configured real provider. No xPrime code or main branch was modified in this
+batch, and milestone 3 remains incomplete.
+
 ## Baseline and independent fix
 
 Baseline: `6902987`. The complete `pnpm verify` passed under Node 22.22.3 and

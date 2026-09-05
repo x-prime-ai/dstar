@@ -97,8 +97,13 @@ Engine terminology do not change.
   conflict requires a new request.
 - A returned request opens its suggestion. Linked proposal controls on each
   comment lead to that version and **View linked changes**. Stable-element HTML
-  changes open `document.html`; CSS/layout or unmapped edits receive an explicit
-  fallback message and available file/full-version comparison.
+  changes open `document.html` with the linked element first and focused.
+  CSS/layout and asset-only edits open the matching file with an explicit
+  file-level explanation; DSTAR does not claim which rendered element they
+  affected. Unmapped HTML edits remain a labeled full-version/file fallback.
+- Recovered, ambiguous and missing anchors remain visible in the comment list.
+  Their location status and original quotation are disclosed instead of hiding
+  the unresolved discussion. Change warnings link back to the affected thread.
 - An exact ready After preview enables acceptance. Before disables acceptance.
   Stale suggestions remain inspectable and rejectable but cannot be accepted.
 - Empty states explain the next action: start a conversation or create the
@@ -113,9 +118,13 @@ collapses the panel. The document, contextual exact-diff view and decision bar
 remain in one reading order. The tabs use roving focus and arrow keys,
 selection actions have visible names and accessible labels, status changes use
 live regions, modal decisions retain explicit confirmation, and focus returns
-to the invoking surface.
+to the invoking surface. Before / After and changed-file controls support arrow,
+Home and End movement. Opening linked changes focuses the changed target when
+available; closing changes returns to the comparison or invoking control.
 
-The implemented flow was Browser-checked at 1440×900, 820×1024 and 390×844.
+The original flow was Browser-checked at 1440×900, 820×1024 and 390×844. The
+embedding-readiness follow-up was separately checked at 1280×720 and 390×844;
+see [integration validation](integration-validation.md) for its evidence limit.
 
 ## Composition contracts
 

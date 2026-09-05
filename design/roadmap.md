@@ -57,6 +57,11 @@ storage and deployment effort. Choose the embedding mechanism from that evidence
 before publishing an independent overlay package. An in-repository controlled
 agent or compile-checked example cannot satisfy this milestone.
 
+Current batch plan: document and exercise the smallest existing Viewer mount
+contract, including base-path routing, host identity handoff, readiness and the
+optional invocation callback. This lowers adapter work but does not change the
+milestone status until a selected real host supplies the exit evidence above.
+
 ### 4. Deepen comment-to-change inspection
 
 The first navigation slice is implemented. Continue only from observed review
@@ -66,6 +71,12 @@ friction:
 - explain unlocated anchors and CSS/layout changes without claiming semantic
   proof; and
 - validate narrow screens and keyboard movement in the real-host scenario.
+
+Current batch plan: improve the fallback explanation and navigation for missing
+anchors, CSS/layout changes and assets; make Before / After state and local
+change destinations explicit; then run browser checks at desktop and 390 px
+with keyboard-only traversal. These are repository-level usability findings
+until repeated in the selected real host.
 
 Exit evidence: reviewers can connect the three comments, changes, decision and
 remaining discussion without source inspection. Acceptance and resolution stay

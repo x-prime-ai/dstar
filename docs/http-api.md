@@ -7,6 +7,10 @@ is currently no separate HTTP client package.
 The API is pre-stable. Products building a custom backend should normally call
 `@dstar/core` and define their own public HTTP contract.
 
+`GET <basePath>/healthz` is the only credential-free operational endpoint. It
+returns `{"status":"ready"}` without document metadata. All `/api` routes
+below remain authenticated.
+
 ## Addressing model
 
 One Viewer process opens one DSTAR package. An authenticated client bootstraps
