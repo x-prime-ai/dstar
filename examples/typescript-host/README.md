@@ -34,18 +34,23 @@ document.reply(
 
 ## Core API
 
-| API                | Purpose                                               |
-| ------------------ | ----------------------------------------------------- |
-| `snapshot()`       | Read current state or an immutable revision/proposal  |
-| `propose()`        | Submit a complete candidate against an exact base     |
-| `comment()`        | Add a comment to an exact element or text target      |
-| `reply()`          | Add an optionally keyed, exact-state reply            |
-| `export()`         | Materialize a revision into an empty directory        |
-| `decide()`         | Accept or reject the exact proposal an Owner reviewed |
-| `resolveComment()` | Resolve a thread as a separate Owner decision         |
+| API                       | Purpose                                               |
+| ------------------------- | ----------------------------------------------------- |
+| `snapshot()`              | Read current state or an immutable revision/proposal  |
+| `createRevisionRequest()` | Freeze exact feedback and an Owner instruction        |
+| `updateRevisionRequest()` | Record an external or host-agent attempt              |
+| `propose()`               | Submit and optionally link a complete candidate       |
+| `comment()`               | Add a comment to an exact element or text target      |
+| `reply()`                 | Add an optionally keyed, exact-state reply            |
+| `export()`                | Materialize a revision into an empty directory        |
+| `decide()`                | Accept or reject the exact proposal an Owner reviewed |
+| `resolveComment()`        | Resolve a thread as a separate Owner decision         |
 
 `@dstar/viewer` separately exports `startViewer()` for products that want the
-complete reference UI and WebMCP surface rather than a custom frontend.
+complete reference UI and WebMCP surface rather than a custom frontend. Its
+optional trusted-host `agentInvocation` callback receives one frozen revision
+request plus encoded base files and returns a complete candidate. Core itself
+never invokes an agent.
 
 For model integrations, create a caller-scoped MCP server after authenticating
 the request:
@@ -61,13 +66,19 @@ const server = createDocumentMcp(packageRoot, actorFromSession, [
 ]);
 ```
 
-Owner-only sessions may additionally receive `decide` and `resolve`. The MCP
+Owner-only sessions may additionally receive `decide` and `resolve`. Revision
+request creation and invocation are Viewer/host operations, not new generic MCP
+tools in this example. The MCP
 caller never supplies its own identity or document path.
 
 Decision and resolution calls require the `revision` and/or `stateId` observed
 when the Owner confirmed the action. Do not refresh those values on the Owner's
 behalf: concurrent review changes should fail closed instead of silently
 changing what was authorized.
+
+Accepting a linked proposal does not resolve its comments, and resolving a
+comment does not accept or alter a proposal. Keep those confirmations distinct
+in custom products.
 
 Session lookup, role assignment, route protection, package selection and secret
 storage belong to the integrating product. Derive every `ActorIdentity` from the

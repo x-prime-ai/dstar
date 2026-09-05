@@ -19,11 +19,25 @@ const principal = (role) => ({
 it("keeps document updates, decisions, resolution and sharing owner-only", () => {
   const owner = principal("owner"),
     reviewer = principal("reviewer");
-  for (const capability of ["propose", "decide", "resolve", "share"])
+  for (const capability of [
+    "propose",
+    "decide",
+    "resolve",
+    "share",
+    "request",
+    "invoke",
+  ])
     expect(hasCapability(owner, capability)).toBe(true);
   for (const capability of ["read", "comment", "handoff", "reply"])
     expect(hasCapability(reviewer, capability)).toBe(true);
-  for (const capability of ["propose", "decide", "resolve", "share"]) {
+  for (const capability of [
+    "propose",
+    "decide",
+    "resolve",
+    "share",
+    "request",
+    "invoke",
+  ]) {
     expect(hasCapability(reviewer, capability)).toBe(false);
     expect(() => requireCapability(reviewer, capability)).toThrow();
   }
@@ -33,6 +47,15 @@ it("classifies current and integration routes through one reusable gate", () => 
   const document = "/api/documents/22222222-2222-4222-8222-222222222222";
   expect(routeCapability("POST", `${document}/proposals`)).toBe("propose");
   expect(routeCapability("POST", `${document}/comments`)).toBe("comment");
+  expect(routeCapability("POST", `${document}/revision-requests`)).toBe(
+    "request",
+  );
+  expect(
+    routeCapability(
+      "POST",
+      `${document}/revision-requests/11111111-1111-4111-8111-111111111111/invoke`,
+    ),
+  ).toBe("invoke");
   expect(routeCapability("POST", "/api/handoffs")).toBe("handoff");
   expect(
     routeCapability(

@@ -25,10 +25,13 @@ request. The agent returns a suggested version. The Owner can locate the
 changes and the feedback they relate to, accept or decline the suggestion, and
 return the next day to continue reviewing.
 
-This is the next target experience. Persistent comments, proposals, decisions
-and history already exist; batch submission and a host-connected agent action
-are planned. See the [roadmap](design/roadmap.md) and
-[review-round design](design/review-rounds.md) for scope and acceptance criteria.
+The reference implementation now supports this flow with durable batch requests,
+external handoff, an optional trusted-host invocation callback and linked review
+navigation. Milestones 1 and 2 are verified by repository automation and a
+controlled test agent, not by a real model provider or deployed host. Validating
+the same flow inside one real host remains the next integration milestone. See
+the [roadmap](design/roadmap.md) and
+[review-round design](design/review-rounds.md) for the evidence boundary.
 
 The product should answer four questions without exposing storage details:
 
@@ -69,9 +72,10 @@ the pre-stable TypeScript SDK or self-host the Viewer at their own origin. A
 host owns its storage, identity, agent execution and deployment lifecycle.
 
 The next integration work should reduce the host's effort: an optional agent
-invocation hook and a mountable review surface should reuse the same Engine.
-Validate that surface in one real host before committing to a separate overlay
-package. Core remains independent of model providers and agent execution.
+invocation hook now reuses the same Engine and durable request contract. A
+mountable review surface still needs validation in one real host before DSTAR
+commits to a separate overlay package. Core remains independent of model
+providers and agent execution.
 
 The current runtime uses a DSTAR filesystem package. Host ownership does not
 yet mean that any existing database or document store can replace that package.
@@ -80,7 +84,8 @@ yet mean that any existing database or document store can replace that package.
 
 ```text
 reviewer feedback and Owner intent
-    -> agent prepares a complete staged HTML/CSS/assets candidate
+    -> Engine freezes an exact-base revision request and feedback snapshot
+    -> host callback or scoped external handoff asks an agent for a candidate
     -> agent or host submits through CLI, SDK or an authorized adapter
     -> Engine validates and stores revision + review diff + storage delta
     -> Viewer reads exact base/candidate; human comments or decides
@@ -114,8 +119,9 @@ does not need a complete copy on every edit:
 This borrows Git-like ideas; it neither executes Git nor requires a repository.
 The Engine generates and verifies deltas, not the language model.
 The bundle stays a portable directory of ordinary files, without a SQLite
-dependency. A small state header and separate proposal/comment-thread JSON
-records keep small review updates from rewriting the whole collaboration history.
+dependency. A small state header and separate proposal, comment-thread and
+revision-request JSON records keep small review updates from rewriting the whole
+collaboration history.
 The Engine owns cross-file commit and recovery; agents use its simple interface.
 Real new content and long review history still consume storage; retention and
 compaction must be explicit, never silently discard accepted history.
@@ -134,10 +140,12 @@ cryptographic proof that only a human could modify the files.
 
 ## Focus and priorities
 
-First make one review round easy: select multiple open comments, add a general
-instruction, send once, and receive a linked revision proposal. Then reduce
-host integration effort and improve navigation between comments and local
-Before / After changes. Existing external-agent handoff remains available.
+The implemented reference flow selects multiple open comments, adds a general
+instruction, sends once through external handoff or a configured host callback,
+and receives a linked revision proposal. Basic navigation connects requests,
+comments, proposals and local Before / After changes while labeling fallbacks
+that cannot be mapped to one element. The next priority is proving the host
+contract and review surface in a real product.
 
 Static HTML reports, designed documents and slides share this workflow.
 Interactive application editing, framework source mapping and deployment are

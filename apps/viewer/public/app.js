@@ -20,6 +20,12 @@ import {
   versionCopy,
   versionList,
 } from "./viewer-model.js";
+import {
+  feedbackDrift,
+  proposalChangeDestination,
+  revisionComposerState,
+  revisionRequestStatus,
+} from "./review-rounds.js";
 
 const $ = (id) => document.getElementById(id);
 const previewState = new PreviewState();
@@ -80,6 +86,11 @@ let current,
   outgoingHandoff = null,
   outgoingDraftId = null,
   commentAgentStates = new Map(),
+  selectedRevisionCommentIds = new Set(),
+  submittingRevisionRequest = false,
+  invokingRevisionRequestId = null,
+  activeRevisionRequestId = null,
+  changeFocusCommentId = null,
   activeSlide = 0,
   messageTimer;
 let previewSerial = 0;
@@ -185,7 +196,7 @@ function renderSlideRail(items = []) {
       );
       button.append(preview);
       button.onclick = safely(async () => {
-        await revokeOutgoingHandoff();
+        await revokeContextBoundHandoff();
         if (!frame) return;
         setActiveSlide(item.index);
         $("preview").contentWindow.postMessage(
@@ -210,7 +221,10 @@ function applySession() {
   $("copy-access-link").disabled = !session.can("share");
   $("selection-comment").hidden = !session.can("comment");
   $("selection-suggest").hidden = true;
+  $("revision-composer").hidden = !canComposeRevision();
 }
+const canComposeRevision = () =>
+  session.can("handoff") && session.can("propose");
 function clearDocumentSelection() {
   if (!frame) return;
   $("preview").contentWindow.postMessage(
@@ -254,7 +268,7 @@ function renderProposalAddresses(proposal, container, compact = false) {
   for (const { id, comment } of motivatingComments(proposal)) {
     const item = el(
       compact ? "small" : "button",
-      `Addresses comment ${id.slice(0, 8)}${comment ? `: ${comment.body.slice(0, compact ? 60 : 120)}` : ""}`,
+      `Linked to comment ${id.slice(0, 8)}${comment ? `: ${comment.body.slice(0, compact ? 60 : 120)}` : ""}`,
       "proposal-address",
     );
     if (!compact && comment) {
@@ -263,6 +277,85 @@ function renderProposalAddresses(proposal, container, compact = false) {
     }
     container.append(item);
   }
+}
+const revisionRequests = () => current?.state.revisionRequests ?? [];
+const revisionRequest = (id) =>
+  revisionRequests().find((request) => request.id === id);
+function commentQuote(comment) {
+  const selector = comment?.target?.selector;
+  if (selector?.type === "text-range" && selector.exact)
+    return `“${selector.exact.slice(0, 220)}”`;
+  if (selector?.type === "text-ranges") {
+    const exact = (selector.ranges ?? [])
+      .map((range) => range.exact)
+      .filter(Boolean)
+      .join(" … ");
+    if (exact) return `“${exact.slice(0, 220)}”`;
+  }
+  return comment?.target?.element
+    ? `Whole element · ${comment.target.element}`
+    : "Original target retained";
+}
+function renderFeedbackSnapshot(request, container, { compact = false } = {}) {
+  container.replaceChildren();
+  const feedback = request?.feedback ?? [];
+  if (!feedback.length) {
+    container.append(
+      el(
+        "p",
+        "This request contains an overall instruction and no comment snapshots.",
+        "revision-request-detail",
+      ),
+    );
+    return;
+  }
+  const details = el("details", undefined, "revision-feedback"),
+    summary = el(
+      "summary",
+      `${feedback.length} frozen feedback ${feedback.length === 1 ? "snapshot" : "snapshots"}`,
+    );
+  if (!compact) details.open = true;
+  details.append(summary);
+  for (const snapshot of feedback) {
+    const item = el("div", undefined, "revision-feedback-item"),
+      currentComment = current?.state.comments.find(
+        (comment) => comment.id === snapshot.id,
+      ),
+      drift = feedbackDrift(snapshot, currentComment);
+    item.append(
+      el("p", snapshot.body),
+      el("small", `Submitted context: ${commentQuote(snapshot)}`),
+    );
+    for (const reply of snapshot.replies ?? []) {
+      const replyCopy = el("div", undefined, "revision-feedback-reply"),
+        author = actorCopy(reply.author);
+      replyCopy.append(
+        el("strong", `${author.name} · ${commentTime(reply.createdAt)}`),
+        el("span", reply.body),
+      );
+      item.append(replyCopy);
+    }
+    if (drift.changed)
+      item.append(el("small", drift.message, "feedback-drift"));
+    details.append(item);
+  }
+  container.append(details);
+}
+function renderProposalRequest(proposal) {
+  const section = $("version-request"),
+    request = proposal?.requestId ? revisionRequest(proposal.requestId) : null;
+  section.hidden = !request;
+  if (!request) {
+    $("version-request-feedback").replaceChildren();
+    return;
+  }
+  const status = revisionRequestStatus(request);
+  $("version-request-title").textContent =
+    `Request ${request.id.slice(0, 8)} · ${status.label}`;
+  $("version-request-instruction").textContent = request.instruction
+    ? request.instruction
+    : "Comments-only request; no overall instruction was submitted.";
+  renderFeedbackSnapshot(request, $("version-request-feedback"));
 }
 const suggestionReady = () =>
   suggestionTarget?.selector.type === "text-range" &&
@@ -312,7 +405,7 @@ for (const [button, filter] of [
 ]) {
   $(button).onclick = safely(async () => {
     if (commentFilter === filter) return;
-    await revokeOutgoingHandoff();
+    await revokeContextBoundHandoff();
     commentFilter = filter;
     activeCommentId = null;
     activeGroup = null;
@@ -432,13 +525,19 @@ async function revokeOutgoingHandoff(nextState = "expired") {
     nextState,
     nextState === "returned"
       ? "Agent result returned. Review it before posting or deciding."
-      : "The agent handoff expired or was revoked because the review context changed.",
+      : handoff.context.action.kind === "revision-request"
+        ? "The external handoff was closed. The saved revision request remains available."
+        : "The agent handoff expired or was revoked because the review context changed.",
   );
   try {
     await api(`handoffs/${handoff.id}/revoke`, {});
   } catch {
     // Local state still fails closed; the server also expires and state-binds it.
   }
+}
+async function revokeContextBoundHandoff() {
+  if (outgoingHandoff?.context.action.kind === "revision-request") return;
+  await revokeOutgoingHandoff();
 }
 async function createAgentHandoff(kind, context) {
   if (context.action?.kind !== kind)
@@ -462,7 +561,9 @@ async function createAgentHandoff(kind, context) {
   }
   setAgentStatus(
     "waiting",
-    "Waiting for the agent. You can keep reading; the draft will return here.",
+    kind === "revision-request"
+      ? "External handoff copied. The saved request remains here while an agent handles it."
+      : "Waiting for the agent. You can keep reading; the draft will return here.",
   );
   outgoingDraftId = null;
   const prompt = agentHandoffPrompt(kind, handoffUrl.href),
@@ -471,7 +572,9 @@ async function createAgentHandoff(kind, context) {
     if (!clipboard?.writeText) throw new Error("Clipboard unavailable");
     await clipboard.writeText(prompt);
     note(
-      "Private 15-minute agent handoff copied — paste it into your agent chat.",
+      kind === "revision-request"
+        ? "Private external revision handoff copied — paste it into your agent chat."
+        : "Private 15-minute agent handoff copied — paste it into your agent chat.",
     );
   } catch {
     await revokeOutgoingHandoff();
@@ -618,10 +721,11 @@ async function preview(id) {
   // iframe load also fires for HTTP error pages; it is never approval evidence.
   $("preview").src = frame.url;
 }
-async function select(id, { keepPreview = false } = {}) {
+async function select(id, { keepPreview = false, focusCommentId = null } = {}) {
   const previous = selected?.id;
-  if (outgoingHandoff && previous !== id) await revokeOutgoingHandoff();
+  if (outgoingHandoff && previous !== id) await revokeContextBoundHandoff();
   selected = current.state.proposals.find((p) => p.id === id);
+  changeFocusCommentId = focusCommentId;
   if (!keepPreview) showingBase = false;
   const copy = versionCopy(selected, current.state, showingBase),
     reviewing = copy.kind === "suggested",
@@ -658,6 +762,17 @@ async function select(id, { keepPreview = false } = {}) {
         ? "The exact suggested document is ready; you can decide here or return to the document."
         : "Review the After version and its changes before deciding.";
     renderProposalAddresses(selected, $("version-addresses"));
+    renderProposalRequest(selected);
+    const focusedComment = changeFocusCommentId
+        ? current.state.comments.find(
+            (comment) => comment.id === changeFocusCommentId,
+          )
+        : null,
+      destination = focusedComment
+        ? proposalChangeDestination(selected, focusedComment)
+        : null;
+    $("version-change-scope").hidden = !destination;
+    $("version-change-scope").textContent = destination?.message ?? "";
     const bytes = selected.changes.reduce(
         (sum, c) => sum + (c.storage?.size ?? 0),
         0,
@@ -667,7 +782,11 @@ async function select(id, { keepPreview = false } = {}) {
       ).length;
     $("storage").textContent =
       `${selected.changes.length} changed files · ${bytes.toLocaleString()} compressed bytes · ${deltas} deltas · ${selected.diff.anchorRisks.length} comment anchor warnings`;
-  } else $("version-addresses").replaceChildren();
+  } else {
+    $("version-addresses").replaceChildren();
+    renderProposalRequest(null);
+    $("version-change-scope").hidden = true;
+  }
   if (previous !== selected?.id) {
     diffFile = null;
     ++diffSerial;
@@ -707,7 +826,17 @@ function setView(mode) {
   }
 }
 $("inspect-changes").onclick = () => {
+  const comment = changeFocusCommentId
+      ? current?.state.comments.find(
+          (entry) => entry.id === changeFocusCommentId,
+        )
+      : null,
+    destination = comment
+      ? proposalChangeDestination(selected, comment)
+      : { path: selected?.diff.files[0]?.path };
   setView("changes");
+  if (destination.path && destination.path !== diffFile)
+    loadDiffFile(destination.path);
   if (document.documentElement.clientWidth <= 760) setPanel(activeTab, false);
 };
 $("close-changes").onclick = () => setView("preview");
@@ -927,7 +1056,7 @@ function focusGroup(id, fromList = true) {
       outgoingHandoff?.context.action.kind === "address-comment" &&
       outgoingHandoff.context.action.commentId !== id
     )
-      safely(revokeOutgoingHandoff)();
+      safely(revokeContextBoundHandoff)();
     activeCommentId = id;
   }
   setPanel("comments-panel", true);
@@ -971,7 +1100,7 @@ function focusComment(id, announce = true) {
     outgoingHandoff?.context.action.kind === "address-comment" &&
     outgoingHandoff.context.action.commentId !== id
   )
-    safely(revokeOutgoingHandoff)();
+    safely(revokeContextBoundHandoff)();
   activeCommentId = id;
   activeGroup = comment.id;
   setPanel("comments-panel", true);
@@ -1121,6 +1250,224 @@ function replyComposer(comment) {
   form.append(actions);
   return form;
 }
+function updateRevisionComposer() {
+  if (!current) return;
+  const state = revisionComposerState({
+      comments: current.state.comments,
+      selectedIds: [...selectedRevisionCommentIds],
+      instruction: $("revision-instruction").value,
+      canCompose: canComposeRevision(),
+      submitting: submittingRevisionRequest,
+    }),
+    summary = $("revision-selection-summary");
+  selectedRevisionCommentIds = new Set(state.commentIds);
+  $("revision-selection-count").textContent =
+    `${state.commentIds.length} ${state.commentIds.length === 1 ? "comment" : "comments"}`;
+  summary.replaceChildren();
+  if (!state.commentIds.length) {
+    summary.textContent =
+      "Select open comments below, or send an instruction on its own.";
+  } else {
+    const list = el("ul");
+    for (const id of state.commentIds) {
+      const comment = current.state.comments.find((entry) => entry.id === id),
+        item = el("li"),
+        remove = el("button", `Remove: ${(comment?.body ?? id).slice(0, 90)}`);
+      remove.type = "button";
+      remove.onclick = () => {
+        selectedRevisionCommentIds.delete(id);
+        comments();
+      };
+      item.append(remove, el("small", commentQuote(comment)));
+      list.append(item);
+    }
+    summary.append(list);
+  }
+  $("submit-revision-request").disabled = !state.canSubmit;
+  $("submit-revision-request").textContent = submittingRevisionRequest
+    ? "Saving…"
+    : "Save revision request";
+  $("revision-instruction").disabled = submittingRevisionRequest;
+  $("revision-composer-hint").textContent =
+    state.reason ||
+    "The exact accepted version and selected feedback will be frozen before any agent is invoked.";
+}
+function requestActionButton(label, fn, className) {
+  const button = el("button", label, className);
+  button.type = "button";
+  button.onclick = safely(fn);
+  return button;
+}
+async function copyRevisionHandoff(request) {
+  if (!canComposeRevision())
+    throw new Error("Only the Owner can send a revision request");
+  activeRevisionRequestId = request.id;
+  await createAgentHandoff("revision-request", {
+    review: null,
+    selection: null,
+    focusedCommentId: null,
+    action: {
+      kind: "revision-request",
+      requestId: request.id,
+      attemptId: crypto.randomUUID(),
+    },
+  });
+  await refresh();
+  renderRevisionRequests();
+}
+async function invokeRevisionRequest(request) {
+  if (!canComposeRevision())
+    throw new Error("Only the Owner can run a revision request");
+  if (!current?.agentInvocationAvailable)
+    throw new Error("This host does not provide an agent invocation hook");
+  const attemptId = crypto.randomUUID();
+  let invocationAcknowledged = false;
+  invokingRevisionRequestId = request.id;
+  renderRevisionRequests();
+  try {
+    await documentApi(`revision-requests/${request.id}/invoke`, { attemptId });
+    invocationAcknowledged = true;
+    note(
+      "Host agent invocation requested. Progress will appear on the saved request.",
+    );
+    await refresh();
+  } catch (error) {
+    if (invocationAcknowledged)
+      throw new Error(
+        "The host accepted this invocation, but Viewer refresh failed. Refresh to see its saved progress.",
+      );
+    if (!error.code)
+      throw new Error(
+        "The host invocation response is uncertain. Refresh the saved request before retrying.",
+      );
+    throw error;
+  } finally {
+    invokingRevisionRequestId = null;
+    renderRevisionRequests();
+  }
+}
+function renderRevisionRequestCard(request) {
+  const status = revisionRequestStatus(request),
+    card = el("article", undefined, "revision-request-card"),
+    heading = el("div", undefined, "revision-request-summary"),
+    copy = el("div"),
+    title =
+      request.instruction ||
+      request.request ||
+      `${request.commentIds?.length ?? 0} selected ${(request.commentIds?.length ?? 0) === 1 ? "comment" : "comments"}`;
+  card.dataset.request = request.id;
+  if (request.id === activeRevisionRequestId) card.dataset.active = "true";
+  copy.append(
+    el("strong", title.slice(0, 160)),
+    el(
+      "small",
+      `Request ${request.id.slice(0, 8)} · ${commentTime(request.createdAt)} · attempt ${request.attempt ?? 0}`,
+    ),
+  );
+  heading.append(
+    copy,
+    el("span", status.label, `revision-request-status ${status.status}`),
+  );
+  card.append(heading, el("p", status.detail, "revision-request-detail"));
+  const feedback = el("div");
+  renderFeedbackSnapshot(request, feedback, { compact: true });
+  card.append(feedback);
+  const actions = el("div", undefined, "revision-request-actions");
+  if (request.proposalId) {
+    actions.append(
+      requestActionButton(
+        "View suggestion",
+        async () => {
+          await select(request.proposalId);
+          setPanel("navigation", true);
+        },
+        "primary",
+      ),
+    );
+  }
+  if (status.canInvoke && canComposeRevision()) {
+    const handoffActive =
+        outgoingHandoff?.context.action.kind === "revision-request" &&
+        outgoingHandoff.context.action.requestId === request.id,
+      copyHandoff = requestActionButton(
+        request.attempt ? "Copy external retry" : "Copy external handoff",
+        () => copyRevisionHandoff(request),
+      );
+    copyHandoff.disabled = handoffActive;
+    if (handoffActive) copyHandoff.textContent = "External handoff active";
+    actions.append(copyHandoff);
+    if (current.agentInvocationAvailable) {
+      const running = invokingRevisionRequestId === request.id,
+        invoke = requestActionButton(
+          running
+            ? "Requesting…"
+            : request.attempt
+              ? "Retry host agent"
+              : "Run host agent",
+          () => invokeRevisionRequest(request),
+          "primary",
+        );
+      invoke.disabled = running || handoffActive;
+      actions.append(invoke);
+    }
+  }
+  if (actions.children.length) card.append(actions);
+  return card;
+}
+function renderRevisionRequests() {
+  if (!current) return;
+  const requests = [...revisionRequests()].sort((left, right) =>
+    String(right.createdAt).localeCompare(String(left.createdAt)),
+  );
+  $("revision-requests").hidden = !requests.length;
+  $("revision-request-list").replaceChildren(
+    ...requests.map(renderRevisionRequestCard),
+  );
+}
+$("revision-instruction").oninput = updateRevisionComposer;
+$("revision-request-form").onsubmit = safely(async (event) => {
+  event.preventDefault();
+  if (!current || submittingRevisionRequest) return;
+  const composer = revisionComposerState({
+    comments: current.state.comments,
+    selectedIds: [...selectedRevisionCommentIds],
+    instruction: $("revision-instruction").value,
+    canCompose: canComposeRevision(),
+  });
+  if (!composer.canSubmit) return;
+  submittingRevisionRequest = true;
+  let saveAcknowledged = false;
+  updateRevisionComposer();
+  try {
+    const result = await documentApi("revision-requests", {
+      base: current.revision ?? null,
+      instruction: composer.instruction,
+      commentIds: composer.commentIds,
+      key: crypto.randomUUID(),
+    });
+    saveAcknowledged = true;
+    activeRevisionRequestId = result.revisionRequest.id;
+    selectedRevisionCommentIds.clear();
+    $("revision-instruction").value = "";
+    await refresh();
+    note(
+      "Revision request saved. Choose an external handoff or the host agent.",
+    );
+  } catch (error) {
+    if (saveAcknowledged)
+      throw new Error(
+        "Revision request saved, but Viewer refresh failed. Refresh to reopen the saved request.",
+      );
+    if (!error.code)
+      throw new Error(
+        "The save response is uncertain. Your selected comments and instruction are preserved here; refresh before submitting again.",
+      );
+    throw error;
+  } finally {
+    submittingRevisionRequest = false;
+    updateRevisionComposer();
+  }
+});
 function commentThread(thread, expanded = false) {
   const c = thread.comment,
     card = el("details", undefined, "comment-thread"),
@@ -1139,6 +1486,29 @@ function commentThread(thread, expanded = false) {
     ),
     el("span", "⌄", "thread-chevron"),
   );
+  if (
+    c.status === "open" &&
+    canComposeRevision() &&
+    selected?.id === current.state.head &&
+    !showingBase
+  ) {
+    const selectLabel = el("label", undefined, "comment-revision-select"),
+      checkbox = el("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = selectedRevisionCommentIds.has(c.id);
+    checkbox.setAttribute(
+      "aria-label",
+      `Include comment ${c.id.slice(0, 8)} in revision request`,
+    );
+    checkbox.onchange = () => {
+      if (checkbox.checked) selectedRevisionCommentIds.add(c.id);
+      else selectedRevisionCommentIds.delete(c.id);
+      updateRevisionComposer();
+    };
+    selectLabel.onclick = (event) => event.stopPropagation();
+    selectLabel.append(checkbox, document.createTextNode("Add to request"));
+    summary.insertBefore(selectLabel, summary.querySelector(".thread-status"));
+  }
   summary.setAttribute(
     "aria-label",
     `${c.status === "open" ? "Open" : "Resolved"} comment by ${commentActor.name}, ${commentTime(c.createdAt)}`,
@@ -1194,11 +1564,11 @@ function commentThread(thread, expanded = false) {
     for (const proposal of linked) {
       const link = el(
         "button",
-        `Addressed by proposal ${proposal.id.slice(0, 8)} · ${proposal.status}`,
+        `Linked proposal ${proposal.id.slice(0, 8)} · ${proposal.status}`,
       );
       link.type = "button";
       link.onclick = safely(async () => {
-        await select(proposal.id);
+        await select(proposal.id, { focusCommentId: c.id });
         setPanel("navigation", true);
       });
       links.append(link);
@@ -1315,6 +1685,8 @@ function comments() {
   $("comments").append(
     ...threads.map((thread) => commentThread(thread, expanded === thread.id)),
   );
+  updateRevisionComposer();
+  renderRevisionRequests();
 }
 function renderIdentity(publicSession) {
   const identity = publicSession?.identity;
@@ -1410,7 +1782,10 @@ async function refresh({ retryPreview = false } = {}) {
     ? previousId
     : (current.state.head ??
       versions.find((item) => item.status === "pending")?.id);
-  await select(id, { keepPreview: !!previousId && previousId === id });
+  await select(id, {
+    keepPreview: !!previousId && previousId === id,
+    focusCommentId: previousId === id ? changeFocusCommentId : null,
+  });
   if (previewState.status === "ready") await syncAnnotations();
   if (retryPreview && previewState.status === "failed")
     await preview(showingBase ? selected?.parent : selected?.id);
@@ -1422,7 +1797,7 @@ $("width").onchange = () => {
 };
 async function showComparison(before) {
   if (!selected || selected.status !== "pending") return;
-  await revokeOutgoingHandoff();
+  await revokeContextBoundHandoff();
   showingBase = before && !!selected.parent;
   $("show-before").setAttribute("aria-pressed", String(showingBase));
   $("show-after").setAttribute("aria-pressed", String(!showingBase));
@@ -1460,7 +1835,7 @@ for (const action of ["accept", "reject"])
     await refresh();
   });
 async function navigateSlide(direction) {
-  await revokeOutgoingHandoff();
+  await revokeContextBoundHandoff();
   if (frame)
     $("preview").contentWindow.postMessage(
       { kind: "dstar-slide", direction, capability: frame.capability },
@@ -1684,44 +2059,79 @@ function applyReplyDraft({ commentId, body, expectedStateId }) {
 async function loadIncomingHandoff() {
   if (!incomingHandoffId || incomingHandoff) return;
   incomingHandoff = await api(`handoffs/${incomingHandoffId}`);
+  const revisionHandoff =
+    incomingHandoff.context.action?.kind === "revision-request";
   setAgentStatus(
     "waiting",
-    "Agent handoff is open. Return a draft before this access expires.",
+    revisionHandoff
+      ? "Revision request handoff is open. Use the exact saved context to propose a revision."
+      : "Agent handoff is open. Return a draft before this access expires.",
   );
-  note("Agent handoff loaded · read and draft access expires in 15 minutes.");
+  note(
+    revisionHandoff
+      ? "Revision request handoff loaded · use get_review_context before proposing."
+      : "Agent handoff loaded · read and draft access expires in 15 minutes.",
+  );
 }
 async function syncOutgoingHandoff() {
   if (!outgoingHandoff) return;
-  if (current?.stateId !== outgoingHandoff.stateId) {
-    const commentId = outgoingHandoff.context.action.commentId,
-      linked = current?.state.proposals.find(
-        (proposal) =>
-          proposal.status === "pending" &&
-          !outgoingHandoff.proposalIds.includes(proposal.id) &&
-          (proposal.motivatedBy ?? []).includes(commentId),
+  if (outgoingHandoff.context.action.kind === "revision-request") {
+    const request = revisionRequest(outgoingHandoff.context.action.requestId),
+      status = request && revisionRequestStatus(request);
+    if (status?.status === "returned") {
+      setAgentStatus(
+        "returned",
+        "A linked suggestion returned. Open it from the saved revision request.",
       );
-    if (commentId)
-      commentAgentStates.set(commentId, linked ? "returned" : "expired");
-    setAgentStatus(
-      linked ? "returned" : "expired",
-      linked
-        ? "A linked proposal returned. Review it before deciding."
-        : "The agent handoff expired because the review state changed.",
-    );
-    if (current) comments();
-    outgoingHandoff = null;
-    outgoingDraftId = null;
-    note(
-      linked
-        ? `Linked proposal ready for review: ${linked.request}`
-        : "Agent handoff closed because the review state changed.",
-    );
-    return;
+      outgoingHandoff = null;
+      outgoingDraftId = null;
+      renderRevisionRequests();
+      return;
+    }
+    if (status && ["failed", "expired", "conflicted"].includes(status.status)) {
+      setAgentStatus(status.status, status.detail);
+      outgoingHandoff = null;
+      outgoingDraftId = null;
+      renderRevisionRequests();
+      return;
+    }
+  }
+  if (current?.stateId !== outgoingHandoff.stateId) {
+    if (outgoingHandoff.context.action.kind === "revision-request") {
+      outgoingHandoff.stateId = current.stateId;
+    } else {
+      const commentId = outgoingHandoff.context.action.commentId,
+        linked = current?.state.proposals.find(
+          (proposal) =>
+            proposal.status === "pending" &&
+            !outgoingHandoff.proposalIds.includes(proposal.id) &&
+            (proposal.motivatedBy ?? []).includes(commentId),
+        );
+      if (commentId)
+        commentAgentStates.set(commentId, linked ? "returned" : "expired");
+      setAgentStatus(
+        linked ? "returned" : "expired",
+        linked
+          ? "A linked proposal returned. Review it before deciding."
+          : "The agent handoff expired because the review state changed.",
+      );
+      if (current) comments();
+      outgoingHandoff = null;
+      outgoingDraftId = null;
+      note(
+        linked
+          ? `Linked proposal ready for review: ${linked.request}`
+          : "Agent handoff closed because the review state changed.",
+      );
+      return;
+    }
   }
   let record;
   try {
     record = await api(`handoffs/${outgoingHandoff.id}`);
   } catch {
+    const revisionHandoff =
+      outgoingHandoff?.context.action.kind === "revision-request";
     if (outgoingHandoff?.context.action.kind === "address-comment")
       commentAgentStates.set(
         outgoingHandoff.context.action.commentId,
@@ -1731,9 +2141,15 @@ async function syncOutgoingHandoff() {
     outgoingHandoff = null;
     setAgentStatus(
       "expired",
-      "The agent handoff expired. Ask the agent again to start a new one.",
+      revisionHandoff
+        ? "The external handoff is no longer available. The saved revision request remains available for retry."
+        : "The agent handoff expired. Ask the agent again to start a new one.",
     );
-    note("Agent handoff expired. Use Ask agent again if needed.");
+    note(
+      revisionHandoff
+        ? "External handoff closed. The saved revision request was not erased."
+        : "Agent handoff expired. Use Ask agent again if needed.",
+    );
     return;
   }
   const returned = record.replyDraft ?? record.draft;
@@ -1941,6 +2357,14 @@ function authorizationChanged(authorized) {
   replyDraft = null;
   postingReply = false;
   commentAgentStates.clear();
+  selectedRevisionCommentIds.clear();
+  submittingRevisionRequest = false;
+  invokingRevisionRequestId = null;
+  activeRevisionRequestId = null;
+  changeFocusCommentId = null;
+  $("revision-instruction").value = "";
+  $("revision-request-list").replaceChildren();
+  $("revision-requests").hidden = true;
   setAgentStatus("idle");
   ++annotationSerial;
   frame = null;

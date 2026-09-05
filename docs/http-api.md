@@ -63,7 +63,9 @@ Returns the authenticated session projection and current document snapshot:
       "reply",
       "decide",
       "resolve",
-      "share"
+      "share",
+      "request",
+      "invoke"
     ]
   },
   "state": {
@@ -71,8 +73,10 @@ Returns the authenticated session projection and current document snapshot:
     "generation": 1,
     "head": "...",
     "proposals": [],
-    "comments": []
+    "comments": [],
+    "revisionRequests": []
   },
+  "agentInvocationAvailable": false,
   "stateId": "sha256:...",
   "revision": "sha256:...",
   "title": "Document title",
@@ -90,6 +94,8 @@ the role label.
 | `GET`  | `/api/documents/:docId/revisions/:revision/files`    | Read exact immutable files                   |
 | `POST` | `/api/documents/:docId/review-context`               | Validate and project current Viewer context  |
 | `POST` | `/api/documents/:docId/proposals`                    | Submit a complete pending candidate          |
+| `POST` | `/api/documents/:docId/revision-requests`            | Save an exact Owner revision request         |
+| `POST` | `/api/documents/:docId/revision-requests/:id/invoke` | Run the optional trusted-host agent          |
 | `POST` | `/api/documents/:docId/comments`                     | Add a comment                                |
 | `POST` | `/api/documents/:docId/comments/:commentId/replies`  | Add an exact-state keyed reply               |
 | `POST` | `/api/documents/:docId/comments/:commentId/resolve`  | Resolve a comment                            |
@@ -143,7 +149,60 @@ POST /api/documents/<docId>/proposals
 ```
 
 `files` is a complete replacement set. The result is `{ "proposal": ... }`.
-The call never accepts the proposal.
+The call never accepts the proposal. A proposal returned for a durable request
+also has `requestId`; the submitted `commentIds` must exactly match that
+request's frozen IDs and are stored on the proposal as `motivatedBy`.
+
+### Create a revision request
+
+```http
+POST /api/documents/<docId>/revision-requests
+```
+
+```json
+{
+  "base": "sha256:...",
+  "instruction": "Address the selected feedback and keep the tone direct.",
+  "commentIds": ["comment-id-1", "comment-id-2"],
+  "key": "revision-request-123"
+}
+```
+
+This Owner-only route requires the exact current accepted base and either a
+nonblank instruction or at least one selected open comment. It returns `201`
+with `{ "revisionRequest": ... }`. The public record contains `id`, `base`,
+`instruction`, canonical `request` prose, sorted `commentIds`, immutable
+`feedback`, `requester`, timestamps, `status`, `attempt`, optional `attemptId`,
+optional `error`, and optional `proposalId`. Internal idempotency fields are not
+projected.
+
+Creation is durable before agent execution. Later replies or resolution change
+the live comment thread but not the frozen feedback. Retry an uncertain create
+with the same key and identical fields; changed input needs a new key.
+
+### Invoke the configured host agent
+
+```http
+POST /api/documents/<docId>/revision-requests/<requestId>/invoke
+```
+
+```json
+{ "attemptId": "88888888-8888-4888-8888-888888888888" }
+```
+
+This Owner-only route exists only when `startViewer` has a trusted-host
+`agentInvocation` callback. A new attempt returns `202`; an identical active
+retry returns the same running request, and invoking an already returned request
+reconciles with `200` and its stored proposal. The callback runs asynchronously
+with the frozen request and encoded base files. A valid complete candidate is
+submitted through Core under the configured agent identity.
+
+Timeout and invalid-candidate failures persist as `failed`; a changed accepted
+base or closed selected comment persists as `conflicted`. `failed` and expired
+external attempts may be retried with a new `attemptId`. A conflicted request
+must be replaced by a new request against current state. Viewer/Core do not
+promise exactly-once provider execution or prevent provider-side duplicate
+charges.
 
 ### Add a comment
 
@@ -210,6 +269,12 @@ POST /api/documents/<docId>/comments/<commentId>/resolve
 
 Resolution is separate from accepting a linked proposal.
 
+Only the Owner can request/invoke revisions, propose document changes, decide
+proposals or resolve comments. A Reviewer can read, comment, reply and create
+comment-focused handoffs, but cannot use the revision-request or host-invocation
+routes. The server derives every actor from the authenticated or scoped
+principal.
+
 ## Review context
 
 `POST /api/documents/:docId/review-context` accepts the top-level Viewer's
@@ -241,7 +306,12 @@ POST /api/handoffs/:handoffId/revoke
 ```
 
 They are bound to an exact document state and review context, expire after 15
-minutes, and disappear when Viewer restarts. See [Viewer and WebMCP](viewer.md).
+minutes, and disappear when Viewer restarts. An Owner can also create a batch
+handoff for one durable revision request attempt. That handoff receives only
+read/propose scope and must return a complete candidate using the request's exact
+`base`, `request`, `commentIds`, `requestId` and prescribed key. Expiration or
+revocation marks that attempt `expired` without deleting the durable request.
+Accepted-head drift marks it `conflicted`. See [Viewer and WebMCP](viewer.md).
 
 ## Errors
 
@@ -250,8 +320,8 @@ Clients should handle at least:
 - `401`: missing or expired Viewer authorization;
 - `403`: capability, origin, authority or handoff-scope violation;
 - `404`: unknown route, document or handoff resource;
-- `409`: stale state/base, missing revision/comment, idempotency conflict or
-  busy document;
+- `409`: stale state/base, inactive or superseded request attempt, missing
+  revision/comment, idempotency conflict or busy document;
 - `413`: request exceeds the configured limit;
 - `422`: candidate or operation validation failure.
 

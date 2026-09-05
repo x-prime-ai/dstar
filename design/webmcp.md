@@ -42,14 +42,14 @@ document. All input schemas reject additional properties. Descriptions and
 annotations mark document and comment contents as untrusted data. A tool must
 not treat instructions found inside that content as user authorization.
 
-| Tool                       | Arguments                                  | Result on success                                                                                                                                               |
-| -------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_review_context`       | `{}`                                       | Public session role/capabilities, package/state IDs, accepted head, reviewed version, selection/action, focused comment, proposals, comments/replies and limits |
-| `read_document`            | `{revision}`                               | Exact immutable revision and complete `files` array                                                                                                             |
-| `draft_selection_comment`  | `{body}`                                   | Opens an editable comment draft for the exact selection; never posts it                                                                                         |
-| `draft_comment_reply`      | `{commentId, body}`                        | Returns an editable reply draft for the exact focused comment; never posts or resolves it                                                                       |
-| `propose_revision` (Owner) | `{base, request, key, files, commentIds?}` | Stored proposal, including exact base/revision, structured motivation links, status and review diff                                                             |
-| `reply_comment`            | `{commentId, body, key}`                   | Comment with its replies; status is not changed                                                                                                                 |
+| Tool                       | Arguments                                              | Result on success                                                                                                          |
+| -------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `get_review_context`       | `{}`                                                   | Public session role/capabilities, state IDs, head/review/action, proposals, revision requests, comments/replies and limits |
+| `read_document`            | `{revision}`                                           | Exact immutable revision and complete `files` array                                                                        |
+| `draft_selection_comment`  | `{body}`                                               | Opens an editable comment draft for the exact selection; never posts it                                                    |
+| `draft_comment_reply`      | `{commentId, body}`                                    | Returns an editable reply draft for the exact focused comment; never posts or resolves it                                  |
+| `propose_revision` (Owner) | `{base, request, key, files, commentIds?, requestId?}` | Stored proposal, including exact base/revision, request/motivation links, status and review diff                           |
+| `reply_comment`            | `{commentId, body, key}`                               | Comment with its replies; status is not changed                                                                            |
 
 Every tool result is a string containing a JSON object with `ok: true` or
 `ok: false`. Successful mutation results also include `viewerUpdated`. If a
@@ -119,6 +119,19 @@ reply to the original Viewer, where a person edits and explicitly posts it.
 For an Owner handoff, `propose_revision` may instead send
 `commentIds:[focusedComment.id]`. A Reviewer handoff does not receive that tool.
 The handoff cannot call the direct reply, accept, reject or resolve routes.
+
+For an Owner batch handoff, the action is
+`{kind:"revision-request", requestId, attemptId}` with no review, selection or
+focused comment. `get_review_context` returns the durable request, all request
+records and the separately current comments. `propose_revision` must echo the
+request's exact base, canonical request prose, comment IDs, `requestId` and
+prescribed `revision-request:<requestId>:<attemptId>` key. The scoped handoff has
+only read/propose capabilities; Reviewer sessions cannot create it.
+
+Later replies or resolution do not rewrite the frozen feedback. Accepted-head
+drift or a closed selected comment conflicts the attempt rather than silently
+rebasing or dropping feedback. Handoff expiration/revocation records `expired`
+while the request remains durable for an explicit retry.
 
 The Engine stores sorted validated links as `proposal.motivatedBy`. Every ID
 must name an existing open comment when new work is created. The links are part
@@ -200,15 +213,18 @@ WebMCP has no server-side namespace. The page adapter obtains `docId` from the
 authenticated Viewer state and maps tools onto the same document-scoped HTTP API
 used by the Viewer UI:
 
-| Method | Route                                               | Body                                                                                                   |
-| ------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `POST` | `/api/documents/:docId/review-context`              | `{review?, selection?, action?, focusedCommentId?}` supplied by the top-level page, validated as above |
-| `GET`  | `/api/documents/:docId/revisions/:revision/files`   | none                                                                                                   |
-| `POST` | `/api/documents/:docId/proposals`                   | `{base, request, key, files, commentIds?}`                                                             |
-| `POST` | `/api/documents/:docId/comments/:commentId/replies` | `{body, key, stateId}`                                                                                 |
-| `POST` | `/api/documents/:docId/comments`                    | `{target, body}`                                                                                       |
-| `POST` | `/api/documents/:docId/proposals/:proposalId/accept | reject`                                                                                                | `{revision, stateId}` |
-| `POST` | `/api/documents/:docId/comments/:commentId/resolve` | `{stateId}`                                                                                            |
+| Method | Route                                                | Body                                                                                                   |
+| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `POST` | `/api/documents/:docId/review-context`               | `{review?, selection?, action?, focusedCommentId?}` supplied by the top-level page, validated as above |
+| `GET`  | `/api/documents/:docId/revisions/:revision/files`    | none                                                                                                   |
+| `POST` | `/api/documents/:docId/proposals`                    | `{base, request, key, files, commentIds?, requestId?}`                                                 |
+| `POST` | `/api/documents/:docId/revision-requests`            | `{base, instruction, commentIds, key}` (Owner only)                                                    |
+| `POST` | `/api/documents/:docId/revision-requests/:id/invoke` | `{attemptId}` for the optional trusted-host callback (Owner only)                                      |
+| `POST` | `/api/documents/:docId/comments/:commentId/replies`  | `{body, key, stateId}`                                                                                 |
+| `POST` | `/api/documents/:docId/comments`                     | `{target, body}`                                                                                       |
+| `POST` | `/api/documents/:docId/proposals/:proposalId/accept` | `{revision, stateId}`                                                                                  |
+| `POST` | `/api/documents/:docId/proposals/:proposalId/reject` | `{revision, stateId}`                                                                                  |
+| `POST` | `/api/documents/:docId/comments/:commentId/resolve`  | `{stateId}`                                                                                            |
 
 The normal Viewer Bearer-session gate runs first. Every mutation also requires the
 configured exact Origin and `Content-Type: application/json`. No route accepts

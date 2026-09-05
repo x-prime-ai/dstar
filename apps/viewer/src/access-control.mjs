@@ -9,6 +9,8 @@ export const CAPABILITIES = Object.freeze({
   DECIDE: "decide",
   RESOLVE: "resolve",
   SHARE: "share",
+  REQUEST: "request",
+  INVOKE: "invoke",
 });
 
 const roleCapabilities = Object.freeze({
@@ -33,6 +35,16 @@ const routeRules = Object.freeze([
   ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/draft$/, CAPABILITIES.HANDOFF],
   ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/revoke$/, CAPABILITIES.HANDOFF],
   ["POST", /^\/api\/handoffs\/[a-f0-9-]{36}\/reply-draft$/, CAPABILITIES.REPLY],
+  [
+    "POST",
+    /^\/api\/documents\/[a-f0-9-]{36}\/revision-requests$/,
+    CAPABILITIES.REQUEST,
+  ],
+  [
+    "POST",
+    /^\/api\/documents\/[a-f0-9-]{36}\/revision-requests\/[a-f0-9-]{36}\/invoke$/,
+    CAPABILITIES.INVOKE,
+  ],
   [
     "POST",
     /^\/api\/documents\/[a-f0-9-]{36}\/comments\/[a-f0-9-]{36}\/replies$/,

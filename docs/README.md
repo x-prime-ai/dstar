@@ -20,14 +20,14 @@ is required.
 
 ## Choose an integration surface
 
-| Product requirement                  | Use                          | What the host provides                                           |
-| ------------------------------------ | ---------------------------- | ---------------------------------------------------------------- |
-| Custom UI or workflow                | `@dstar/core`                | routes, identity, authorization and storage                      |
-| MCP tools in an existing product     | `@dstar/mcp` + `@dstar/core` | MCP transport, document lookup, identity and capabilities        |
-| Complete review UI                   | `@dstar/viewer`              | package storage, origin, TLS, credentials and routing            |
-| Browser-agent tools in the review UI | Viewer WebMCP                | a browser with native WebMCP support; no separate server package |
-| Disposable review environments       | workspace service            | seed, wildcard routing, lifecycle policy and persistent volume   |
-| Local authoring and inspection       | CLI                          | local package and candidate directories                          |
+| Product requirement                  | Use                          | What the host provides                                                         |
+| ------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------ |
+| Custom UI or workflow                | `@dstar/core`                | routes, identity, authorization and storage                                    |
+| MCP tools in an existing product     | `@dstar/mcp` + `@dstar/core` | MCP transport, document lookup, identity and capabilities                      |
+| Complete review UI                   | `@dstar/viewer`              | package storage, origin, TLS, credentials, routing and optional agent callback |
+| Browser-agent tools in the review UI | Viewer WebMCP                | a browser with native WebMCP support; no separate server package               |
+| Disposable review environments       | workspace service            | seed, wildcard routing, lifecycle policy and persistent volume                 |
+| Local authoring and inspection       | CLI                          | local package and candidate directories                                        |
 
 These surfaces share one Core document. MCP and WebMCP do not maintain parallel
 document state.

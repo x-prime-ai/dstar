@@ -253,6 +253,54 @@
           <p id="comments-summary" class="panel-caption">
             Each comment starts a thread.
           </p>
+          <section
+            id="revision-composer"
+            class="revision-composer"
+            aria-labelledby="revision-composer-title"
+            hidden
+          >
+            <div class="revision-section-heading">
+              <div>
+                <p class="eyebrow">REVISION ROUND</p>
+                <h2 id="revision-composer-title">Request one revision</h2>
+              </div>
+              <span id="revision-selection-count">0 comments</span>
+            </div>
+            <form id="revision-request-form">
+              <div
+                id="revision-selection-summary"
+                class="revision-selection-summary"
+              >
+                Select open comments below, or send an instruction on its own.
+              </div>
+              <label for="revision-instruction">Overall instruction</label>
+              <textarea
+                id="revision-instruction"
+                maxlength="20000"
+                placeholder="For example: make the report more concise while addressing the selected feedback."
+              ></textarea>
+              <p id="revision-composer-hint" class="composer-hint">
+                Select at least one open comment or add an instruction.
+              </p>
+              <div class="composer-actions">
+                <button id="submit-revision-request" class="primary" disabled>
+                  Save revision request
+                </button>
+              </div>
+            </form>
+          </section>
+          <section
+            id="revision-requests"
+            class="revision-requests"
+            aria-labelledby="revision-requests-title"
+            hidden
+          >
+            <div class="revision-section-heading">
+              <h2 id="revision-requests-title">Revision requests</h2>
+              <small>Saved history</small>
+            </div>
+            <div id="revision-request-list"></div>
+          </section>
           <div
             id="agent-status"
             class="agent-status"
@@ -340,6 +388,22 @@
             <button id="inspect-changes" class="primary">
               View changes <span aria-hidden="true">→</span>
             </button>
+            <p
+              id="version-change-scope"
+              class="version-change-scope"
+              hidden
+            ></p>
+            <section
+              id="version-request"
+              class="version-request"
+              aria-labelledby="version-request-title"
+              hidden
+            >
+              <p class="eyebrow">REVISION REQUEST</p>
+              <h2 id="version-request-title"></h2>
+              <p id="version-request-instruction"></p>
+              <div id="version-request-feedback"></div>
+            </section>
             <div id="version-addresses" class="proposal-addresses"></div>
             <details class="version-technical">
               <summary>Technical details</summary>

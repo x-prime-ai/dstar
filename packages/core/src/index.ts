@@ -16,6 +16,8 @@ export function openDocument(root: string): DstarDocument {
   return {
     snapshot: repo.snapshot.bind(repo),
     propose: repo.propose.bind(repo),
+    createRevisionRequest: repo.createRevisionRequest.bind(repo),
+    updateRevisionRequest: repo.updateRevisionRequest.bind(repo),
     comment: repo.comment.bind(repo),
     reply: repo.reply.bind(repo),
     export: repo.export.bind(repo),

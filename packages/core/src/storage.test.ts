@@ -80,7 +80,7 @@ function failSwap(path: string, when: "before" | "after"): void {
 function legacy(f: ReturnType<typeof setup>): State {
   const state = f.repo.load();
   fs.writeFileSync(join(f.repo.meta, "state.json"), JSON.stringify(state));
-  for (const name of ["comments", "proposals"])
+  for (const name of ["comments", "proposals", "revisionRequests"])
     fs.rmSync(join(f.repo.meta, name), { recursive: true, force: true });
   return state;
 }
@@ -109,6 +109,101 @@ describe("directory metadata records", () => {
     expect(s.state.comments.map((c) => c.id)).toEqual([a.id, b.id]);
     expect(s.state.comments[0]!.replies).toHaveLength(1);
     expect(s.stateId).toBe(digest(JSON.stringify(s.state)));
+  });
+
+  it("stores revision requests as a third records-v1 collection", () => {
+    const f = setup();
+    f.accept(f.p);
+    const request = f.repo.createRevisionRequest({
+      base: f.p.revision,
+      instruction: "Revise the whole document",
+      requester: "owner",
+      key: "stored-request",
+    });
+    const header = JSON.parse(
+      fs.readFileSync(join(f.repo.meta, "state.json"), "utf8"),
+    );
+    expect(header).toMatchObject({ revisionRequestCount: 1 });
+    expect(
+      JSON.parse(
+        fs.readFileSync(
+          join(f.repo.meta, "revisionRequests/00000000.json"),
+          "utf8",
+        ),
+      ),
+    ).toEqual(request);
+    vi.clearAllMocks();
+    f.repo.updateRevisionRequest(request.id, {
+      status: "running",
+      attemptId: "host-attempt",
+    });
+    expect(renamed()).toEqual([
+      join(f.repo.meta, "metadata-journal.json"),
+      join(f.repo.meta, "revisionRequests/00000000.json"),
+      join(f.repo.meta, "state.json"),
+    ]);
+  });
+
+  it("reads the original two-collection records-v1 header as no requests", () => {
+    const f = setup(),
+      path = join(f.repo.meta, "state.json"),
+      header = JSON.parse(fs.readFileSync(path, "utf8"));
+    delete header.revisionRequestCount;
+    fs.writeFileSync(path, JSON.stringify(header));
+    const reopened = new Repository(f.root).snapshot();
+    expect(reopened.state.revisionRequests).toEqual([]);
+    expect(JSON.parse(fs.readFileSync(path, "utf8"))).not.toHaveProperty(
+      "revisionRequestCount",
+    );
+  });
+
+  it("reads a legacy monolithic state with no revision request field", () => {
+    const f = setup(),
+      path = join(f.repo.meta, "state.json"),
+      state = f.repo.load(),
+      legacyState = JSON.parse(JSON.stringify(state));
+    delete legacyState.revisionRequests;
+    fs.writeFileSync(path, JSON.stringify(legacyState));
+    for (const name of ["comments", "proposals", "revisionRequests"])
+      fs.rmSync(join(f.repo.meta, name), { recursive: true, force: true });
+    const bytes = fs.readFileSync(path),
+      reopened = new Repository(f.root).snapshot();
+    expect(reopened.state.revisionRequests).toEqual([]);
+    expect(fs.readFileSync(path)).toEqual(bytes);
+  });
+
+  it("recovers an interrupted revision request state update", () => {
+    const f = setup();
+    f.accept(f.p);
+    const request = f.repo.createRevisionRequest({
+        base: f.p.revision,
+        instruction: "Retry safely",
+        requester: "owner",
+        key: "recover-request",
+      }),
+      before = f.repo.snapshot();
+    failSwap(join(f.repo.meta, "state.json"), "before");
+    expect(() =>
+      f.repo.updateRevisionRequest(request.id, {
+        status: "running",
+        attemptId: "recover-attempt",
+      }),
+    ).toThrow("Injected storage failure");
+    vi.mocked(fs.renameSync).mockImplementation(originalRename);
+    const recovered = new Repository(f.root).snapshot();
+    expect(recovered.stateId).toBe(before.stateId);
+    expect(recovered.state.revisionRequests[0]).toMatchObject({
+      status: "submitted",
+      attempt: 0,
+    });
+    f.repo.updateRevisionRequest(request.id, {
+      status: "running",
+      attemptId: "recover-attempt",
+    });
+    expect(f.repo.snapshot().state.revisionRequests[0]).toMatchObject({
+      status: "running",
+      attempt: 1,
+    });
   });
 
   it("only rewrites the changed thread, undo journal and small header on reply", () => {

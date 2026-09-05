@@ -4,9 +4,10 @@ Status: implemented host-owned MVP; development format with a pre-stable public
 SDK surface.
 
 This architecture supports the multi-round document review experience in the
-[Vision](../VISION.md). The [review-round design](review-rounds.md) proposes
-durable batch requests, optional host agent invocation and a mountable review
-surface. Those extensions remain planned; Core continues to own revisions and
+[Vision](../VISION.md). Durable batch requests, scoped external handoff and the
+optional trusted-host agent callback are implemented. The
+[review-round design](review-rounds.md) specifies those contracts and the still
+unimplemented real-host embedding milestone. Core continues to own revisions;
 the host owns agent execution. See the [roadmap](roadmap.md) for sequencing.
 
 ## Responsibilities
@@ -14,7 +15,9 @@ the host owns agent execution. See the [roadmap](roadmap.md) for sequencing.
 ```text
 MCP client ──> host MCP transport ──> @dstar/mcp ──┐
                                                    ├──> @dstar/core
-product UI / reference Viewer ─────────────────────┘         │
+product UI / reference Viewer ──> optional host agent ───────┤
+                           │                                 │
+                           └──> scoped external handoff ─────┘
                                                              ▼
                                                    host-owned directory
 ```
@@ -26,7 +29,8 @@ A Viewer is not needed to prepare a proposal or reconstruct historical HTML.
 The Viewer does not calculate or own versions. Its local server reads immutable
 materializations and submits attributed collaboration or Owner decision commands
 to the Engine. Its centralized role gate gives Reviewer read/comment/reply/
-handoff capabilities; document proposals, decisions and resolution are Owner-only.
+handoff capabilities. Revision request creation/invocation, document proposals,
+decisions and resolution are Owner-only.
 `@dstar/mcp` does not own versions either: it validates protocol inputs, exposes
 only host-selected capabilities and invokes Core. The integrating product owns
 the MCP transport, authentication, process and package directory.
@@ -45,7 +49,8 @@ the MCP transport, authentication, process and package directory.
 
 The portable artifact remains an ordinary directory, with no SQLite or Git
 runtime requirement. A small `.dstar/state.json` commits the head, generation
-and counts of separately stored proposal and comment-thread JSON records.
+and counts of separately stored proposal, comment-thread and revision-request
+JSON records.
 Compressed content objects and exact-byte delta encodings remain unchanged.
 The Engine assembles the same logical JSON view for CLI/Viewer consumers.
 
@@ -71,6 +76,22 @@ stable-ID review summaries. The accepted checkout and head remain unchanged.
 
 The candidate can be viewed directly from its immutable storage objects.
 Subsequent changes to the agent's staging directory do not change the proposal.
+
+## Revision request and invocation
+
+An Owner creates a durable request against the exact accepted revision. Core
+freezes the instruction, selected open comment IDs and their feedback/reply
+snapshot before any invocation. The request's latest `attemptId` is a
+compare-and-set boundary for either a 15-minute external handoff or the Viewer's
+optional trusted-host callback. Core never calls a provider or receives model
+credentials.
+
+Both invocation routes must return one complete candidate using the request's
+exact base, canonical request prose and comment set. `propose` stores the one
+linked proposal and atomically sets `revisionRequest.proposalId` and
+`proposal.requestId`. A provider timeout can be recorded and retried, but DSTAR
+does not claim exactly-once provider execution. Accepted-head drift conflicts
+the request; it is never silently rebased.
 
 ## Decisions
 

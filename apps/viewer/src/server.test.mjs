@@ -108,6 +108,9 @@ it("mounts a Viewer at a canonical document path", async () => {
   );
   expect((await wire(viewer, "/documents/dstar-doc/app.js")).status).toBe(200);
   expect(
+    (await wire(viewer, "/documents/dstar-doc/review-rounds.js")).status,
+  ).toBe(200);
+  expect(
     (await wire(viewer, "/documents/dstar-doc/api/state", { headers })).status,
   ).toBe(200);
   const preview = (
@@ -2042,4 +2045,434 @@ it("keeps document API routes inside configured authority and persists retries a
       )
     ).json().files,
   ).toEqual(request.files);
+});
+
+it("persists an Owner batch request and scopes its external handoff to one attempt", async () => {
+  const { root, engine, proposal } = fixture(),
+    ownerToken = "o".repeat(64),
+    reviewerToken = "r".repeat(64),
+    viewer = await start(root, 0, { ownerToken, reviewerToken }),
+    ownerHeaders = {
+      Authorization: `Bearer ${ownerToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    reviewerHeaders = {
+      Authorization: `Bearer ${reviewerToken}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    post = (path, body, headers = ownerHeaders) =>
+      wire(viewer, path, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+  await post(documentApi(viewer, `proposals/${proposal.id}/accept`), {
+    revision: proposal.revision,
+    stateId: engine.snapshot().stateId,
+  });
+  const comments = ["Clarify", "Shorten", "Add evidence"].map((body) =>
+    engine.comment({
+      author: { id: "reviewer", displayName: "Reviewer", role: "reviewer" },
+      body,
+      target: {
+        revision: proposal.revision,
+        element: "intro",
+        selector: { type: "element" },
+      },
+    }),
+  );
+  const createBody = {
+    base: proposal.revision,
+    instruction: "Keep the overall tone direct.",
+    commentIds: comments.map((comment) => comment.id),
+    key: "batch-request-one",
+  };
+  expect(
+    (
+      await post(
+        documentApi(viewer, "revision-requests"),
+        createBody,
+        reviewerHeaders,
+      )
+    ).status,
+  ).toBe(403);
+  const created = await post(
+    documentApi(viewer, "revision-requests"),
+    createBody,
+  );
+  expect(created.status).toBe(201);
+  const revisionRequest = created.json().revisionRequest;
+  expect(revisionRequest.feedback).toHaveLength(3);
+  const attemptId = "77777777-7777-4777-8777-777777777777",
+    scopedToken = "s".repeat(64),
+    context = {
+      review: null,
+      selection: null,
+      focusedCommentId: null,
+      action: {
+        kind: "revision-request",
+        requestId: revisionRequest.id,
+        attemptId,
+      },
+    };
+  expect(
+    (
+      await post(
+        "/api/handoffs",
+        { id: attemptId, accessToken: scopedToken, context },
+        reviewerHeaders,
+      )
+    ).status,
+  ).toBe(403);
+  const handoff = await post("/api/handoffs", {
+    id: attemptId,
+    accessToken: scopedToken,
+    context,
+  });
+  expect(handoff.status).toBe(201);
+  expect(handoff.json().session.capabilities).toEqual(["read", "propose"]);
+  engine.reply(
+    comments[0].id,
+    "New discussion after submission",
+    { id: "owner", displayName: "Owner", role: "owner" },
+    "newer-discussion",
+  );
+  const scopedHeaders = {
+    Authorization: `Bearer ${scopedToken}`,
+    Origin: viewer.origin,
+    "Content-Type": "application/json",
+  };
+  const read = await post(
+    documentApi(viewer, "review-context"),
+    context,
+    scopedHeaders,
+  );
+  expect(read.status).toBe(200);
+  expect(read.json().revisionRequest.feedback[0].replies).toHaveLength(0);
+  expect(read.json().comments[0].replies).toHaveLength(1);
+  const active = engine.snapshot().state.revisionRequests[0];
+  const proposed = await post(
+    documentApi(viewer, "proposals"),
+    {
+      base: active.base,
+      request: active.request,
+      requestId: active.id,
+      commentIds: active.commentIds,
+      key: `revision-request:${active.id}:${attemptId}`,
+      files: candidateFiles("Batch updated greeting"),
+    },
+    scopedHeaders,
+  );
+  expect(proposed.status).toBe(200);
+  expect(proposed.json().proposal).toMatchObject({
+    requestId: active.id,
+    motivatedBy: active.commentIds,
+  });
+  const returned = engine.snapshot().state.revisionRequests[0];
+  expect(returned).toMatchObject({
+    status: "returned",
+    proposalId: proposed.json().proposal.id,
+  });
+  expect(
+    engine.snapshot().state.comments.every((c) => c.status === "open"),
+  ).toBe(true);
+});
+
+it("runs the optional trusted-host hook in durable attempts with timeout and retry", async () => {
+  const { root, engine, proposal } = fixture();
+  engine.decide(
+    proposal.id,
+    "accept",
+    proposal.revision,
+    engine.snapshot().stateId,
+    { id: "owner", displayName: "Owner", role: "owner" },
+  );
+  let calls = 0;
+  const viewer = await start(root, 0, {
+      agentInvocation: {
+        identity: {
+          id: "test-agent",
+          displayName: "Controlled Test Agent",
+          role: "agent",
+        },
+        timeoutMs: 100,
+        async invoke(context) {
+          calls += 1;
+          expect(context.request.base).toBe(proposal.revision);
+          if (calls === 2) return new Promise(() => {});
+          return { files: candidateFiles(`Host result ${calls}`) };
+        },
+      },
+    }),
+    headers = {
+      Authorization: `Bearer ${new URL(viewer.ownerUrl).hash.slice(1)}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    post = (path, body) =>
+      wire(viewer, path, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+  const makeRequest = async (key) =>
+    (
+      await post(documentApi(viewer, "revision-requests"), {
+        base: proposal.revision,
+        instruction: `Host instruction ${key}`,
+        commentIds: [],
+        key,
+      })
+    ).json().revisionRequest;
+  const waitForStatus = async (id, expected) => {
+    let observed;
+    for (let index = 0; index < 100; index++) {
+      const request = engine
+        .snapshot()
+        .state.revisionRequests.find((entry) => entry.id === id);
+      observed = request;
+      if (request?.status === expected) return request;
+      await delay(10);
+    }
+    throw new Error(
+      `Timed out waiting for ${expected}; observed ${JSON.stringify(observed)}`,
+    );
+  };
+  const first = await makeRequest("first-host-request"),
+    firstAttempt = "88888888-8888-4888-8888-888888888888";
+  const started = await post(
+    documentApi(viewer, `revision-requests/${first.id}/invoke`),
+    { attemptId: firstAttempt },
+  );
+  expect(started.status).toBe(202);
+  expect(started.json().revisionRequest.status).toBe("running");
+  const returned = await waitForStatus(first.id, "returned");
+  expect(returned.proposalId).toBeTruthy();
+  const reconciled = await post(
+    documentApi(viewer, `revision-requests/${first.id}/invoke`),
+    { attemptId: firstAttempt },
+  );
+  expect(reconciled.status).toBe(200);
+  expect(calls).toBe(1);
+
+  const second = await makeRequest("second-host-request"),
+    failedAttempt = "99999999-9999-4999-8999-999999999999";
+  expect(
+    (
+      await post(documentApi(viewer, `revision-requests/${second.id}/invoke`), {
+        attemptId: failedAttempt,
+      })
+    ).status,
+  ).toBe(202);
+  const failed = await waitForStatus(second.id, "failed");
+  expect(failed.error).toBe("agent_invocation_timeout");
+  const retryAttempt = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  await post(documentApi(viewer, `revision-requests/${second.id}/invoke`), {
+    attemptId: retryAttempt,
+  });
+  const retried = await waitForStatus(second.id, "returned");
+  expect(retried.attempt).toBe(2);
+  expect(calls).toBe(3);
+  expect(engine.snapshot().state.proposals.at(-1).author.displayName).toBe(
+    "Controlled Test Agent",
+  );
+});
+
+it("reconciles process-local attempts after restart without losing their requests", async () => {
+  const { root, engine, proposal } = fixture(),
+    requester = { id: "owner", displayName: "Owner", role: "owner" };
+  engine.decide(
+    proposal.id,
+    "accept",
+    proposal.revision,
+    engine.snapshot().stateId,
+    requester,
+  );
+  const host = engine.createRevisionRequest({
+      base: proposal.revision,
+      instruction: "Host work",
+      requester,
+      key: "restart-host",
+    }),
+    external = engine.createRevisionRequest({
+      base: proposal.revision,
+      instruction: "External work",
+      requester,
+      key: "restart-external",
+    });
+  engine.updateRevisionRequest(host.id, {
+    status: "running",
+    attemptId: "host-attempt",
+  });
+  engine.updateRevisionRequest(external.id, {
+    status: "submitted",
+    attemptId: "external-attempt",
+  });
+  const viewer = await startViewer(root);
+  cleanup.push(() => close(viewer.server));
+  const requests = engine.snapshot().state.revisionRequests;
+  expect(requests.find((request) => request.id === host.id)).toMatchObject({
+    status: "failed",
+    attemptId: "host-attempt",
+    error: "agent_invocation_interrupted",
+  });
+  expect(requests.find((request) => request.id === external.id)).toMatchObject({
+    status: "expired",
+    attemptId: "external-attempt",
+    error: "external_handoff_interrupted",
+  });
+});
+
+it("keeps frozen discussion stable and conflicts resolved feedback or a stale base during host execution", async () => {
+  const { root, candidate, engine, proposal } = fixture(),
+    owner = { id: "owner", displayName: "Owner", role: "owner" };
+  engine.decide(
+    proposal.id,
+    "accept",
+    proposal.revision,
+    engine.snapshot().stateId,
+    owner,
+  );
+  const releases = [];
+  let resultNumber = 0;
+  const viewer = await start(root, 0, {
+      agentInvocation: {
+        identity: {
+          id: "controlled-agent",
+          displayName: "Controlled Test Agent",
+          role: "agent",
+        },
+        async invoke() {
+          return new Promise((resolve) => {
+            releases.push(() =>
+              resolve({
+                files: candidateFiles(`Controlled result ${++resultNumber}`),
+              }),
+            );
+          });
+        },
+      },
+    }),
+    headers = {
+      Authorization: `Bearer ${new URL(viewer.ownerUrl).hash.slice(1)}`,
+      Origin: viewer.origin,
+      "Content-Type": "application/json",
+    },
+    post = (path, body) =>
+      wire(viewer, path, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      }),
+    waitFor = async (id, status) => {
+      for (let index = 0; index < 150; index++) {
+        const request = engine
+          .snapshot()
+          .state.revisionRequests.find((entry) => entry.id === id);
+        if (request?.status === status) return request;
+        await delay(10);
+      }
+      throw new Error(`Request did not reach ${status}`);
+    },
+    waitForRelease = async () => {
+      for (let index = 0; index < 100 && !releases.length; index++)
+        await delay(5);
+      expect(releases.length).toBeGreaterThan(0);
+      return releases.shift();
+    },
+    makeRequest = async (instruction, commentIds, key) =>
+      (
+        await post(documentApi(viewer, "revision-requests"), {
+          base: engine.snapshot().revision,
+          instruction,
+          commentIds,
+          key,
+        })
+      ).json().revisionRequest;
+
+  const discussedComment = engine.comment({
+      author: "reviewer",
+      body: "Keep the submitted wording",
+      target: {
+        revision: proposal.revision,
+        element: "intro",
+        selector: { type: "element" },
+      },
+    }),
+    discussed = await makeRequest(
+      "Apply this feedback",
+      [discussedComment.id],
+      "discussion-drift",
+    );
+  await post(documentApi(viewer, `revision-requests/${discussed.id}/invoke`), {
+    attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  });
+  const releaseDiscussion = await waitForRelease();
+  engine.reply(
+    discussedComment.id,
+    "This reply is newer than the frozen request",
+    owner,
+    "discussion-after-submit",
+  );
+  releaseDiscussion();
+  const discussionResult = await waitFor(discussed.id, "returned");
+  expect(discussionResult.feedback[0].replies).toHaveLength(0);
+  expect(
+    engine.snapshot().state.comments.find((c) => c.id === discussedComment.id)
+      .replies,
+  ).toHaveLength(1);
+
+  const resolvedComment = engine.comment({
+      author: "reviewer",
+      body: "Resolve while running",
+      target: {
+        revision: proposal.revision,
+        element: "intro",
+        selector: { type: "element" },
+      },
+    }),
+    resolved = await makeRequest(
+      "Apply resolved feedback",
+      [resolvedComment.id],
+      "resolved-drift",
+    );
+  await post(documentApi(viewer, `revision-requests/${resolved.id}/invoke`), {
+    attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  });
+  const releaseResolved = await waitForRelease();
+  engine.resolveComment(resolvedComment.id, engine.snapshot().stateId, owner);
+  releaseResolved();
+  expect(await waitFor(resolved.id, "conflicted")).toMatchObject({
+    error: "comment_closed",
+  });
+
+  const stale = await makeRequest("Return from an old base", [], "stale-host");
+  await post(documentApi(viewer, `revision-requests/${stale.id}/invoke`), {
+    attemptId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  });
+  const releaseStale = await waitForRelease();
+  writeFileSync(
+    join(candidate, "document.html"),
+    html("Competing accepted result"),
+  );
+  const competing = engine.propose({
+    candidate,
+    base: proposal.revision,
+    request: "Competing accepted result",
+    author: "agent",
+    key: "competing-accepted-result",
+  });
+  engine.decide(
+    competing.id,
+    "accept",
+    competing.revision,
+    engine.snapshot().stateId,
+    owner,
+  );
+  releaseStale();
+  expect(await waitFor(stale.id, "conflicted")).toMatchObject({
+    error: "stale_base",
+  });
 });

@@ -38,6 +38,15 @@ const viewer = await startViewer("/srv/dstar/brief.dstar", 3000, {
   reviewerTokenFile: "/run/secrets/dstar-reviewer",
   ownerDisplayName: "Document owner",
   reviewerDisplayName: "Document reviewer",
+  agentInvocation: {
+    identity: { id: "host-agent", displayName: "Host agent", role: "agent" },
+    timeoutMs: 60_000,
+    async invoke({ request, base }, { signal }) {
+      return {
+        files: await yourAgent({ request, base, signal }),
+      };
+    },
+  },
 });
 
 console.log(viewer.origin);
@@ -70,6 +79,12 @@ Run one Viewer process per package. For a path-mounted instance, provide
 `basePath`; for stronger browser isolation, prefer a distinct origin per
 package. Never let a request choose `packageRoot`.
 
+`agentInvocation` is optional and trusted-host-only. Viewer supplies the
+durable revision request plus the exact base files, and the callback returns one
+complete encoded file set. Provider selection, credentials, billing, process
+durability and cancellation belong to the host. Core never executes an agent.
+The configured timeout must be 100–300000 ms.
+
 ## Roles in the reference Viewer
 
 The built-in session adapter provides fixed Owner and Reviewer roles:
@@ -79,12 +94,41 @@ The built-in session adapter provides fixed Owner and Reviewer roles:
 | Read and inspect versions                        | yes   | yes      |
 | Add comments and replies                         | yes   | yes      |
 | Create a scoped agent handoff                    | yes   | yes      |
+| Save a multi-comment revision request            | yes   | no       |
+| Invoke the configured host agent                 | yes   | no       |
 | Propose complete document updates through WebMCP | yes   | no       |
 | Accept or reject proposals                       | yes   | no       |
 | Resolve comments and manage sharing              | yes   | no       |
 
 These are Viewer product roles, not Core roles. A custom service over Core may
 define a different policy.
+
+## Complete a review round
+
+On the current accepted version, an Owner can select **Add to request** on one
+or more open comments, add an optional overall instruction, and save one durable
+revision request. The request freezes the exact base and submitted feedback
+before any agent runs. The Owner then chooses **Copy external handoff** or, when
+configured, **Run host agent**.
+
+Requests remain visible after refresh with submitted/running/returned/failed/
+expired/conflicted status. Failed or expired attempts can be retried; accepted
+head drift requires a new request. New replies and later resolution are shown as
+drift beside the frozen feedback rather than injected into an active attempt.
+On Viewer restart, a process-local running host attempt is reconciled to failed
+and an outstanding external handoff to expired; the durable request and feedback
+remain available for an explicit retry.
+
+A returned request links to **View suggestion**. Each selected comment links to
+the proposal, and the proposal links back to the frozen request. **View linked
+changes** opens `document.html` when the proposal diff identifies the comment's
+target element; otherwise Viewer labels the limitation and opens the available
+file or full-version comparison. This is navigation, not proof that the agent
+satisfied every comment.
+
+Accept/reject still requires an exact ready After preview and explicit Owner
+confirmation. Accepting never resolves a comment; resolution is a separate
+Owner action against the current review state.
 
 ## HTTP API
 
@@ -120,13 +164,16 @@ package. See the detailed [WebMCP security model](../design/webmcp.md).
 
 ## Scoped handoffs
 
-**Ask agent** creates a private, short-lived handoff bound to one exact Viewer
-state and review context. Its credential is distinct from Owner and Reviewer
-credentials. Depending on the action, it can return an editable draft or a
-linked pending proposal; it cannot silently decide or resolve work.
+**Ask agent** and **Copy external handoff** create private, short-lived handoffs
+bound to one exact Viewer state or durable revision-request attempt. Their
+credentials are distinct from Owner and Reviewer credentials. Depending on the
+action, a handoff can return an editable draft or a linked pending proposal; it
+cannot silently decide or resolve work. Batch revision handoffs are Owner-only
+and receive only the frozen base/request/comment set.
 
-Handoffs are in-memory and expire on timeout or Viewer restart. Treat their URLs
-as secrets.
+Handoffs are in-memory and expire on timeout or Viewer restart. The durable
+request survives and records expiration so the Owner can retry. Treat handoff
+URLs as secrets.
 
 ## Deploy safely
 

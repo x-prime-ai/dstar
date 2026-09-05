@@ -12,16 +12,25 @@ import {
   revision,
   revisionFromEntries,
 } from "./delta.js";
-import { filePath, validateHtml, validateTarget, reviewDiff } from "./html.js";
+import {
+  filePath,
+  validateHtml,
+  validateTarget,
+  reviewDiff,
+  resolveTarget,
+} from "./html.js";
 import type {
   Actor,
   Comment,
+  CreateRevisionRequestInput,
   Files,
   Proposal,
+  RevisionRequest,
   Snapshot,
   State,
   Storage,
   Target,
+  UpdateRevisionRequestInput,
 } from "./types.js";
 
 const HASH = /^sha256:[a-f0-9]{64}$/;
@@ -44,6 +53,103 @@ function actorField(value: Actor, name: string): void {
     )
   )
     throw new Error(`Invalid ${name}`);
+}
+function timestampField(value: string, name: string): void {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) ||
+    Number.isNaN(Date.parse(value))
+  )
+    throw new Error(`Invalid ${name}`);
+}
+function targetField(value: Target, name: string): void {
+  if (
+    !value ||
+    !HASH.test(value.revision) ||
+    typeof value.element !== "string" ||
+    !value.element ||
+    !value.selector ||
+    typeof value.selector !== "object"
+  )
+    throw new Error(`Invalid ${name}`);
+  const range = (entry: {
+    start: number;
+    end: number;
+    unit: string;
+    exact: string;
+    prefix?: string;
+    suffix?: string;
+  }): void => {
+    if (
+      !Number.isSafeInteger(entry.start) ||
+      !Number.isSafeInteger(entry.end) ||
+      entry.start < 0 ||
+      entry.end <= entry.start ||
+      entry.unit !== "unicode-code-point" ||
+      typeof entry.exact !== "string" ||
+      !entry.exact ||
+      (entry.prefix !== undefined && typeof entry.prefix !== "string") ||
+      (entry.suffix !== undefined && typeof entry.suffix !== "string")
+    )
+      throw new Error(`Invalid ${name}`);
+  };
+  if (value.selector.type === "element") return;
+  if (value.selector.type === "text-range") {
+    range(value.selector);
+    return;
+  }
+  if (
+    value.selector.type !== "text-ranges" ||
+    !Array.isArray(value.selector.ranges) ||
+    value.selector.ranges.length < 1 ||
+    value.selector.ranges.length > 100
+  )
+    throw new Error(`Invalid ${name}`);
+  for (const entry of value.selector.ranges) {
+    if (!entry || typeof entry.element !== "string" || !entry.element)
+      throw new Error(`Invalid ${name}`);
+    range(entry);
+  }
+}
+function replyFields(replies: Comment["replies"], name: string): void {
+  if (!Array.isArray(replies) || replies.length > 10000)
+    throw new Error(`Invalid ${name}`);
+  const ids = new Set<string>();
+  for (const reply of replies) {
+    if (
+      !reply ||
+      !UUID.test(reply.id) ||
+      ids.has(reply.id) ||
+      (reply.key !== undefined &&
+        (typeof reply.key !== "string" ||
+          !reply.key.trim() ||
+          reply.key.length > 200))
+    )
+      throw new Error(`Invalid ${name}`);
+    textField(reply.body, `${name} body`);
+    actorField(reply.author, `${name} author`);
+    timestampField(reply.createdAt, `${name} timestamp`);
+    ids.add(reply.id);
+  }
+}
+function requestProse(instruction: string): string {
+  return instruction || "Address selected review feedback";
+}
+function requestCommand(input: {
+  base: string | null;
+  instruction: string;
+  commentIds: string[];
+  requester: Actor;
+}): string {
+  return digest(
+    JSON.stringify([
+      input.base,
+      input.instruction,
+      requestProse(input.instruction),
+      input.commentIds,
+      input.requester,
+    ]),
+  );
 }
 function bounded(files: Files): Files {
   if (
@@ -122,8 +228,10 @@ function validateState(value: State): State {
     typeof value.id !== "string" ||
     !Array.isArray(value.proposals) ||
     !Array.isArray(value.comments) ||
+    !Array.isArray(value.revisionRequests) ||
     value.proposals.length > 10000 ||
-    value.comments.length > 10000
+    value.comments.length > 10000 ||
+    value.revisionRequests.length > 10000
   )
     throw new Error("Unsupported or corrupt DSTAR state");
   const ids = new Set<string>();
@@ -141,7 +249,10 @@ function validateState(value: State): State {
     )
       throw new Error("Corrupt comment metadata");
     actorField(c.author, "comment author");
-    for (const reply of c.replies) actorField(reply.author, "reply author");
+    textField(c.body, "comment");
+    timestampField(c.createdAt, "comment timestamp");
+    targetField(c.target, "comment target");
+    replyFields(c.replies, "comment replies");
     if (c.status === "resolved" && (c.resolvedAt || c.resolvedBy)) {
       if (!c.resolvedAt || !c.resolvedBy)
         throw new Error("Resolved comment has incomplete attribution");
@@ -150,6 +261,101 @@ function validateState(value: State): State {
       throw new Error("Open comment has resolution attribution");
     }
     commentIds.add(c.id);
+  }
+  const requestIds = new Set<string>();
+  const requestKeys = new Set<string>();
+  const requestById = new Map<string, RevisionRequest>();
+  for (const request of value.revisionRequests) {
+    if (
+      !request ||
+      !UUID.test(request.id) ||
+      requestIds.has(request.id) ||
+      (request.base !== null && !HASH.test(request.base)) ||
+      typeof request.instruction !== "string" ||
+      request.instruction.length > 20000 ||
+      typeof request.request !== "string" ||
+      !request.request.trim() ||
+      request.request.length > 20000 ||
+      request.request !== requestProse(request.instruction) ||
+      !Array.isArray(request.commentIds) ||
+      request.commentIds.length > 100 ||
+      new Set(request.commentIds).size !== request.commentIds.length ||
+      request.commentIds.some(
+        (id) => typeof id !== "string" || !UUID.test(id) || !commentIds.has(id),
+      ) ||
+      request.commentIds.some(
+        (id, index) => index > 0 && request.commentIds[index - 1]! >= id,
+      ) ||
+      (!request.instruction.trim() && request.commentIds.length === 0) ||
+      !Array.isArray(request.feedback) ||
+      request.feedback.length !== request.commentIds.length ||
+      typeof request.key !== "string" ||
+      !request.key.trim() ||
+      request.key.length > 200 ||
+      requestKeys.has(request.key) ||
+      !HASH.test(request.command) ||
+      ![
+        "submitted",
+        "running",
+        "returned",
+        "failed",
+        "expired",
+        "conflicted",
+      ].includes(request.status) ||
+      !Number.isSafeInteger(request.attempt) ||
+      request.attempt < 0 ||
+      (request.attempt === 0) !== (request.attemptId === undefined) ||
+      (request.attemptId !== undefined &&
+        (typeof request.attemptId !== "string" ||
+          !request.attemptId.trim() ||
+          request.attemptId.length > 200)) ||
+      (request.proposalId !== undefined && !UUID.test(request.proposalId)) ||
+      (request.status === "returned") !== (request.proposalId !== undefined) ||
+      ["failed", "expired", "conflicted"].includes(request.status) !==
+        (request.error !== undefined) ||
+      (request.error !== undefined &&
+        (typeof request.error !== "string" ||
+          !request.error.trim() ||
+          request.error.length > 20000)) ||
+      request.command !== requestCommand(request)
+    )
+      throw new Error("Corrupt revision request metadata");
+    textField(request.request, "revision request prose");
+    actorField(request.requester, "revision requester");
+    timestampField(request.createdAt, "revision request timestamp");
+    timestampField(request.updatedAt, "revision request update timestamp");
+    if (request.updatedAt < request.createdAt)
+      throw new Error("Corrupt revision request metadata");
+    for (const [index, feedback] of request.feedback.entries()) {
+      if (
+        !feedback ||
+        feedback.id !== request.commentIds[index] ||
+        feedback.status !== "open"
+      )
+        throw new Error("Corrupt revision request feedback");
+      textField(feedback.body, "revision request feedback body");
+      actorField(feedback.author, "revision request feedback author");
+      timestampField(feedback.createdAt, "revision request feedback timestamp");
+      targetField(feedback.target, "revision request feedback target");
+      replyFields(feedback.replies, "revision request feedback replies");
+      const source = value.comments.find(
+        (comment) => comment.id === feedback.id,
+      );
+      if (
+        !source ||
+        source.body !== feedback.body ||
+        source.createdAt !== feedback.createdAt ||
+        JSON.stringify(source.author) !== JSON.stringify(feedback.author) ||
+        JSON.stringify(source.target) !== JSON.stringify(feedback.target) ||
+        feedback.replies.length > source.replies.length ||
+        JSON.stringify(source.replies.slice(0, feedback.replies.length)) !==
+          JSON.stringify(feedback.replies)
+      )
+        throw new Error("Corrupt revision request feedback snapshot");
+    }
+    requestIds.add(request.id);
+    requestKeys.add(request.key);
+    requestById.set(request.id, request);
   }
   for (const p of value.proposals) {
     if (
@@ -174,6 +380,20 @@ function validateState(value: State): State {
     )
       throw new Error("Corrupt proposal metadata");
     actorField(p.author, "proposal author");
+    if (p.requestId !== undefined) {
+      if (!UUID.test(p.requestId)) throw new Error("Corrupt proposal metadata");
+      const request = requestById.get(p.requestId);
+      if (
+        !request ||
+        request.proposalId !== p.id ||
+        request.status !== "returned" ||
+        p.base !== request.base ||
+        p.request !== request.request ||
+        JSON.stringify(p.motivatedBy ?? []) !==
+          JSON.stringify(request.commentIds)
+      )
+        throw new Error("Corrupt linked revision proposal");
+    }
     if (p.decision) actorField(p.decision.actor, "decision actor");
     ids.add(p.id);
     const paths = new Set<string>();
@@ -196,6 +416,16 @@ function validateState(value: State): State {
     )
       throw new Error("Corrupt checkpoint");
   }
+  for (const request of value.revisionRequests)
+    if (
+      request.proposalId !== undefined &&
+      !value.proposals.some(
+        (proposal) =>
+          proposal.id === request.proposalId &&
+          proposal.requestId === request.id,
+      )
+    )
+      throw new Error("Missing linked revision proposal");
   if (
     value.head !== null &&
     !value.proposals.some((p) => p.id === value.head && p.status === "accepted")
@@ -413,6 +643,7 @@ export class Repository {
           head: null,
           proposals: [],
           comments: [],
+          revisionRequests: [],
         });
       const state = this.load();
       this.recover(state);
@@ -451,6 +682,167 @@ export class Repository {
       };
     });
   }
+  createRevisionRequest(args: CreateRevisionRequestInput): RevisionRequest {
+    if (args.base !== null && !HASH.test(args.base))
+      throw new Error("Invalid revision request base");
+    actorField(args.requester, "requester");
+    textField(args.key, "key", 200);
+    const instruction = args.instruction?.trim() ? args.instruction : "";
+    if (instruction.length > 20000)
+      throw new Error("Invalid revision request instruction");
+    if (
+      args.commentIds !== undefined &&
+      (!Array.isArray(args.commentIds) ||
+        args.commentIds.length > 100 ||
+        new Set(args.commentIds).size !== args.commentIds.length ||
+        args.commentIds.some(
+          (commentId) => typeof commentId !== "string" || !UUID.test(commentId),
+        ))
+    )
+      throw new Error("Invalid revision request comment IDs");
+    const commentIds = [...(args.commentIds ?? [])].sort();
+    if (!instruction && !commentIds.length)
+      throw new Error("A revision request needs feedback or an instruction");
+    const command = requestCommand({
+      base: args.base,
+      instruction,
+      commentIds,
+      requester: args.requester,
+    });
+    return this.transaction((state) => {
+      const previous = state.revisionRequests.find(
+        (request) => request.key === args.key,
+      );
+      if (previous) {
+        if (previous.command !== command)
+          throw new Error(
+            "Idempotency key already used for a different revision request",
+          );
+        return previous;
+      }
+      const baseFiles = this.materialize(state, state.head);
+      if ((baseFiles.size ? revision(baseFiles) : null) !== args.base)
+        throw new Error(
+          "Stale base: re-read head and create a new revision request",
+        );
+      const index = baseFiles.size ? validateHtml(baseFiles) : null;
+      const feedback = commentIds.map((commentId) => {
+        const comment = state.comments.find((entry) => entry.id === commentId);
+        if (!comment) throw new Error("Unknown revision request comment");
+        if (comment.status !== "open")
+          throw new Error("Revision request comment is no longer open");
+        if (!index)
+          throw new Error("Revision request comment has no accepted base");
+        const resolution = resolveTarget(index, comment.target);
+        if (!["exact", "recovered"].includes(resolution.status))
+          throw new Error(
+            `Revision request comment anchor is ${resolution.status}`,
+          );
+        return JSON.parse(
+          JSON.stringify({
+            id: comment.id,
+            target: comment.target,
+            body: comment.body,
+            author: comment.author,
+            createdAt: comment.createdAt,
+            replies: comment.replies,
+            status: comment.status,
+          }),
+        ) as RevisionRequest["feedback"][number];
+      });
+      const now = new Date().toISOString();
+      const request: RevisionRequest = {
+        id: randomUUID(),
+        base: args.base,
+        instruction,
+        request: requestProse(instruction),
+        commentIds,
+        feedback,
+        requester: args.requester,
+        createdAt: now,
+        key: args.key,
+        command,
+        status: "submitted",
+        attempt: 0,
+        updatedAt: now,
+      };
+      state.revisionRequests.push(request);
+      this.save(state);
+      return request;
+    });
+  }
+  updateRevisionRequest(
+    id: string,
+    args: UpdateRevisionRequestInput,
+  ): RevisionRequest {
+    if (!UUID.test(id)) throw new Error("Invalid revision request ID");
+    if (
+      !["submitted", "running", "failed", "expired", "conflicted"].includes(
+        args.status,
+      )
+    )
+      throw new Error("Invalid revision request status");
+    textField(args.attemptId, "attempt ID", 200);
+    if (args.expectedStateId !== undefined && !HASH.test(args.expectedStateId))
+      throw new Error("Invalid expected state ID");
+    const failed = ["failed", "expired", "conflicted"].includes(args.status);
+    if (failed)
+      textField(args.error as string, "revision request error", 20000);
+    else if (args.error !== undefined)
+      throw new Error("Only a terminal invocation state can have an error");
+    return this.transaction((state) => {
+      const request = state.revisionRequests.find((entry) => entry.id === id);
+      if (!request) throw new Error("Unknown revision request");
+      // Returned is terminal. A late host callback reconciles to the already
+      // stored request/proposal instead of changing or duplicating either.
+      if (request.status === "returned") return request;
+      if (request.attemptId === args.attemptId) {
+        if (request.status === args.status && request.error === args.error)
+          return request;
+        if (request.status === "submitted" && args.status === "running") {
+          request.status = "running";
+          request.updatedAt = new Date().toISOString();
+          this.save(state);
+          return request;
+        }
+        if (request.status !== "running" && request.status !== "submitted")
+          throw new Error("Invocation attempt is already complete");
+        if (!failed)
+          throw new Error("Invocation attempt cannot move backwards");
+        request.status = args.status;
+        request.error = args.error!;
+        request.updatedAt = new Date().toISOString();
+        this.save(state);
+        return request;
+      }
+      if (request.attemptId !== undefined && failed)
+        throw new Error("Invocation attempt was superseded");
+      if (
+        request.attemptId !== undefined &&
+        ["submitted", "running"].includes(request.status)
+      )
+        throw new Error("A revision request attempt is already active");
+      if (request.status === "conflicted")
+        throw new Error("A conflicted revision request must be replaced");
+      if (
+        args.expectedStateId !== undefined &&
+        digest(JSON.stringify(state)) !== args.expectedStateId
+      )
+        throw new Error("Review state changed; refresh before retrying");
+      if (failed && request.attemptId !== undefined)
+        throw new Error("A failure must identify the current attempt");
+      if (failed && request.attempt !== 0)
+        throw new Error("Invocation attempt was superseded");
+      request.attempt += 1;
+      request.attemptId = args.attemptId;
+      request.status = args.status;
+      request.updatedAt = new Date().toISOString();
+      if (failed) request.error = args.error!;
+      else delete request.error;
+      this.save(state);
+      return request;
+    });
+  }
   propose(args: {
     candidate: string;
     base: string | null;
@@ -458,6 +850,8 @@ export class Repository {
     author: Actor;
     key: string;
     commentIds?: string[];
+    requestId?: string;
+    attemptId?: string;
   }): Proposal {
     const candidate = safe(args.candidate);
     if (
@@ -473,6 +867,10 @@ export class Repository {
     textField(args.request, "request");
     actorField(args.author, "author");
     textField(args.key, "key", 200);
+    if (args.requestId !== undefined && !UUID.test(args.requestId))
+      throw new Error("Invalid revision request ID");
+    if (args.attemptId !== undefined)
+      textField(args.attemptId, "attempt ID", 200);
     if (
       args.commentIds !== undefined &&
       (!Array.isArray(args.commentIds) ||
@@ -486,11 +884,42 @@ export class Repository {
       throw new Error("Invalid motivating comment IDs");
     const motivatedBy = [...(args.commentIds ?? [])].sort();
     return this.transaction((state) => {
+      const request =
+        args.requestId === undefined
+          ? undefined
+          : state.revisionRequests.find((entry) => entry.id === args.requestId);
+      if (args.requestId !== undefined && !request)
+        throw new Error("Unknown revision request");
+      if (request) {
+        if (
+          args.base !== request.base ||
+          args.request !== request.request ||
+          JSON.stringify(motivatedBy) !== JSON.stringify(request.commentIds)
+        )
+          throw new Error("Proposal does not match its revision request");
+        if (args.attemptId !== request.attemptId)
+          throw new Error("Invocation attempt was superseded");
+      } else if (args.attemptId !== undefined) {
+        throw new Error("An attempt ID requires a revision request");
+      }
       const command = digest(
         JSON.stringify(
           motivatedBy.length
-            ? [args.base, result, args.request, args.author, motivatedBy]
-            : [args.base, result, args.request, args.author],
+            ? [
+                args.base,
+                result,
+                args.request,
+                args.author,
+                motivatedBy,
+                ...(request ? [request.id] : []),
+              ]
+            : [
+                args.base,
+                result,
+                args.request,
+                args.author,
+                ...(request ? [request.id] : []),
+              ],
         ),
       );
       const previous = state.proposals.find((p) => p.key === args.key);
@@ -500,6 +929,16 @@ export class Repository {
             "Idempotency key already used for a different proposal",
           );
         return previous;
+      }
+      if (request?.proposalId) {
+        const previousForRequest = state.proposals.find(
+          (proposal) => proposal.id === request.proposalId,
+        );
+        if (!previousForRequest)
+          throw new Error("Missing linked revision proposal");
+        if (previousForRequest.command !== command)
+          throw new Error("Revision request already returned a proposal");
+        return previousForRequest;
       }
       for (const commentId of motivatedBy) {
         const comment = state.comments.find((entry) => entry.id === commentId);
@@ -532,6 +971,7 @@ export class Repository {
         parent: state.head,
         revision: result,
         request: args.request,
+        ...(request ? { requestId: request.id } : {}),
         ...(motivatedBy.length ? { motivatedBy } : {}),
         author: args.author,
         key: args.key,
@@ -543,6 +983,12 @@ export class Repository {
       };
       state.proposals.push(p);
       this.materialize(state, p.id);
+      if (request) {
+        request.status = "returned";
+        request.proposalId = p.id;
+        request.updatedAt = new Date().toISOString();
+        delete request.error;
+      }
       this.save(state);
       return p;
     }, true);

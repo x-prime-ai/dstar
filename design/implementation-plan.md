@@ -1,8 +1,9 @@
 # Implementation status
 
-Delivered foundation as of 2026-09-04. The [roadmap](roadmap.md) owns future
-priority order; the [review-round design](review-rounds.md) describes planned
-batch feedback and host integration. Neither is already delivered by this list.
+Delivered reference implementation as of 2026-09-04. The
+[roadmap](roadmap.md) owns future priority order; the
+[review-round design](review-rounds.md) describes the implemented milestones
+1/2 contract and incomplete real-host embedding milestone.
 
 ## Delivered
 
@@ -28,6 +29,13 @@ batch feedback and host integration. Neither is already delivered by this list.
   compile-checked external TypeScript consumer.
 - Role-bound Owner/Reviewer sessions, browser WebMCP and scoped external-agent
   handoff, including comment-focused draft and revision workflows.
+- Durable batch revision requests in the third `records-v1` collection, with
+  exact base, frozen feedback/replies, requester, status, attempts and linked
+  proposal identity.
+- Core create/update/link APIs, Owner-only Viewer request/invoke routes, batch
+  external handoff and optional trusted-host `agentInvocation` callback.
+- Request status/drift UI and basic request → proposal and comment → proposal →
+  changes navigation.
 
 ## Verification
 
@@ -40,12 +48,17 @@ Viewer HTTP tests cover session authentication, origin checks, immutable
 sandboxed previews, comments and exact decisions. Browser verification checks
 actual presentation, selecting text, adding comments and review controls.
 
+The milestone 1/2 additions are verified by current automated Core/UI/Viewer
+tests using real filesystem persistence, loopback HTTP and a controlled test
+agent callback. This is not a real provider run or production host deployment.
+
 ## Next work
 
-The next product milestone is a complete review round: select several comments,
-add a general instruction, send once, inspect the linked suggestion, decide and
-resume later. Batch requests and optional host-connected agent invocation come
-first; embedding validation and better comment-to-change navigation follow.
+The next product milestone is real-host embedding validation: complete two
+review rounds at the host's own origin with its identity, filesystem package and
+provider execution. The repository example and controlled test agent do not
+satisfy that milestone. Deeper comment-to-change navigation follows observed
+real-host friction.
 
 See the [roadmap](roadmap.md) for exit evidence, validation measures and the
 engineering backlog. Canonical Markdown, direct inline editing and broader

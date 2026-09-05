@@ -4,6 +4,21 @@ This record covers the HTML-first Engine and Viewer on the integration branch.
 No deployment, public service, demo or browser setting change is part of this
 validation.
 
+## Review-round milestones 1 and 2 (2026-09-04)
+
+The current repository automation verifies durable revision requests, frozen
+feedback, request/proposal linkage, batch external-handoff scope, Owner/Reviewer
+boundaries, stale/superseded attempts, timeout/retry and basic linked-change
+navigation. The host-invocation scenario uses a controlled in-test callback
+that returns encoded candidate files and deliberately times out on demand.
+
+This is automated contract evidence only. No real model provider, provider
+credential, billing path, production host deployment, native provider/browser
+integration or durable worker across process restart was exercised. Roadmap
+milestone 3—embedding the flow in one real host at its own origin—remains
+unverified and incomplete. Current test commands and outcomes should be recorded
+from the final integrated tree rather than inferred from older counts below.
+
 ## Baseline and independent fix
 
 Baseline: `6902987`. The complete `pnpm verify` passed under Node 22.22.3 and

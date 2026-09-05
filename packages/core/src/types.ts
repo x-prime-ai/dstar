@@ -97,6 +97,8 @@ export interface Proposal {
   parent: string | null;
   revision: string;
   request: string;
+  /** Durable revision request that produced this proposal, when applicable. */
+  requestId?: string;
   /** Persistent annotation/comment IDs that motivated this proposal. */
   motivatedBy?: string[];
   author: Actor;
@@ -114,6 +116,36 @@ export interface Proposal {
     storage: Storage;
   }[];
 }
+export type RevisionRequestStatus =
+  "submitted" | "running" | "returned" | "failed" | "expired" | "conflicted";
+export type RevisionRequestFeedback = Pick<
+  Comment,
+  "id" | "target" | "body" | "author" | "createdAt" | "replies" | "status"
+>;
+export interface RevisionRequest {
+  id: string;
+  /** Exact accepted revision captured when the request was submitted. */
+  base: string | null;
+  /** Owner-supplied whole-request instruction; empty for comments-only requests. */
+  instruction: string;
+  /** Nonempty canonical prose used by a linked Proposal. */
+  request: string;
+  commentIds: string[];
+  /** Immutable submitted feedback, independent of later discussion changes. */
+  feedback: RevisionRequestFeedback[];
+  requester: Actor;
+  createdAt: string;
+  key: string;
+  command: string;
+  status: RevisionRequestStatus;
+  /** Monotonically increasing invocation number; zero means not yet invoked. */
+  attempt: number;
+  /** Host/external-agent identity for the latest invocation. */
+  attemptId?: string;
+  updatedAt: string;
+  error?: string;
+  proposalId?: string;
+}
 export interface ElementPreview {
   tag: string;
   parent: string | null;
@@ -129,6 +161,7 @@ export interface State {
   head: string | null;
   proposals: Proposal[];
   comments: Comment[];
+  revisionRequests: RevisionRequest[];
 }
 export interface Snapshot {
   state: State;
@@ -145,6 +178,23 @@ export interface ProposeInput {
   author: Actor;
   key: string;
   commentIds?: string[];
+  requestId?: string;
+  attemptId?: string;
+}
+
+export interface CreateRevisionRequestInput {
+  base: string | null;
+  instruction?: string;
+  commentIds?: string[];
+  requester: Actor;
+  key: string;
+}
+
+export interface UpdateRevisionRequestInput {
+  status: "submitted" | "running" | "failed" | "expired" | "conflicted";
+  attemptId: string;
+  error?: string;
+  expectedStateId?: string;
 }
 
 export interface CommentInput {
@@ -162,6 +212,11 @@ export interface ExportResult {
 export interface DstarDocument {
   snapshot(revisionOrProposalId?: string): Snapshot;
   propose(input: ProposeInput): Proposal;
+  createRevisionRequest(input: CreateRevisionRequestInput): RevisionRequest;
+  updateRevisionRequest(
+    requestId: string,
+    input: UpdateRevisionRequestInput,
+  ): RevisionRequest;
   comment(input: CommentInput): Comment;
   reply(
     commentId: string,

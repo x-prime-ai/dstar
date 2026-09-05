@@ -1,138 +1,152 @@
 # Review rounds and host integration
 
-Status: planned product design, 2026-09-04. The
-[MVP contract](html-mvp.md) and [architecture](architecture.md) describe current
-behavior. This document introduces no supported API or storage schema.
+Status: milestones 1 and 2 implemented, 2026-09-04. Verification is repository
+automation with loopback HTTP and a controlled test agent. It is not a real
+provider run or host deployment. Milestone 3, embedding the review surface in a
+real host, remains incomplete.
 
 ## Product scenario
 
 A reviewer annotates an AI-generated report. The Owner selects three open
-comments, adds a general instruction, and requests one revision. The agent
-returns a suggested version linked to those comments. The Owner inspects its
-changes, accepts or declines it, and returns later to continue the discussion.
+comments, adds a general instruction, and saves one revision request. An agent
+returns a suggested version linked to the request and comments. The Owner
+inspects its changes, accepts or declines it, and returns later to continue the
+discussion.
 
-Reports, proposals, design explanations and slides are the initial content
-types. The same workflow operates on canonical HTML, CSS and local assets.
+Reports, proposals, design explanations and slides use the same canonical HTML,
+CSS and local-asset workflow. This work does not add Markdown authority, inline
+editing or another storage backend.
 
-## Existing foundation and missing experience
+## Implemented contract
 
-| Area             | Implemented                                                                       | Planned                                                                  |
-| ---------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Feedback         | Persistent anchored threads, replies and resolution                               | Select multiple open threads for one revision request                    |
-| Agent entry      | CLI, MCP, WebMCP and scoped external handoff; comment actions focus on one thread | Batch handoff and optional host-connected invocation                     |
-| Revision context | Exact base and `motivatedBy` links to multiple comments                           | Freeze selected feedback and a general instruction as one review request |
-| Review           | Immutable proposals, Before / After, file changes and linked comments             | Easier movement from each comment to relevant local changes              |
-| Integration      | Core API and self-hosted Viewer                                                   | A mountable review surface validated in one real host                    |
+| Area            | Implemented behavior                                                               |
+| --------------- | ---------------------------------------------------------------------------------- |
+| Feedback        | Owner selects several current open threads or supplies an instruction              |
+| Durable request | Core freezes exact base, instruction, comment IDs, feedback/replies and requester  |
+| Agent entry     | One-attempt external handoff or optional trusted-host `agentInvocation` callback   |
+| Return          | Complete candidate linked by `revisionRequest.proposalId` and `proposal.requestId` |
+| Review          | Request → suggestion and comment → proposal → changes navigation                   |
+| Human boundary  | Exact Owner accept/reject and separate exact comment resolution                    |
+| Roles           | Reviewer can read/comment/reply but cannot request/invoke/propose/decide/resolve   |
 
-The existing `motivatedBy` array records motivation. It does not prove that an
-agent satisfied a comment or identify an exact changed range for that comment.
+The existing `motivatedBy` array records which selected comments motivated a
+proposal. It does not prove that an agent satisfied a comment or identify an
+exact changed range for every CSS/layout edit.
 
-## Collect and submit feedback
+## Collect and save feedback
 
-Open comments gain an explicit selection control for the Owner. The request
-composer shows selected comments, their quoted context and a general instruction.
-The Owner can remove a comment or change the instruction before sending. Allow
-an instruction-only revision request as well; a general instruction belongs to
-the request and does not introduce a new whole-document comment anchor type.
+On the exact current accepted version, open comments expose **Add to request**
+for an Owner. The composer accepts selected comments, a general instruction, or
+both. Request creation is Owner-only and durable before either agent route
+starts.
 
-A submitted request captures the document, exact accepted base, selected comment
-IDs and the reviewed feedback/context. Preserve original comment targets and
-their relationship to the current base. Historical comments with ambiguous or
-missing anchors must be explained before submission; do not silently attach
-them to a different passage.
+Core stores a `RevisionRequest` with:
 
-Revision requests are Owner-only in the reference Viewer. Reviewers continue
-to comment, reply and request reply drafts. Selecting comments never grants
-revision or decision authority to a Reviewer.
+- `id`, exact `base`, Owner `instruction`, and canonical nonempty `request`;
+- sorted `commentIds` plus immutable `feedback` copies of the selected open
+  comments, targets and replies;
+- `requester`, `createdAt`, `updatedAt`, `status`, `attempt`, optional
+  `attemptId`, optional `error`, and optional `proposalId`; and
+- internal idempotency `key` and `command`, omitted from Viewer public results.
 
-The request is durable before agent invocation. Reopening the document should
-show what was submitted and whether a proposal has returned. An expired external
-handoff must not erase the submitted request. The implementation must define
-the minimal persistence extension and retry identity before adding this UI;
-browser-local state alone does not meet this design.
+Creation requires the current accepted base. Selected comments must still be
+open and resolve exactly or recoverably on that base. An identical key retry
+returns the existing request; changed arguments under the key fail.
 
 ## Invoke an agent
 
-Offer two routes through the same request context:
+Both routes use the same frozen request and a new random attempt ID.
 
-- An external-agent handoff for users who work in their own agent environment.
-- A host-provided invocation hook for products that already run an agent.
+- **External handoff:** Viewer creates an in-memory, 15-minute bearer resource
+  with only read/propose scope. The URL contains neither Owner nor Reviewer
+  credentials. Expiration or revocation records `expired` without erasing the
+  request.
+- **Trusted-host callback:** `startViewer({agentInvocation})` passes the public
+  request and exact encoded base files to a host function with an `AbortSignal`.
+  The callback returns one complete encoded candidate. The configured timeout
+  is 100–300000 ms; the default is 60 seconds.
 
-The hook belongs in a trusted host integration layer. Core continues to validate
-and persist documents without starting agents or managing model credentials.
-Provider-specific CLI adapters can be optional wrappers around this boundary;
-they are not prerequisites for the review workflow.
+The host owns provider configuration, credentials, execution, billing and
+process durability. Core persists request/attempt state and validates candidates;
+it never invokes an agent.
 
-The interface should report submitted, running when known, returned and failed
-or expired states, and offer an explicit retry. Display only progress the host
-can establish. Durable request state does not imply that a process continues
-running through a host restart. Reuse logical request identity on retries so
-that an ambiguous response does not create duplicate proposals. Do not promise
-exactly-once agent execution or duplicate-charge prevention across providers.
+Request states are `submitted`, `running`, `returned`, `failed`, `expired` and
+`conflicted`. `attempt` increases for each handoff or host retry, while
+`attemptId` identifies the only attempt allowed to return. An identical active
+invoke reconciles to existing durable state. A new attempt supersedes an old
+failed/expired attempt. Returned requests are terminal.
+
+Viewer restart cannot resume its in-memory executor: it reconciles a running
+host attempt to `failed` and an issued external handoff to `expired`, preserving
+the request and frozen feedback for explicit retry.
+
+This limits duplicate stored proposals, not duplicate provider execution or
+charges after an ambiguous timeout. Callers refresh durable state before retrying
+and use a new attempt ID only when starting a new execution.
 
 ## Return and review a suggestion
 
-Both routes ultimately submit a complete HTML/CSS/assets candidate against the
-captured base through Core. Core freezes the proposal before any review UI
-displays it. Persist its relationship to the request and selected comments;
-reuse `motivatedBy` for comment links instead of inferring them from prose.
-For instruction-only requests, omit `motivatedBy` rather than submitting an empty
-array where the current Core expects a nonempty list.
+The agent returns a complete HTML/CSS/assets candidate, not a patch. Core
+requires the request's exact `base`, canonical `request`, sorted `commentIds`,
+`requestId`, current `attemptId`, and prescribed attempt-scoped key. It stores
+the proposal and request link atomically. The proposal remains pending; no agent
+route can accept, reject or resolve.
 
-The Owner sees the suggested version, its explanation and the selected feedback.
-From a comment, the UI should lead to its anchor and relevant Before / After
-context where that relationship can be established. For CSS, layout or changes
-without a precise local mapping, show the available file or full-version
-comparison and label the limitation. An agent's claimed explanation is not a
-verified mapping of every comment to a specific edit.
+The request card opens its returned suggestion. A comment lists linked proposals;
+opening one focuses that relationship. **View linked changes** uses
+`document.html` when the structured diff names the comment's target element.
+Otherwise Viewer explains that no exact local mapping exists and opens the
+available file or full Before/After comparison.
 
-Acceptance remains an explicit Owner action against the exact candidate and
-current review state. Accepting a proposal leaves comment resolution separate;
-selected comments remain open until the Owner resolves them. Declining a
-proposal retains the proposal and the feedback for the next attempt.
+Acceptance is still an explicit Owner decision against the exact ready After
+preview, proposal revision and current review-state hash. Reject is also explicit.
+Accepting or rejecting never resolves a comment; resolution is a separate Owner
+action with its own current state check.
 
-## Changes while the agent is working
+## Changes while an agent works
 
-- If the accepted document changes, a result based on the old version cannot
-  become current. Explain the conflict and let the Owner prepare a new request
-  against the new base; never silently rebase it.
-- If discussion changes, retain the submitted feedback snapshot and show that
-  newer discussion exists. The agent should not receive a moving request.
-- If a selected comment is resolved before proposal submission, current Core
-  validation can reject its inclusion in `motivatedBy`. Show an actionable
-  failure and let the Owner prepare a new request. Do not weaken that validation
-  or silently drop the comment to make the result fit.
-- If saving or invoking fails, preserve the feedback and indicate whether the
-  request was persisted, invocation is uncertain, or a proposal already exists.
+- **Accepted head changes:** the request becomes `conflicted`; an old result
+  cannot become a current proposal. The Owner creates a new request against the
+  new head. There is no silent rebase.
+- **Discussion changes:** the submitted feedback remains unchanged. Viewer
+  compares it with live comments and labels newer discussion.
+- **Selected comment resolves:** the request still shows the frozen open-comment
+  snapshot, but proposal return fails closed and the request conflicts instead
+  of dropping that comment.
+- **Timeout or invalid candidate:** the request records a bounded failure code
+  and remains available for a new attempt.
+- **Late or duplicate result:** only the active attempt may return; an already
+  returned request reconciles to its existing proposal.
 
-## Reduce integration effort
+## Evidence and remaining work
 
-Start with one real host that has an existing document display and agent entry.
-Provide a mountable review surface backed by the existing Core, with a small
-host contract for document selection, trusted identity, invocation and result
-delivery. Reuse the reference Viewer where practical. Decide whether iframe
-embedding, a component or a separate overlay is warranted from this integration.
+Automated Core tests cover durable reopen, frozen feedback, state validation,
+attempt transitions, stale/superseded attempts, proposal linkage and
+idempotency. Viewer tests cover Owner/Reviewer boundaries, batch external
+handoff, exact scoped return, timeout/retry and a controlled host callback. UI
+unit tests cover request composition, status, drift labels and
+comment-to-change destination selection.
 
-Authored content remains isolated from review controls and credentials. A
-browser save callback must not replace Core proposal validation and acceptance.
-The host still operates the filesystem package; a new storage backend is not
-part of the embedding milestone.
+This evidence completes implementation milestones 1 and 2 only at repository
+test level. No real model provider, production host deployment, native provider
+browser workflow, billing behavior or process-restart continuation has been
+validated for this delivery.
 
-Measure required host code, setup steps and elapsed time to the first accepted
-revision. Record friction from adapting storage and identity as well as UI work.
+Milestone 3 must embed or mount the review experience in one real host at its
+own origin with host-owned identity, storage and provider execution. It should
+record setup work and time to a first accepted revision before selecting a
+general overlay/component design. The filesystem package remains the storage
+contract for that validation; a generic storage abstraction is out of scope.
 
 ## Deferred choices
 
-Direct inline edits need a design for their attribution and submission as a
-reviewable revision. Canonical Markdown needs renderer/source mapping and writeback
-semantics. Neither is required for the first multi-comment review round.
-
-Do not add a new document schema, universal agent orchestration layer or broad
-format-support matrix to implement this scenario. The
-[roadmap](roadmap.md) defines sequencing and milestone evidence.
+Direct inline edits need an attributed revision workflow. Canonical Markdown
+needs renderer/source mapping and writeback semantics. Neither is part of this
+review-round implementation. Do not add a second document schema, universal
+agent orchestration layer or storage backend for milestone 3.
 
 ## Reference
 
 [MikoMarkup's integration design](https://github.com/snowan/miko-markup/blob/0b46f04ec5b8166b13ca4c4ae2f5529efe9fc4e9/docs/integration.md)
-informs the batch-feedback workflow and small host callback boundary. DSTAR
-uses those ideas with persistent review context and its existing revision model.
+informed the batch-feedback workflow and small host callback boundary. DSTAR
+uses those ideas with durable review context and its exact revision model.

@@ -8,14 +8,19 @@ import {
   validateTarget,
 } from "@dstar/core";
 import {
+  encodedSnapshot,
   documentErrorResult,
   documentRoute,
   publicComment,
+  publicProposal,
+  publicRevisionRequest,
+  submitCandidate,
 } from "./document-api.mjs";
 import { createPreviewCache } from "./preview-cache.mjs";
 import { fileDiff } from "./file-diff.mjs";
 import {
   authorized,
+  displayName,
   resolveViewerConfig,
   trustedRequestUrl,
   viewerOrigin,
@@ -37,6 +42,8 @@ const handoffId = (value) =>
   typeof value === "string" && /^[a-f0-9-]{36}$/.test(value);
 const handoffToken = (value) =>
   typeof value === "string" && /^[A-Za-z0-9_-]{48,256}$/.test(value);
+const uuid = (value) =>
+  typeof value === "string" && /^[a-f0-9-]{36}$/.test(value);
 const exactBody = (body, keys) => {
   if (
     !body ||
@@ -47,19 +54,95 @@ const exactBody = (body, keys) => {
     throw new Error("Unknown or missing request fields");
 };
 export async function startViewer(root, port = 0, options = {}) {
-  const config = resolveViewerConfig(root, port, options);
+  const configuredInvocation =
+    options && typeof options === "object" && !Array.isArray(options)
+      ? options.agentInvocation
+      : undefined;
+  const viewerOptions =
+    options && typeof options === "object" && !Array.isArray(options)
+      ? { ...options }
+      : options;
+  if (viewerOptions && typeof viewerOptions === "object")
+    delete viewerOptions.agentInvocation;
+  const config = resolveViewerConfig(root, port, viewerOptions);
+  let agentInvocation = null;
+  if (configuredInvocation !== undefined) {
+    if (
+      !configuredInvocation ||
+      typeof configuredInvocation !== "object" ||
+      Array.isArray(configuredInvocation) ||
+      !["identity", "invoke"].every((key) => key in configuredInvocation) ||
+      !Object.keys(configuredInvocation).every((key) =>
+        ["identity", "invoke", "timeoutMs"].includes(key),
+      )
+    )
+      throw new Error("Invalid trusted host agent invocation");
+    const identity = configuredInvocation.identity;
+    if (
+      !identity ||
+      typeof identity !== "object" ||
+      Array.isArray(identity) ||
+      Object.keys(identity).sort().join(",") !== "displayName,id,role" ||
+      typeof configuredInvocation.invoke !== "function" ||
+      !/^[a-z][a-z0-9-]{0,63}$/.test(identity.id) ||
+      identity.role !== "agent" ||
+      typeof identity.displayName !== "string" ||
+      displayName(identity.displayName, "agent") !== identity.displayName
+    )
+      throw new Error("Invalid trusted host agent invocation");
+    const timeoutMs = configuredInvocation.timeoutMs ?? 60_000;
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 300_000)
+      throw new Error("agentInvocation timeoutMs must be 100–300000");
+    agentInvocation = Object.freeze({
+      identity: Object.freeze({ ...identity }),
+      invoke: configuredInvocation.invoke,
+      timeoutMs,
+    });
+  }
   const document = openDocument(config.root),
     engine = document,
     review = document;
+  // In-memory handoffs and hook processes cannot survive a Viewer restart.
+  // Reconcile only attempts whose process-local executor is necessarily gone;
+  // the durable request and frozen feedback remain available for explicit retry.
+  for (const request of engine.snapshot().state.revisionRequests) {
+    if (!request.attemptId) continue;
+    if (request.status === "running")
+      engine.updateRevisionRequest(request.id, {
+        status: "failed",
+        attemptId: request.attemptId,
+        error: "agent_invocation_interrupted",
+      });
+    else if (request.status === "submitted")
+      engine.updateRevisionRequest(request.id, {
+        status: "expired",
+        attemptId: request.attemptId,
+        error: "external_handoff_interrupted",
+      });
+  }
   const documentId = engine.snapshot().state.id,
     documentBase = `/api/documents/${documentId}`;
   const capabilities = createPreviewCache(),
-    handoffs = new Map();
+    handoffs = new Map(),
+    activeInvocations = new Map();
+  const expireRevisionHandoff = (handoff) => {
+    if (handoff?.context.action.kind !== "revision-request") return;
+    try {
+      engine.updateRevisionRequest(handoff.context.action.requestId, {
+        status: "expired",
+        attemptId: handoff.context.action.attemptId,
+        error: "external_handoff_expired",
+      });
+    } catch {
+      // A newer attempt or returned proposal owns the durable request now.
+    }
+  };
   const getHandoff = (id) => {
     const handoff = handoffs.get(id);
     if (!handoff) return null;
     if (handoff.expiresAt <= Date.now()) {
       handoffs.delete(id);
+      expireRevisionHandoff(handoff);
       return null;
     }
     return handoff;
@@ -89,6 +172,30 @@ export async function startViewer(root, port = 0, options = {}) {
     const selection = context?.selection,
       action = context?.action,
       viewed = context?.review;
+    if (action?.kind === "revision-request") {
+      const current = engine.snapshot(),
+        request = current.state.revisionRequests.find(
+          (entry) => entry.id === action.requestId,
+        );
+      if (
+        !request ||
+        request.status === "returned" ||
+        context.review !== null ||
+        context.selection !== null ||
+        context.focusedCommentId !== null ||
+        !uuid(action.attemptId) ||
+        action.target !== undefined ||
+        action.commentId !== undefined ||
+        action.draft !== undefined
+      )
+        throw new Error("Invalid revision request handoff context");
+      return {
+        context: JSON.parse(JSON.stringify(context)),
+        stateId: current.stateId,
+        headRevision: request.base,
+        allowedRevisions: request.base ? [request.base] : [],
+      };
+    }
     if (action?.kind === "address-comment") {
       const current = engine.snapshot(),
         comment = current.state.comments.find(
@@ -166,6 +273,125 @@ export async function startViewer(root, port = 0, options = {}) {
       ),
     };
   };
+  const startHostInvocation = (requestId, attemptId) => {
+    if (!agentInvocation)
+      throw Object.assign(new Error("No trusted host agent is configured"), {
+        status: 404,
+        code: "not_found",
+      });
+    const before = engine.snapshot(),
+      request = before.state.revisionRequests.find(
+        (entry) => entry.id === requestId,
+      );
+    if (!request)
+      throw Object.assign(new Error("Unknown revision request"), {
+        status: 404,
+        code: "not_found",
+      });
+    if (request.status === "returned") {
+      const proposal = before.state.proposals.find(
+        (entry) => entry.id === request.proposalId,
+      );
+      return {
+        status: 200,
+        body: {
+          revisionRequest: publicRevisionRequest(request),
+          ...(proposal ? { proposal: publicProposal(proposal) } : {}),
+        },
+      };
+    }
+    if (
+      request.attemptId !== undefined &&
+      request.attemptId !== attemptId &&
+      ["submitted", "running"].includes(request.status)
+    )
+      throw Object.assign(
+        new Error("A revision request attempt is already active"),
+        { status: 409, code: "attempt_conflict" },
+      );
+    if (request.status === "running" && request.attemptId === attemptId)
+      return {
+        status: 202,
+        body: { revisionRequest: publicRevisionRequest(request) },
+      };
+    const started = engine.updateRevisionRequest(requestId, {
+      status: "running",
+      attemptId,
+    });
+    const controller = new AbortController(),
+      activity = { attemptId, controller, interrupted: false };
+    activeInvocations.set(requestId, activity);
+    globalThis.queueMicrotask(async () => {
+      let timer;
+      try {
+        const accepted = engine.snapshot();
+        if (accepted.revision !== started.base)
+          throw new Error("Stale base: revision request is conflicted");
+        const base = encodedSnapshot(accepted);
+        const timeout = new Promise((_, reject) => {
+          timer = globalThis.setTimeout(() => {
+            controller.abort();
+            reject(new Error("agent_invocation_timeout"));
+          }, agentInvocation.timeoutMs);
+        });
+        const result = await Promise.race([
+          agentInvocation.invoke(
+            {
+              documentId,
+              request: publicRevisionRequest(started),
+              base,
+            },
+            { signal: controller.signal },
+          ),
+          timeout,
+        ]);
+        if (activity.interrupted) return;
+        exactBody(result, ["files"]);
+        submitCandidate(
+          engine,
+          {
+            files: result.files,
+            base: started.base,
+            request: started.request,
+            commentIds: started.commentIds,
+            requestId: started.id,
+            attemptId,
+            key: `revision-request:${started.id}:${attemptId}`,
+          },
+          agentInvocation.identity,
+        );
+      } catch (error) {
+        if (activity.interrupted) return;
+        const result = documentErrorResult(error),
+          status = ["stale_base", "comment_closed"].includes(result.code)
+            ? "conflicted"
+            : "failed";
+        try {
+          engine.updateRevisionRequest(requestId, {
+            status,
+            attemptId,
+            error:
+              error instanceof Error &&
+              error.message === "agent_invocation_timeout"
+                ? "agent_invocation_timeout"
+                : result.code === "validation_failed"
+                  ? "agent_invocation_failed"
+                  : result.code,
+          });
+        } catch {
+          // A newer attempt or returned proposal won the request-level CAS.
+        }
+      } finally {
+        globalThis.clearTimeout(timer);
+        if (activeInvocations.get(requestId)?.attemptId === attemptId)
+          activeInvocations.delete(requestId);
+      }
+    });
+    return {
+      status: 202,
+      body: { revisionRequest: publicRevisionRequest(started) },
+    };
+  };
   let origin;
   const server = createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -201,6 +427,7 @@ export async function startViewer(root, port = 0, options = {}) {
           "/app.js",
           "/preview-state.js",
           "/review-state.js",
+          "/review-rounds.js",
           "/viewer-model.js",
           "/diff-view.js",
           "/webmcp.js",
@@ -289,11 +516,40 @@ export async function startViewer(root, port = 0, options = {}) {
         !path.startsWith(`${documentBase}/`)
       )
         return json(404, { error: "Unknown document" });
-      if (scoped && engine.snapshot().stateId !== scoped.handoff.stateId) {
-        handoffs.delete(scoped.id);
-        return json(409, {
-          error: "Agent handoff context changed; ask the agent again",
-        });
+      if (scoped) {
+        const batch = scoped.handoff.context.action.kind === "revision-request";
+        const current = engine.snapshot();
+        const request = batch
+          ? current.state.revisionRequests.find(
+              (entry) => entry.id === scoped.handoff.context.action.requestId,
+            )
+          : null;
+        if (
+          (!batch && current.stateId !== scoped.handoff.stateId) ||
+          (batch &&
+            (!request ||
+              request.status !== "submitted" ||
+              request.attemptId !== scoped.handoff.context.action.attemptId ||
+              current.revision !== request.base))
+        ) {
+          handoffs.delete(scoped.id);
+          if (batch && request?.status === "submitted") {
+            try {
+              engine.updateRevisionRequest(request.id, {
+                status: "conflicted",
+                attemptId: request.attemptId,
+                error: "stale_base",
+              });
+            } catch {
+              // A concurrent result or retry already owns this request.
+            }
+          }
+          return json(409, {
+            error: batch
+              ? "Revision request attempt is no longer active"
+              : "Agent handoff context changed; ask the agent again",
+          });
+        }
       }
       const scopedRevisionRead = scoped
         ? new RegExp(
@@ -330,7 +586,9 @@ export async function startViewer(root, port = 0, options = {}) {
           (req.method === "POST" &&
             (path === `${documentBase}/review-context` ||
               (path === `${documentBase}/proposals` &&
-                scoped.handoff.context.action.kind === "address-comment") ||
+                ["address-comment", "revision-request"].includes(
+                  scoped.handoff.context.action.kind,
+                )) ||
               (path === `/api/handoffs/${scoped.id}/draft` &&
                 scoped.handoff.context.action.kind !== "address-comment") ||
               (path === `/api/handoffs/${scoped.id}/reply-draft` &&
@@ -362,7 +620,13 @@ export async function startViewer(root, port = 0, options = {}) {
           config.workspaceManagementUrl
             ? { workspaceManagementUrl: config.workspaceManagementUrl }
             : {}),
-          state: s.state,
+          state: {
+            ...s.state,
+            revisionRequests: s.state.revisionRequests.map(
+              publicRevisionRequest,
+            ),
+          },
+          agentInvocationAvailable: Boolean(agentInvocation),
           stateId: s.stateId,
           revision: s.revision,
           title: s.index?.title ?? "New document",
@@ -485,8 +749,38 @@ export async function startViewer(root, port = 0, options = {}) {
           throw new Error("Agent handoff credential must be unique");
         const existing = getHandoff(body.id);
         if (existing) throw new Error("Agent handoff already exists");
-        const validated = validateHandoffContext(body.context),
-          action = validated.context.action,
+        let validated = validateHandoffContext(body.context);
+        if (validated.context.action.kind === "revision-request") {
+          requireCapability(principal, CAPABILITIES.REQUEST);
+          const existingRequest = engine
+            .snapshot()
+            .state.revisionRequests.find(
+              (entry) => entry.id === validated.context.action.requestId,
+            );
+          if (
+            existingRequest?.attemptId !== undefined &&
+            existingRequest.attemptId !== validated.context.action.attemptId &&
+            ["submitted", "running"].includes(existingRequest.status)
+          )
+            throw Object.assign(
+              new Error("A revision request attempt is already active"),
+              { status: 409, code: "attempt_conflict" },
+            );
+          const request = engine.updateRevisionRequest(
+            validated.context.action.requestId,
+            {
+              status: "submitted",
+              attemptId: validated.context.action.attemptId,
+            },
+          );
+          const refreshed = engine.snapshot();
+          validated = {
+            ...validated,
+            stateId: refreshed.stateId,
+            headRevision: request.base,
+          };
+        }
+        const action = validated.context.action,
           record = {
             ...validated,
             draft: null,
@@ -498,11 +792,13 @@ export async function startViewer(root, port = 0, options = {}) {
               principal,
               action.kind === "address-comment"
                 ? [CAPABILITIES.READ, CAPABILITIES.REPLY, CAPABILITIES.PROPOSE]
-                : [
-                    CAPABILITIES.READ,
-                    CAPABILITIES.COMMENT,
-                    CAPABILITIES.HANDOFF,
-                  ],
+                : action.kind === "revision-request"
+                  ? [CAPABILITIES.READ, CAPABILITIES.PROPOSE]
+                  : [
+                      CAPABILITIES.READ,
+                      CAPABILITIES.COMMENT,
+                      CAPABILITIES.HANDOFF,
+                    ],
             ),
           };
         handoffs.set(body.id, record);
@@ -570,7 +866,17 @@ export async function startViewer(root, port = 0, options = {}) {
         )
           return json(403, { error: "Only the handoff creator can revoke it" });
         handoffs.delete(revoke[1]);
+        expireRevisionHandoff(record);
         return json(200, { revoked: true });
+      }
+      const invocation = new RegExp(
+        `^${documentBase}/revision-requests/([a-f0-9-]{36})/invoke$`,
+      ).exec(path);
+      if (invocation) {
+        exactBody(body, ["attemptId"]);
+        if (!uuid(body.attemptId)) throw new Error("Invalid attempt ID");
+        const result = startHostInvocation(invocation[1], body.attemptId);
+        return json(result.status, result.body);
       }
       const comment = new RegExp(
         `^${documentBase}/comments/([a-f0-9-]{36})/(replies|resolve)$`,
@@ -627,6 +933,11 @@ export async function startViewer(root, port = 0, options = {}) {
   server.once("close", () => {
     capabilities.clear();
     handoffs.clear();
+    for (const invocation of activeInvocations.values())
+      invocation.interrupted = true;
+    for (const invocation of activeInvocations.values())
+      invocation.controller.abort();
+    activeInvocations.clear();
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);

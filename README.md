@@ -5,8 +5,8 @@ and retain the feedback and decisions behind each version.
 
 DSTAR gives AI products a document review and revision runtime with host-owned
 data. The initial focus is reports, proposals, design explanations and slides.
-See the [Vision](VISION.md) and [roadmap](design/roadmap.md) for the next
-multi-comment review workflow and its planned integration improvements.
+See the [Vision](VISION.md) and [roadmap](design/roadmap.md) for the
+multi-comment review workflow and remaining real-host integration work.
 
 There is one canonical artifact: `document.html` + CSS + local assets.
 A simple document, a designed page and slides are different layouts, not
@@ -36,13 +36,13 @@ paths are:
 
 The new HTML-first path consists of:
 
-- [Core](packages/core/src/index.ts): validation, revisions, comments,
-  compact history and exact-base proposals.
+- [Core](packages/core/src/index.ts): validation, revisions, comments, durable
+  revision requests, compact history and exact-base proposals.
 - [MCP](packages/mcp/README.md): caller-scoped MCP tools backed by Core.
 - [CLI](scripts/dstar.mjs): local development and operator tooling.
 - [Viewer](apps/viewer/src/server.mjs): current-document reading, precise
-  comments, a simple version timeline, Before/After review,
-  role-bound identity and explicit human decisions.
+  comments, a simple version timeline, Before/After review, role-bound identity,
+  batch agent handoff/host invocation and explicit human decisions.
 
 Core creates the candidate revision, review summary and storage delta **during
 `propose`**, not when the Viewer opens. No Git installation or hosted DSTAR
@@ -67,10 +67,11 @@ pnpm dstar propose ./my-document.dstar --candidate examples/html-first --base no
 pnpm dstar serve ./my-document.dstar
 ```
 
-`serve` prints separate private Owner and Reviewer URLs. The Owner may accept,
-reject, resolve, manage sharing and submit document updates. The Reviewer may
-read, comment, reply and use agent handoff for reply drafts, but cannot update,
-decide or resolve. Open the appropriate complete URL. Use **Review changes** to
+`serve` prints separate private Owner and Reviewer URLs. The Owner may request
+and invoke revisions, accept, reject, resolve, manage sharing and submit document
+updates. The Reviewer may read, comment, reply and use comment-focused agent
+handoff, but cannot request/invoke document revisions, update, decide or resolve.
+Open the appropriate complete URL. Use **Review changes** to
 inspect the initial proposal and create the Current version. Select text, or
 Alt-click an element, to Comment. **Versions** is one newest-first list with a
 plain status on each item; revision hashes and storage facts remain under
@@ -112,6 +113,14 @@ accepted document. The agent CLI intentionally has no accept/reject/resolve
 commands. See the [skill workflow](skills/dstar-documents/references/authoring.md)
 and [comment commands](skills/dstar-documents/references/comments.md).
 
+In the current accepted version, an Owner can mark several open comments with
+**Add to request**, add an overall instruction, and save one durable revision
+request. The Owner then copies a scoped external handoff or invokes a configured
+trusted-host callback. Returned suggestions link request → proposal and comment
+→ proposal → changes. If an exact element mapping is unavailable, Viewer says so
+and opens the available file/full-version comparison. Accept/reject and comment
+resolution remain separate exact Owner confirmations.
+
 When the browser supports WebMCP, the top-level Viewer registers role-scoped
 document/review tools for browser agents. Both roles can read exact versions,
 prepare editable comment/reply drafts and post an authenticated keyed reply;
@@ -143,7 +152,10 @@ my-document.dstar/
 ├── styles.css          optional; styles/ is also supported
 ├── assets/             optional local images/fonts
 └── .dstar/
-    ├── state.json      proposals, decisions, comments and accepted head
+    ├── state.json      small header with collection counts and accepted head
+    ├── proposals/      immutable proposals and later decisions
+    ├── comments/       comment threads and replies
+    ├── revisionRequests/ durable frozen revision-request records
     └── objects/        content-addressed compressed blobs/deltas
 ```
 
@@ -158,7 +170,12 @@ History still grows with genuine new content; this is not a constant-size store.
 This is a local MVP with development format `dstar-html-0.2-dev`, not a stable
 interoperability specification. It supports static HTML/CSS, local raster images
 and fonts, linear history, element/single-element text comments, replies,
-fixed Owner/Reviewer identities and Owner decisions. It does not yet offer
+fixed Owner/Reviewer identities, durable batch revision requests and exact
+Owner decisions. Milestones 1 and 2 are implemented and covered by repository
+automation using loopback HTTP and a controlled test agent. This is not evidence
+of a real model provider, production host deployment or native
+browser-provider integration; the roadmap's real-host embedding milestone
+remains incomplete. It does not yet offer
 arbitrary scripts/SVG, an identity provider or arbitrary users, auto-merge,
 garbage collection, assignment, advanced slide
 scaling, or migration from earlier pre-HTML formats.

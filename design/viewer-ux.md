@@ -1,8 +1,8 @@
 # Viewer information architecture
 
-Status: implemented for the HTML-first Viewer. Planned batch feedback,
-host-connected agent invocation and comment-to-change navigation are specified
-separately in [Review rounds](review-rounds.md); they are not existing controls.
+Status: implemented for the HTML-first Viewer, including durable batch feedback,
+optional host-connected agent invocation and basic comment-to-change navigation.
+See [Review rounds](review-rounds.md) for the exact contract and evidence limits.
 
 The Viewer is a reading and review surface. It preserves the Engine's exact
 revision, comparison, anchor and decision guarantees without asking a reader to
@@ -88,6 +88,17 @@ Engine terminology do not change.
 - Agent work uses one local status region with `idle`, `waiting`, `returned` and
   `expired` states. Returned text is always an editable draft; it is never
   posted or accepted automatically.
+- On the current accepted version, an Owner can add open comments to one request
+  and include an overall instruction. Saved request cards show submitted,
+  running, returned, failed, expired or conflicted state plus frozen feedback.
+  A Reviewer never sees enabled request/invoke controls.
+- Live replies or resolution after submission are labeled beside the immutable
+  feedback snapshot. Failed/expired attempts can be retried; a stale-base
+  conflict requires a new request.
+- A returned request opens its suggestion. Linked proposal controls on each
+  comment lead to that version and **View linked changes**. Stable-element HTML
+  changes open `document.html`; CSS/layout or unmapped edits receive an explicit
+  fallback message and available file/full-version comparison.
 - An exact ready After preview enables acceptance. Before disables acceptance.
   Stale suggestions remain inspectable and rejectable but cannot be accepted.
 - Empty states explain the next action: start a conversation or create the
@@ -113,6 +124,9 @@ The implemented flow was Browser-checked at 1440×900, 820×1024 and 390×844.
 - Comment-agent UI composes into `.comment[data-comment]` using
   `.comment-address-agent`, `.reply-composer`, `.linked-proposals`,
   `#version-addresses` and the shared agent status region.
+- Review-round UI composes through `#revision-request-form`,
+  `#revision-request-list`, `proposal.requestId`, `proposal.motivatedBy` and the
+  pure helpers in `review-rounds.js`.
 - Workspace create/reset stays outside the Viewer. A future
   `workspaceManagementUrl` is an Owner-only link, not an embedded lifecycle API.
 - `viewer-model.js` owns presentation groups, labels, actor display and the

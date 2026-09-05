@@ -8,11 +8,12 @@ format or SDK contract. See [architecture](architecture.md).
 The root checkout holds the current accepted `document.html`, optional
 `styles.css`, `styles/**/*.css`, and local `assets/**`. Before genesis is
 accepted, these files do not exist in the destination package.
-`.dstar/state.json` is a small commit header. Proposal/decision records and
-comment threads live in separate JSON files; `.dstar/objects/<64 lowercase hex>`
-contains immutable compressed objects. Copy the whole directory, not just the
-checkout, to retain review history. Locks and recovery journals also live under `.dstar`
-while operations are in progress; do not copy a package mid-write.
+`.dstar/state.json` is a small commit header. Proposal/decision records,
+comment threads and durable revision requests live in separate JSON files;
+`.dstar/objects/<64 lowercase hex>` contains immutable compressed objects. Copy
+the whole directory, not just the checkout, to retain review history. Locks and
+recovery journals also live under `.dstar` while operations are in progress;
+do not copy a package mid-write.
 
 The metadata is collaboration/storage information, not a duplicate semantic
 document source. There is no SQLite, Git executable or database service dependency.
@@ -30,6 +31,7 @@ assets/                            # optional
   proposals/00000000.json           # one proposal, decision and optional checkpoint
   proposals/00000001.json
   comments/00000000.json            # one comment thread, including replies
+  revisionRequests/00000000.json     # one frozen batch revision request
   objects/<64 lowercase hex>        # compressed immutable file blobs/deltas
   write.lock                       # only while an Engine operation holds the lock
   metadata-journal.json             # only during metadata updates/recovery
@@ -37,20 +39,27 @@ assets/                            # optional
 ```
 
 The header contains `format`, `storage: "records-v1"`, `id`, `generation`,
-`head`, `proposalCount` and `commentCount`. It contains no proposal/comment arrays
-and is capped at 4 KiB. Each collection uses zero-based, contiguous eight-digit
-decimal filenames up to its committed count. A file contains the corresponding
-proposal or comment JSON directly, including its stable UUID. The ordinal
-preserves insertion order without a growing root index; it is not the public ID.
-Record files are Engine-owned and must not be reordered or edited by hand.
-Files beyond the committed counts are not read; a write refuses to overwrite an
-untracked record at its next destination. Unknown files are never garbage-collected.
+`head`, `proposalCount`, `commentCount` and `revisionRequestCount`. It contains
+no proposal, comment or revision-request arrays and is capped at 4 KiB. Each
+collection uses zero-based, contiguous eight-digit decimal filenames up to its
+committed count. A file contains the corresponding record JSON directly,
+including its stable UUID. The ordinal preserves insertion order without a
+growing root index; it is not the public ID. Record files are Engine-owned and
+must not be reordered or edited by hand. Files beyond the committed counts are
+not read; a write refuses to overwrite an untracked record at its next
+destination. Unknown files are never garbage-collected.
 
-The Engine and CLI still expose the complete logical `State` with ordered
-`proposals` and `comments` arrays. Physical storage fields do not enter the review
-state hash. A reply updates its thread record, not all proposals or other threads;
-accept/reject updates the affected proposal record. Existing replies remain
-inside their thread rather than introducing a file per message.
+Core, CLI and Viewer still expose the complete logical `State` with ordered
+`proposals`, `comments` and `revisionRequests` arrays. Physical record layout
+does not change the review-state hash. A reply updates its thread record,
+accept/reject updates the affected proposal record, and request lifecycle changes
+update the affected revision-request record. Existing replies remain inside
+their thread rather than introducing a file per message.
+
+The original two-collection `records-v1` header remains readable: an absent
+`revisionRequestCount` means an empty third collection. The next real mutation
+writes the count. This is an additive development-format migration, not a new
+storage backend.
 
 Existing monolithic `dstar-html-0.2-dev` metadata remains readable without
 conversion on inspection or idempotent retries. The next actual mutation converts
@@ -146,7 +155,7 @@ only changed records. New records use a null before-image. The Engine then
 durably writes those records, atomically replaces `state.json` last, and removes
 the metadata journal. Newly created record/object parent directories are also
 synced. The journal format is `dstar-metadata-undo-v1`; record destinations are
-restricted to bounded ordinals in the two metadata collections.
+restricted to bounded ordinals in the three metadata collections.
 
 On reopen, metadata recovery runs **before** loading records or recovering the
 checkout. If the authoritative state matches the before hash, it restores the
@@ -200,6 +209,29 @@ replying or resolving a comment leaves proposal history unchanged. Viewer and
 agent projections expose `motivatedBy` so “Addresses comment …” is derived from
 structured state rather than proposal request text.
 
+## Durable revision requests
+
+`State.revisionRequests` is the third `records-v1` collection. A request freezes
+one exact accepted `base`, an Owner `instruction`, canonical nonempty `request`
+prose, sorted `commentIds`, an immutable snapshot of each selected open comment
+and its replies, the `requester`, timestamps, and retry identity. Viewer public
+projections omit internal `key` and `command` fields; Core's filesystem-backed
+state retains them for idempotency validation.
+
+The lifecycle is `submitted`, `running`, `returned`, `failed`, `expired` or
+`conflicted`. `attempt` increases for each external-handoff or trusted-host
+attempt; `attemptId` names the latest attempt. A returned request has exactly
+one `proposalId`, and that proposal has the reciprocal `requestId`. Core verifies
+that the linked proposal uses the request's exact base, canonical request prose,
+sorted comment links and current attempt. This is request-level compare-and-set
+behavior, not an exactly-once promise for a model provider.
+
+The frozen feedback does not change when discussion continues or a comment is
+resolved. Current comments remain available separately so a UI can disclose
+discussion drift or later resolution. A changed accepted head conflicts the
+request; Core never rebases its returned candidate. Proposal acceptance and
+comment resolution remain separate explicit mutations.
+
 ## Presentation and security profile
 
 - Static HTML; one html/body; meaningful text requires a stable-ID ancestor.
@@ -249,10 +281,11 @@ schemas and larger adversarial/scale corpora are future hardening work.
 
 ## Current caps and limitations
 
-512 canonical files, 8 MiB per file, 32 MiB total and indexed text; 2,048 directory entries; 30,000 parsed HTML nodes and
-depth 80; 10,000 proposals/comments; 64 MiB aggregate live metadata (header plus
-record JSON). Undo journals are temporary, separately bounded, and may require
-additional disk space. Limits reject new work
+512 canonical files, 8 MiB per file, 32 MiB total and indexed text; 2,048
+directory entries; 30,000 parsed HTML nodes and depth 80; 10,000 records per
+proposal, comment and revision-request collection; 64 MiB aggregate live
+metadata (header plus record JSON). Undo journals are temporary, separately
+bounded, and may require additional disk space. Limits reject new work
 instead of discarding existing accepted versions. Reads/replay are synchronous
 and intended for modest local packages. Directory scanning and DOM indexing
 are not yet a hardened streaming implementation. Full `inspect` and current
@@ -264,5 +297,6 @@ from the same bounded, verified snapshot. Routine regression scenarios use
 20–50 comment threads and a few assets, not thousands of comments.
 Per-thread growth, pagination, packed metadata and retention remain future work.
 
-No branches/merge, CRDT, hosted auth, assignment, automatic agents, pre-HTML migration,
-retention/GC, arbitrary scripts, semantic CSS-rule diff or stable public API.
+No branches/merge, CRDT, hosted auth, assignment, Core-owned automatic agents,
+pre-HTML migration, retention/GC, arbitrary scripts, semantic CSS-rule diff or
+stable public API.

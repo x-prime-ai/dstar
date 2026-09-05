@@ -7,13 +7,14 @@ import type { State } from "./types.js";
 export const STATE_LIMIT = 64 * 1024 * 1024;
 const COUNT_LIMIT = 10000;
 const JOURNAL_LIMIT = STATE_LIMIT * 2 + 1024 * 1024;
-const collections = ["proposals", "comments"] as const;
+const collections = ["proposals", "comments", "revisionRequests"] as const;
 type Collection = (typeof collections)[number];
 type Records = Record<Collection, string[]>;
 type Header = Omit<State, Collection> & {
   storage: "records-v1";
   proposalCount: number;
   commentCount: number;
+  revisionRequestCount: number;
 };
 type Baseline = { raw: string; records: Records; split: boolean };
 type Undo = { collection: Collection; index: number; before: string | null };
@@ -58,18 +59,32 @@ export class MetadataStore {
     const raw = read(this.statePath, STATE_LIMIT).toString("utf8");
     const parsed = JSON.parse(raw) as Omit<State, Collection> &
       Partial<Pick<State, Collection>> &
-      Partial<Pick<Header, "storage" | "proposalCount" | "commentCount">>;
+      Partial<
+        Pick<
+          Header,
+          "storage" | "proposalCount" | "commentCount" | "revisionRequestCount"
+        >
+      >;
     if (!parsed || parsed.format !== "dstar-html-0.2-dev")
       throw new Error("Unsupported or corrupt DSTAR state");
     let state: State;
-    const records: Records = { proposals: [], comments: [] };
+    const records: Records = {
+      proposals: [],
+      comments: [],
+      revisionRequests: [],
+    };
     if (parsed.storage === undefined) {
-      state = parsed as State;
+      state = {
+        ...(parsed as Omit<State, "revisionRequests">),
+        revisionRequests: parsed.revisionRequests ?? [],
+      };
       if (
         !Array.isArray(state.proposals) ||
         !Array.isArray(state.comments) ||
+        !Array.isArray(state.revisionRequests) ||
         state.proposals.length > COUNT_LIMIT ||
-        state.comments.length > COUNT_LIMIT
+        state.comments.length > COUNT_LIMIT ||
+        state.revisionRequests.length > COUNT_LIMIT
       )
         throw new Error("Unsupported or corrupt DSTAR state");
       for (const collection of collections)
@@ -81,12 +96,16 @@ export class MetadataStore {
         parsed.storage !== "records-v1" ||
         Buffer.byteLength(raw) > 4096 ||
         "proposals" in parsed ||
-        "comments" in parsed
+        "comments" in parsed ||
+        "revisionRequests" in parsed
       )
         throw new Error("Unsupported metadata storage");
       const counts = {
         proposals: parsed.proposalCount,
         comments: parsed.commentCount,
+        // records-v1 originally shipped with two collections. Its absent third
+        // count is the migration representation of an empty request history.
+        revisionRequests: parsed.revisionRequestCount ?? 0,
       };
       let size = Buffer.byteLength(raw);
       for (const collection of collections) {
@@ -117,6 +136,9 @@ export class MetadataStore {
         ),
         comments: records.comments.map(
           (raw) => JSON.parse(raw) as State["comments"][number],
+        ),
+        revisionRequests: records.revisionRequests.map(
+          (raw) => JSON.parse(raw) as State["revisionRequests"][number],
         ),
       };
     }
@@ -150,13 +172,18 @@ export class MetadataStore {
       head: state.head,
       proposalCount: state.proposals.length,
       commentCount: state.comments.length,
+      revisionRequestCount: state.revisionRequests.length,
     };
     if (!Number.isSafeInteger(header.generation))
       throw new Error("Invalid generation");
     const raw = JSON.stringify(header);
     if (Buffer.byteLength(raw) > 4096)
       throw new Error("Metadata header size limit exceeded");
-    const records: Records = { proposals: [], comments: [] };
+    const records: Records = {
+      proposals: [],
+      comments: [],
+      revisionRequests: [],
+    };
     const changes: (Undo & { after: string })[] = [];
     let size = Buffer.byteLength(raw);
     for (const collection of collections) {
@@ -236,7 +263,7 @@ export class MetadataStore {
       !/^sha256:[a-f0-9]{64}$/.test(journal.before) ||
       !/^sha256:[a-f0-9]{64}$/.test(journal.after) ||
       !Array.isArray(journal.records) ||
-      journal.records.length > COUNT_LIMIT * 2
+      journal.records.length > COUNT_LIMIT * collections.length
     )
       throw new Error("Invalid metadata recovery journal");
     const seen = new Set<string>();

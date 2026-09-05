@@ -61,6 +61,56 @@ accepted checkout remains unchanged until an explicit acceptance.
 If `base` is stale, read a new snapshot and prepare a new candidate and key.
 Never relabel an old candidate as based on newer content.
 
+## Create and run a durable revision request
+
+Core can freeze an Owner instruction and selected open feedback before a host
+starts an agent:
+
+```ts
+const request = document.createRevisionRequest({
+  base: current.revision,
+  instruction: "Address the selected feedback and keep the tone direct.",
+  commentIds: [firstComment.id, secondComment.id],
+  requester: owner,
+  key: "revision-request-123",
+});
+
+const attemptId = crypto.randomUUID();
+const running = document.updateRevisionRequest(request.id, {
+  status: "running",
+  attemptId,
+});
+```
+
+`createRevisionRequest` sorts and validates the comment IDs, requires the exact
+accepted base, and copies each selected open comment, target and current replies
+into immutable `feedback`. An instruction-only request is valid; an empty
+request is not. An exact create retry returns the stored request.
+
+The integrating host—not Core—invokes the agent. After receiving a complete
+candidate, link it atomically to the active request attempt:
+
+```ts
+const linked = document.propose({
+  candidate: "/srv/staging/revision-request-123",
+  base: running.base,
+  request: running.request,
+  commentIds: running.commentIds,
+  requestId: running.id,
+  attemptId,
+  author: agentIdentity,
+  key: `revision-request:${running.id}:${attemptId}`,
+});
+```
+
+Core verifies the exact base, canonical request prose, comment links and current
+attempt, then sets the request to `returned` with `proposalId` and adds the
+reciprocal `proposal.requestId`. Use `updateRevisionRequest` to record
+`submitted`, `running`, `failed`, `expired` or `conflicted`; `returned` is set
+only by a linked `propose`. A timeout or uncertain provider response may mean
+the provider ran even though no proposal was stored. Reconcile durable state
+before starting a distinct attempt.
+
 ## Read current and historical content
 
 ```ts
@@ -165,6 +215,8 @@ Export into an empty destination. Omit the revision to export accepted content.
 | `openDocument(root)`                                   | Open the complete document API                     |
 | `snapshot(reference?)`                                 | Read current state or immutable historical content |
 | `propose(input)`                                       | Persist a complete candidate for review            |
+| `createRevisionRequest(input)`                         | Freeze an exact batch request and feedback         |
+| `updateRevisionRequest(requestId, input)`              | Advance or retry one invocation attempt            |
 | `comment(input)`                                       | Create a comment on an exact target                |
 | `reply(commentId, body, actor, key?, stateId?)`        | Add a reply                                        |
 | `decide(proposalId, action, revision, stateId, actor)` | Accept or reject                                   |
@@ -184,6 +236,8 @@ assets, storage and recovery behavior.
 - Authenticate before opening or mutating a document.
 - Map application document IDs to trusted package paths.
 - Authorize each operation; Core does not interpret `actor.role`.
+- Keep agent execution, provider credentials, timeouts and cancellation in the
+  trusted host; Core never starts an agent.
 - Generate idempotency keys outside untrusted model output where practical.
 - Run one writer process per package.
 - Back up the complete package while writers are stopped.

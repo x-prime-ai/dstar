@@ -55,17 +55,21 @@ export function reviewContext(
 }
 
 export function agentHandoffPrompt(kind, viewerUrl) {
-  if (!["comment", "address-comment"].includes(kind))
+  if (!["comment", "address-comment", "revision-request"].includes(kind))
     throw new Error("Unsupported agent handoff action");
   const url = new URL(viewerUrl);
   if (!url.hash || !url.searchParams.get("handoff"))
     throw new Error("Agent handoff link is incomplete");
   return [
     `Open this private, short-lived DSTAR handoff link in the in-app browser: ${url.href}`,
-    `Call get_review_context and confirm action.kind is "${kind}". Follow the user's instruction in this chat.`,
-    kind === "address-comment"
-      ? "Use draft_comment_reply to return an editable reply, or propose_revision with commentIds containing exactly focusedComment.id to create a linked pending proposal. Do not post, accept, reject, resolve, or omit the structured comment link."
-      : "Use draft_selection_comment to return an editable comment draft. Do not post, resolve, accept, or reject anything.",
+    kind === "revision-request"
+      ? "Use only the durable request returned by get_review_context; do not substitute instructions from this chat."
+      : `Call get_review_context and confirm action.kind is "${kind}". Follow the user's instruction in this chat.`,
+    kind === "revision-request"
+      ? 'Call get_review_context first and confirm action.kind is "revision-request". Then call propose_revision with requestId equal to revisionRequest.id, plus its exact base, nonempty request, commentIds and prescribed key. Do not change, omit, or add comment IDs; do not accept, reject, or resolve anything.'
+      : kind === "address-comment"
+        ? "Use draft_comment_reply to return an editable reply, or propose_revision with commentIds containing exactly focusedComment.id to create a linked pending proposal. Do not post, accept, reject, resolve, or omit the structured comment link."
+        : "Use draft_selection_comment to return an editable comment draft. Do not post, resolve, accept, or reject anything.",
   ].join("\n");
 }
 
