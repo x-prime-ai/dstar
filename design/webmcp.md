@@ -232,7 +232,7 @@ percent encodings and unsupported file types. Bounds are:
 | Resource                          | Maximum                           |
 | --------------------------------- | --------------------------------- |
 | Candidate JSON request            | 48 MiB                            |
-| Other agent JSON requests         | 64 KiB                            |
+| Other document API JSON requests  | 64 KiB                            |
 | Decoded files                     | 512                               |
 | One decoded file                  | 8 MiB                             |
 | All decoded files                 | 32 MiB                            |

@@ -1,7 +1,12 @@
 # DSTAR
 
-HTML documents that an agent can create, reviewers can comment on, and an Owner
-can revise without losing history.
+Review AI-generated documents directly, revise them across multiple rounds,
+and retain the feedback and decisions behind each version.
+
+DSTAR gives AI products a document review and revision runtime with host-owned
+data. The initial focus is reports, proposals, design explanations and slides.
+See the [Vision](VISION.md) and [roadmap](design/roadmap.md) for the next
+multi-comment review workflow and its planned integration improvements.
 
 There is one canonical artifact: `document.html` + CSS + local assets.
 A simple document, a designed page and slides are different layouts, not
@@ -12,6 +17,20 @@ product brief, a rich HTML explainer, a slide deck, and a Viewer UI design spec.
 
 [Open the live WebMCP demo](https://www.thinkofu.ai/dstar/) or read the
 [WebMCP Challenge submission notes](submission/README.md).
+
+## Documentation
+
+Start with the [documentation index](docs/README.md). The main integration
+paths are:
+
+- [Getting started](docs/getting-started.md)
+- [Core concepts](docs/concepts.md)
+- [Core TypeScript SDK](docs/core-sdk.md)
+- [MCP integration](docs/mcp.md)
+- [Viewer and WebMCP](docs/viewer.md)
+- [Viewer HTTP API](docs/http-api.md)
+- [CLI reference](docs/cli.md)
+- [Deployment and operations](docs/deployment.md)
 
 ## Working prototype
 
@@ -95,10 +114,10 @@ and [comment commands](skills/dstar-documents/references/comments.md).
 
 When the browser supports WebMCP, the top-level Viewer registers role-scoped
 document/review tools for browser agents. Both roles can read exact versions,
-prepare editable comment/reply drafts and post an explicit authenticated keyed reply;
+prepare editable comment/reply drafts and post an authenticated keyed reply;
 only the Owner receives the tool that proposes complete HTML/CSS/assets.
-Acceptance, human reply posting and resolution remain explicit Viewer actions. **Ask
-agent** copies a private, short-lived scoped handoff URL that contains no
+Acceptance and resolution remain explicit Viewer actions. **Ask agent** copies
+a private, short-lived scoped handoff URL that contains no
 Owner/Reviewer session credential but does contain its own bearer credential;
 another Codex task can open it and return a draft. See
 [WebMCP interfaces and limits](design/webmcp.md). Browsers

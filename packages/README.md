@@ -1,5 +1,8 @@
 # DSTAR packages
 
+See the [public documentation index](../docs/README.md) for installation,
+concepts and end-to-end integration paths.
+
 [`@dstar/core`](core/README.md) is the server-side TypeScript SDK behind the
 HTML-first CLI, Viewer and workspace services. It validates complete
 HTML/CSS/asset candidates, stores exact revisions and compact history, and

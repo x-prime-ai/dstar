@@ -1,5 +1,9 @@
 # TypeScript host integration
 
+Start with the [Core SDK](../../docs/core-sdk.md) and
+[MCP integration](../../docs/mcp.md) guides. This directory is the corresponding
+compile-checked composition example.
+
 This private, compile-checked example consumes the public `@dstar/core`,
 `@dstar/mcp` and `@dstar/viewer` packages. It is not a package for consumers to
 install.

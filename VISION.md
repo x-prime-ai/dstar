@@ -1,7 +1,44 @@
 # DSTAR Vision
 
-DSTAR makes AI-authored HTML documents reviewable and versioned with as little
-machinery as possible.
+DSTAR lets people review AI-generated documents directly, revise them across
+multiple rounds, and retain the feedback and decisions behind each version.
+
+For integrating developers, DSTAR adds document review and revision to an AI
+product while keeping documents and data on the host's infrastructure.
+
+## Who we serve
+
+The initial users review reports, proposals, design explanations and slide
+decks that an agent has already drafted. The initial integrators build products
+that generate those documents and need a repeatable review experience.
+
+The hard part begins after the first draft: people copy excerpts into chat,
+explain where an edit belongs, compare replacement files, and lose track of
+which feedback was addressed. DSTAR should make the second and third review
+round as understandable as the first.
+
+## The experience to deliver
+
+A reviewer opens an AI-generated report and leaves three local comments. The
+Owner selects those comments, adds a general instruction and sends one revision
+request. The agent returns a suggested version. The Owner can locate the
+changes and the feedback they relate to, accept or decline the suggestion, and
+return the next day to continue reviewing.
+
+This is the next target experience. Persistent comments, proposals, decisions
+and history already exist; batch submission and a host-connected agent action
+are planned. See the [roadmap](design/roadmap.md) and
+[review-round design](design/review-rounds.md) for scope and acceptance criteria.
+
+The product should answer four questions without exposing storage details:
+
+- What text and version did this feedback refer to?
+- What did the agent change, and which feedback motivated it?
+- Which version did the Owner accept, and what remains unresolved?
+- Can another authorized reviewer or a returning user continue the discussion?
+
+Durable history and exact revisions support these answers. They become a
+product advantage when the review experience is clear and easy to integrate.
 
 ## One artifact
 
@@ -28,16 +65,23 @@ DSTAR needs a skill, a small deterministic Engine and a Viewer:
   and exact-base verification to the same Engine.
 
 A CLI remains sufficient for agent authoring. External products may instead use
-the pre-stable TypeScript SDK or self-host the Viewer at their own origin. The
-Engine is a document runtime, not a platform, agent orchestrator or hosted
-service; a host owns its storage, identity and deployment lifecycle.
+the pre-stable TypeScript SDK or self-host the Viewer at their own origin. A
+host owns its storage, identity, agent execution and deployment lifecycle.
+
+The next integration work should reduce the host's effort: an optional agent
+invocation hook and a mountable review surface should reuse the same Engine.
+Validate that surface in one real host before committing to a separate overlay
+package. Core remains independent of model providers and agent execution.
+
+The current runtime uses a DSTAR filesystem package. Host ownership does not
+yet mean that any existing database or document store can replace that package.
 
 ## The loop
 
 ```text
-human intent
+reviewer feedback and Owner intent
     -> agent prepares a complete staged HTML/CSS/assets candidate
-    -> skill invokes Engine through CLI
+    -> agent or host submits through CLI, SDK or an authorized adapter
     -> Engine validates and stores revision + review diff + storage delta
     -> Viewer reads exact base/candidate; human comments or decides
     -> Engine verifies candidate and base, then commits an accepted head
@@ -88,13 +132,31 @@ are excluded from the first profile. A sandbox isolates authored layout from
 review controls. Local filesystem access is a trusted-host boundary, not
 cryptographic proof that only a human could modify the files.
 
-## Initial scope
+## Focus and priorities
 
-Deliver a useful local creation → review → comment → revision → history loop.
-Keep the canonical format and module count small.
+First make one review round easy: select multiple open comments, add a general
+instruction, send once, and receive a linked revision proposal. Then reduce
+host integration effort and improve navigation between comments and local
+Before / After changes. Existing external-agent handoff remains available.
 
-Not required for the initial version: MCP, a published SDK, Git, a hosted
-backend, real-time collaboration, branches/merges, a universal document tree,
-arbitrary web applications, automatic comment execution, or office-format
-export. Independent interoperability and a stable specification follow the
-working prototype, rather than being claimed prematurely.
+Static HTML reports, designed documents and slides share this workflow.
+Interactive application editing, framework source mapping and deployment are
+outside the initial product focus. Direct inline editing and canonical Markdown
+are deferred until a concrete user or integration need justifies their cost.
+Markdown import could produce canonical HTML; preserving Markdown as authority
+would require a separate source-mapping and revision design.
+
+Core consistency and recovery guarantees remain requirements. Broader storage,
+format and protocol work should follow demonstrated correctness, scale or
+integration needs. The current SDK and artifact format remain pre-stable.
+
+## How we assess progress
+
+Measure time and host work required to complete the first accepted revision,
+manual copy/paste and context re-entry during a round, and whether a user can
+resume a second round after reopening the document. Establish a baseline with
+the current Viewer and compare the same scenario after each milestone.
+
+These measures are a validation plan, not reported results. Successful
+multi-round use and lower integration effort should guide priorities ahead of
+feature count.

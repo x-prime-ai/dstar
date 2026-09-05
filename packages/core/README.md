@@ -1,5 +1,10 @@
 # `@dstar/core`
 
+For the complete onboarding and lifecycle guide, see the
+[Core TypeScript SDK documentation](../../docs/core-sdk.md). The
+[core concepts](../../docs/concepts.md) explain revisions, state IDs, targets
+and idempotency.
+
 Server-side TypeScript SDK for creating, validating, reviewing and versioning
 portable DSTAR HTML documents. It operates directly on a host-owned filesystem
 directory and never calls a DSTAR-operated service.

@@ -1,5 +1,8 @@
 # `@dstar/mcp`
 
+For the complete host integration workflow, capability model and request
+lifecycle, see the [MCP integration guide](../../docs/mcp.md).
+
 MCP server adapter for `@dstar/core`. It registers DSTAR tools on a caller-scoped
 MCP server; it does not host document storage, authentication or an HTTP origin.
 It also does not implement browser WebMCP or Viewer UI; those belong to

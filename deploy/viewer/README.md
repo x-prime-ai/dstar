@@ -67,13 +67,13 @@ person's role. The current UI moves the fragment into
 session storage and removes it from the address bar. Share neither this URL
 nor preview URLs (which contain read capabilities). Browser extensions and a
 trusted local process remain outside this boundary. Owner may decide, resolve
-and manage sharing; Reviewer may comment, reply, suggest, propose and use agent
-handoff but cannot decide or resolve. The configured display name and fixed role
+and manage sharing; Reviewer may read, comment, reply and use agent handoff but
+cannot propose, decide or resolve. The configured display name and fixed role
 are persisted as write attribution; request bodies cannot override authors.
 Programmatic callers may use `startViewer(root, port, {host, externalOrigin,
 ownerToken, reviewerToken, ownerDisplayName, reviewerDisplayName})`, with file
 variants for each token. The return value is
-`{server, origin, baseUrl, ownerUrl, reviewerUrl?}`. Treat all returned role URLs
+`{server, origin, baseUrl, documentId, ownerUrl, reviewerUrl?}`. Treat all returned role URLs
 as secrets and never log them in a service.
 
 ## TLS proxy and instance boundaries
@@ -102,10 +102,10 @@ query strings and `/frame/` paths. Do not cache authenticated state or previews.
 The example is not a provisioned TLS setup; validate certificates, limits and
 proxy configuration separately before exposure.
 
-The proxy example sets `client_max_body_size 48m` to match the agent JSON
-request cap (Nginx otherwise defaults to 1 MiB; see
+The proxy example sets `client_max_body_size 48m` to match the candidate proposal
+JSON request cap (Nginx otherwise defaults to 1 MiB; see
 [client_max_body_size](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)).
-Decoded candidate files remain limited to 32 MiB by the WebMCP bridge.
+Decoded candidate files remain limited to 32 MiB by the document API.
 Compose gives `/tmp` 64 MiB so an allowed candidate can be staged; budget
 additional memory and proxy temporary disk for concurrent requests. These
 limits are not a load-test or production capacity guarantee.

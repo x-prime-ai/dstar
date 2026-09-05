@@ -1,5 +1,9 @@
 # Implementation status
 
+Delivered foundation as of 2026-09-04. The [roadmap](roadmap.md) owns future
+priority order; the [review-round design](review-rounds.md) describes planned
+batch feedback and host integration. Neither is already delivered by this list.
+
 ## Delivered
 
 - Independent `@dstar/core` and `pnpm dstar` launcher, without Git.
@@ -11,6 +15,8 @@
 - Locked writes, authoritative state switch and checkout recovery journal.
 - Element and single-element Unicode text comments, replies, explicit recovery
   status and separate human resolution.
+- Proposal links to multiple open comments through `motivatedBy`; this is a
+  Core capability, not yet a batch-selection and submission experience.
 - Viewer sandbox, exact base/candidate previews, bounded review summaries,
   pending queue, accepted history and human acceptance/rejection.
 - Doc-like/rich HTML and slide examples using one format.
@@ -20,6 +26,8 @@
   reply, decision and resolution tools.
 - Publish-ready `@dstar/viewer`, a host-owned deployment contract and a
   compile-checked external TypeScript consumer.
+- Role-bound Owner/Reviewer sessions, browser WebMCP and scoped external-agent
+  handoff, including comment-focused draft and revision workflows.
 
 ## Verification
 
@@ -31,17 +39,17 @@ out-of-band changes and unsafe HTML/CSS.
 Viewer HTTP tests cover session authentication, origin checks, immutable
 sandboxed previews, comments and exact decisions. Browser verification checks
 actual presentation, selecting text, adding comments and review controls.
-## Next work, not silently part of this MVP
 
-- Publish a normative schema and independent revision/delta vectors.
-- HTML5 parser parity and a larger adversarial HTML/CSS/browser corpus.
-- Durable multi-user principals, external authorization and cross-platform
-  filesystem/crash testing.
-- Safer automatic abandoned-lock recovery; currently an explicit operator step.
-- Search/pagination for large histories and bounded streamed materialization.
-- Rich CSS/property diff, comment highlight navigation and cross-element ranges.
-- Better slide sizing/fullscreen/accessibility and review ergonomics.
-- Explicit retention/GC/compaction.
+## Next work
+
+The next product milestone is a complete review round: select several comments,
+add a general instruction, send once, inspect the linked suggestion, decide and
+resume later. Batch requests and optional host-connected agent invocation come
+first; embedding validation and better comment-to-change navigation follow.
+
+See the [roadmap](roadmap.md) for exit evidence, validation measures and the
+engineering backlog. Canonical Markdown, direct inline editing and broader
+storage/protocol work are deferred until a concrete need justifies them.
 
 The integrating product mounts `@dstar/mcp` using its chosen MCP transport and
 authentication. Browser WebMCP in the reference Viewer is an additional UI

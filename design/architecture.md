@@ -3,6 +3,12 @@
 Status: implemented host-owned MVP; development format with a pre-stable public
 SDK surface.
 
+This architecture supports the multi-round document review experience in the
+[Vision](../VISION.md). The [review-round design](review-rounds.md) proposes
+durable batch requests, optional host agent invocation and a mountable review
+surface. Those extensions remain planned; Core continues to own revisions and
+the host owns agent execution. See the [roadmap](roadmap.md) for sequencing.
+
 ## Responsibilities
 
 ```text

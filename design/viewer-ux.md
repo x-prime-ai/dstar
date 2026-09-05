@@ -1,6 +1,8 @@
 # Viewer information architecture
 
-Status: implemented for the HTML-first Viewer.
+Status: implemented for the HTML-first Viewer. Planned batch feedback,
+host-connected agent invocation and comment-to-change navigation are specified
+separately in [Review rounds](review-rounds.md); they are not existing controls.
 
 The Viewer is a reading and review surface. It preserves the Engine's exact
 revision, comparison, anchor and decision guarantees without asking a reader to

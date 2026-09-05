@@ -1,5 +1,8 @@
 # `@dstar/viewer`
 
+For the complete integration guide, see [Viewer and WebMCP](../../docs/viewer.md)
+and the [Viewer HTTP API](../../docs/http-api.md).
+
 Self-hosted DSTAR review UI with its browser WebMCP surface built in. It serves one
 filesystem-backed DSTAR package from one Node.js process; it does not call a
 DSTAR-operated service.

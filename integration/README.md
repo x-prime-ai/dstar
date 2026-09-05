@@ -1,5 +1,9 @@
 # Host DSTAR on your own infrastructure
 
+This is the normative host-boundary reference. For task-oriented onboarding,
+start with the [documentation index](../docs/README.md) and
+[deployment guide](../docs/deployment.md).
+
 DSTAR is a format plus a local runtime, not a hosted document API. A compatible
 host owns the document bytes, review history, user identity, browser origin and
 operational lifecycle. DSTAR does not need to receive document content or sit on
