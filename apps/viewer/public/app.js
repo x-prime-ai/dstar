@@ -1512,6 +1512,7 @@ function renderRevisionRequestCard(request) {
         async () => {
           await select(request.proposalId);
           setPanel("navigation", true);
+          focusVersionButton(request.proposalId);
         },
         "primary",
       ),
@@ -1726,9 +1727,7 @@ function commentThread(thread, expanded = false) {
       link.onclick = safely(async () => {
         await select(proposal.id, { focusCommentId: c.id });
         setPanel("navigation", true);
-        document
-          .querySelector(`[data-proposal="${proposal.id}"]`)
-          ?.focus({ preventScroll: true });
+        focusVersionButton(proposal.id);
       });
       links.append(link);
     }
@@ -1874,6 +1873,11 @@ function versionTime(value) {
     year:
       date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
   }).format(date);
+}
+function focusVersionButton(proposalId) {
+  document
+    .querySelector(`[data-proposal="${proposalId}"]`)
+    ?.focus({ preventScroll: true });
 }
 function versionButton(proposal) {
   const button = el("button"),
