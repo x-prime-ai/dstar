@@ -25,12 +25,13 @@ request. The agent returns a suggested version. The Owner can locate the
 changes and the feedback they relate to, accept or decline the suggestion, and
 return the next day to continue reviewing.
 
-The reference implementation now supports this flow with durable batch requests,
+The standalone implementation supports this flow with durable batch requests,
 external handoff, an optional trusted-host invocation callback and linked review
-navigation. Milestones 1 and 2 are verified by repository automation and a
-controlled test agent, not by a real model provider or deployed host. Validating
-the same flow inside one real host remains the next integration milestone. See
-the [roadmap](design/roadmap.md) and
+navigation. Core, CLI, MCP and Viewer are verified by repository automation and
+a controlled test agent, not by a real model provider or deployed external
+product. Cross-product host/provider validation is deferred and is not a
+completion condition for DSTAR's standalone delivery. See the
+[roadmap](design/roadmap.md) and
 [review-round design](design/review-rounds.md) for the evidence boundary.
 
 The product should answer four questions without exposing storage details:
@@ -71,11 +72,11 @@ A CLI remains sufficient for agent authoring. External products may instead use
 the pre-stable TypeScript SDK or self-host the Viewer at their own origin. A
 host owns its storage, identity, agent execution and deployment lifecycle.
 
-The next integration work should reduce the host's effort: an optional agent
-invocation hook now reuses the same Engine and durable request contract. A
-mountable review surface still needs validation in one real host before DSTAR
-commits to a separate overlay package. Core remains independent of model
-providers and agent execution.
+The optional agent invocation hook reuses the same Engine and durable request
+contract. The mountable Viewer is a supported standalone integration surface.
+A separate overlay package or claims about a particular external product still
+require future evidence. Core remains independent of model providers and agent
+execution.
 
 The current runtime uses a DSTAR filesystem package. Host ownership does not
 yet mean that any existing database or document store can replace that package.
@@ -140,12 +141,12 @@ cryptographic proof that only a human could modify the files.
 
 ## Focus and priorities
 
-The implemented reference flow selects multiple open comments, adds a general
+The implemented standalone flow selects multiple open comments, adds a general
 instruction, sends once through external handoff or a configured host callback,
 and receives a linked revision proposal. Basic navigation connects requests,
 comments, proposals and local Before / After changes while labeling fallbacks
-that cannot be mapped to one element. The next priority is proving the host
-contract and review surface in a real product.
+that cannot be mapped to one element. Future cross-product validation may test
+this contract in a real product, but is outside the current delivery scope.
 
 Static HTML reports, designed documents and slides share this workflow.
 Interactive application editing, framework source mapping and deployment are

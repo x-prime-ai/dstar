@@ -15,8 +15,12 @@ Inside this repository the workspace package is linked by `pnpm install`.
 
 ## Start locally
 
+First create `quickstart-document.dstar` through the
+[Getting started](getting-started.md#create-a-document-package) genesis step.
+Then start its Viewer:
+
 ```sh
-pnpm dstar serve ./my-document.dstar --port 4173
+pnpm dstar serve ./quickstart-document.dstar --port 4173
 ```
 
 The command prints separate private Owner and Reviewer bearer links. Open the

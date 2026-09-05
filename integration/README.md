@@ -74,7 +74,8 @@ or exposing package paths:
 The returned `baseUrl`, `healthUrl` and `documentId` let the host wire routing
 and monitoring without parsing private access URLs. This mount contract uses
 the existing reference Viewer at the host's origin; it is not an iframe/overlay
-SDK and does not satisfy the real-host milestone by itself.
+SDK and does not claim validation inside a different product or with a real
+provider.
 
 The runnable container, environment contract, proxy rules and backup checklist
 are in the [self-hosting guide](../deploy/viewer/README.md). The

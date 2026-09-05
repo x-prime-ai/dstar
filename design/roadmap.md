@@ -1,9 +1,11 @@
 # DSTAR roadmap
 
-Updated: 2026-09-04. Milestones 1 and 2 are implemented and verified by current
-repository automation with a controlled test agent. That evidence is not a real
-provider run or host deployment. See the [delivery plan](delivery-plan.md) and
-[review-round design](review-rounds.md) for the exact contract.
+Updated: 2026-09-04. The DSTAR standalone Core, CLI, MCP and Viewer delivery is
+implemented and verified by current repository automation with a controlled
+test agent. That evidence is not a real provider run or external product
+deployment. Cross-product host/provider validation is deferred and does not
+block standalone delivery. See the [delivery plan](delivery-plan.md) and
+[review-round design](review-rounds.md) for the exact evidence boundary.
 
 ## Implemented: complete one reference review round
 
@@ -42,27 +44,27 @@ stored proposal without duplication. This verifies the callback contract, not a
 real provider integration, production process lifecycle or duplicate-charge
 behavior.
 
-## Next: lower real integration effort
+## Implemented: standalone integration surfaces
 
-### 3. Validate a mountable review surface in one real host — not implemented
+### 3. Mountable review and public package readiness — implemented
 
-- Reuse Core and reference review behavior inside an existing product.
-- Document the smallest working identity, document, origin and invocation
-  contract.
-- Record host setup, adapter work and time to first accepted revision.
+- Public `@dstar/core`, `@dstar/mcp` and `@dstar/viewer` entry points and
+  TypeScript declarations.
+- A base-path-safe Viewer mount with credential-free readiness, returned
+  `baseUrl`/`healthUrl`, and host-facing identity/origin/invocation guidance.
+- Clean packed-package import smoke plus a compile-checked TypeScript consumer.
+- A useful standalone path when `agentInvocation` is absent: durable requests
+  can use scoped external handoff; Core and MCP can return request-linked
+  proposals, while the repository CLI can submit ordinary proposals.
 
-Exit evidence: a real host completes two review rounds at its own origin with
-host-owned data, identity and real provider execution. Document remaining
-storage and deployment effort. Choose the embedding mechanism from that evidence
-before publishing an independent overlay package. An in-repository controlled
-agent or compile-checked example cannot satisfy this milestone.
+Current evidence: repository tests cover path-mounted assets/API/health,
+identity and origin rejection, callback absence/presence, refresh, restart
+reconciliation and repeated review rounds over durable state. The release check
+packs and imports all three public packages from a clean consumer layout.
 
-Repository readiness delivered: the existing Viewer mount contract now includes
-base-path-safe health/readiness and host-facing integration guidance. The
-optional invocation callback and identity/origin boundaries are documented and
-tested with controlled fixtures. This lowers adapter work but does not change
-the milestone status until a selected real host supplies the exit evidence
-above.
+This makes the standalone integration contract deliverable without selecting a
+different product. It does not claim a real provider, TLS deployment,
+host-specific identity adapter or cross-product user study.
 
 ### 4. Deepen comment-to-change inspection — repository slice implemented
 
@@ -79,18 +81,20 @@ assets and generic fallbacks now have explicit, non-semantic navigation;
 Before/After and changed-file focus are keyboard-operable; and controlled
 browser checks passed at desktop and 390 px. Unlocated discussions remain
 inspectable without being submitted as uninterpretable revision feedback.
-These remain repository-level usability findings until repeated in the selected
-real host.
+These are controlled repository-level usability findings, not
+external-product user evidence.
 
 Exit evidence: reviewers can connect the three comments, changes, decision and
 remaining discussion without source inspection. Acceptance and resolution stay
 distinct.
 
-## Validation measures
+## Deferred cross-product validation
 
-Establish a baseline in the target real host, then repeat the same report and
-review tasks. These are planned measurements; no achieved numeric result is
-asserted by the repository tests.
+A future integration may establish a baseline in a selected external product,
+then repeat the same report and review tasks with its real identity, data and
+provider execution. These are optional planned measurements; no achieved
+numeric result is asserted by repository tests, and this work is not part of
+the standalone completion criteria.
 
 | Measure                 | Record                                                                                           |
 | ----------------------- | ------------------------------------------------------------------------------------------------ |
@@ -112,6 +116,7 @@ asserted by the repository tests.
 | Search, pagination, retention/GC and streamed materialization | Measured document/history sizes hit current usability or runtime limits                 |
 | Broader identities and deployment models                      | A target integration exceeds fixed roles or single-writer filesystem assumptions        |
 | Advanced slide sizing and cross-element selections            | Review tasks show current presentation or selection limits block completion             |
+| External-product/provider validation                          | A separate integration explicitly selects a host, provider and success measures         |
 
 ## Ongoing correctness work
 

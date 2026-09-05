@@ -1,9 +1,9 @@
 # Review rounds and host integration
 
-Status: milestones 1 and 2 implemented, 2026-09-04. Verification is repository
-automation with loopback HTTP and a controlled test agent. It is not a real
-provider run or host deployment. Milestone 3, embedding the review surface in a
-real host, remains incomplete.
+Status: standalone review rounds implemented, 2026-09-04. Verification is
+repository automation with loopback HTTP and a controlled test agent. It is not
+a real provider run or external product deployment. Cross-product embedding and
+provider validation are deferred, not blockers for the standalone delivery.
 
 ## Product scenario
 
@@ -127,23 +127,24 @@ handoff, exact scoped return, timeout/retry and a controlled host callback. UI
 unit tests cover request composition, status, drift labels and
 comment-to-change destination selection.
 
-This evidence completes implementation milestones 1 and 2 only at repository
-test level. No real model provider, production host deployment, native provider
-browser workflow, billing behavior or process-restart continuation has been
-validated for this delivery.
+This evidence completes the standalone review-round delivery at repository-test
+level. No real model provider, production external-host deployment, native
+provider browser workflow, billing behavior or provider work continuation
+across process restart has been validated.
 
-Milestone 3 must embed or mount the review experience in one real host at its
-own origin with host-owned identity, storage and provider execution. It should
-record setup work and time to a first accepted revision before selecting a
-general overlay/component design. The filesystem package remains the storage
-contract for that validation; a generic storage abstraction is out of scope.
+A future cross-product study may embed or mount the review experience in an
+external product at its own origin and record setup work, adapter code and time
+to a first accepted revision. That study is explicitly deferred. It must not be
+reported as already completed or used to hold the standalone runtime open. The
+filesystem package remains the current storage contract; a generic storage
+abstraction is out of scope.
 
 ## Deferred choices
 
 Direct inline edits need an attributed revision workflow. Canonical Markdown
 needs renderer/source mapping and writeback semantics. Neither is part of this
 review-round implementation. Do not add a second document schema, universal
-agent orchestration layer or storage backend for milestone 3.
+agent orchestration layer or storage backend as speculative follow-up work.
 
 ## Reference
 

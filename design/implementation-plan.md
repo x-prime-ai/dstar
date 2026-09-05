@@ -2,8 +2,8 @@
 
 Delivered reference implementation as of 2026-09-04. The
 [roadmap](roadmap.md) owns future priority order; the
-[review-round design](review-rounds.md) describes the implemented milestones
-1/2 contract and incomplete real-host embedding milestone.
+[review-round design](review-rounds.md) describes the implemented standalone
+contract and the deferred external-host/provider evidence boundary.
 
 ## Delivered
 
@@ -48,17 +48,20 @@ Viewer HTTP tests cover session authentication, origin checks, immutable
 sandboxed previews, comments and exact decisions. Browser verification checks
 actual presentation, selecting text, adding comments and review controls.
 
-The milestone 1/2 additions are verified by current automated Core/UI/Viewer
+The review-round additions are verified by current automated Core/UI/Viewer
 tests using real filesystem persistence, loopback HTTP and a controlled test
-agent callback. This is not a real provider run or production host deployment.
+agent callback. Packed public package entry points are also exercised from a
+clean consumer layout. This is not a real provider run or production host
+deployment.
 
-## Next work
+## Delivery boundary
 
-The next product milestone is real-host embedding validation: complete two
-review rounds at the host's own origin with its identity, filesystem package and
-provider execution. The repository example and controlled test agent do not
-satisfy that milestone. Deeper comment-to-change navigation follows observed
-real-host friction.
+The DSTAR standalone delivery is complete at the documented pre-stable MVP
+boundary. A real external product may later validate two rounds at its own
+origin with its identity, filesystem package and provider execution. That would
+produce cross-product integration evidence, not complete a missing standalone
+runtime requirement. Deeper comment-to-change work should follow observed
+review friction rather than expand this delivery speculatively.
 
 See the [roadmap](roadmap.md) for exit evidence, validation measures and the
 engineering backlog. Canonical Markdown, direct inline editing and broader

@@ -71,10 +71,12 @@ and manage sharing; Reviewer may read, comment, reply and use agent handoff but
 cannot propose, decide or resolve. The configured display name and fixed role
 are persisted as write attribution; request bodies cannot override authors.
 Programmatic callers may use `startViewer(root, port, {host, externalOrigin,
-ownerToken, reviewerToken, ownerDisplayName, reviewerDisplayName})`, with file
-variants for each token. The return value is
-`{server, origin, baseUrl, documentId, ownerUrl, reviewerUrl?}`. Treat all returned role URLs
-as secrets and never log them in a service.
+basePath, ownerToken, reviewerToken, ownerDisplayName, reviewerDisplayName,
+agentInvocation})`, with file variants for each token and an optional trusted
+host callback. The return value is
+`{server, origin, baseUrl, healthUrl, documentId, ownerUrl, reviewerUrl?}`.
+`healthUrl` is credential-free and contains no document metadata; treat all
+returned role URLs as secrets and never log them in a service.
 
 ## TLS proxy and instance boundaries
 

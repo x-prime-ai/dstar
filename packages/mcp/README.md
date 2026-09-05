@@ -44,13 +44,20 @@ registration for that MCP caller:
 | `decide`   | `dstar_decide_proposal`  |
 | `resolve`  | `dstar_resolve_comment`  |
 
-The MCP package adapts protocol inputs and outputs, validates submitted file
-sets, and calls Core. Authorization remains the product's responsibility: never
-derive `actor`, capabilities or a document filesystem path from untrusted tool
-arguments. Mutation tools that can be retried require an idempotency key, and
-reply, decision and resolution tools require the exact state observed by the
-caller.
+The MCP package adapts these protocol inputs and outputs, validates submitted
+file sets, and calls Core. Read results include durable revision requests and
+reciprocal request/proposal links. A proposal may include both `requestId` and
+`attemptId` to return a candidate into an active host-managed request attempt;
+the two fields are optional only as a pair. Authorization remains the product's
+responsibility: never derive `actor`, capabilities or a document filesystem
+path from untrusted tool arguments. Mutation tools that can be retried require
+an idempotency key, and reply, decision and resolution tools require the exact
+state observed by the caller.
 
 The handler is transport-independent. Mount its `fetch` handler using the MCP
 SDK adapter appropriate to your HTTP framework, or use the SDK's stdio helper
 for a locally launched server.
+
+Revision-request creation/invocation remains a Core or Viewer host operation,
+not a separate MCP tool. This adapter can read those requests and submit the
+linked result after the trusted host starts an attempt.

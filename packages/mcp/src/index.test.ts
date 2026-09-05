@@ -108,6 +108,53 @@ it("registers caller-scoped tools that drive the Core collaboration API", async 
     (reply.structuredContent?.comment as { replies: unknown[] }).replies[0],
   ).not.toHaveProperty("key");
 
+  const request = document.createRevisionRequest({
+    base: genesis.revision,
+    instruction: "Clarify the selected heading",
+    commentIds: [comment.id],
+    requester: owner,
+    key: "request-1",
+  });
+  const attemptId = "host-job-1";
+  document.updateRevisionRequest(request.id, {
+    status: "running",
+    attemptId,
+  });
+
+  const missingAttempt = await handlers.get("dstar_propose_revision")!({
+    base: genesis.revision,
+    request: request.request,
+    key: "missing-attempt",
+    requestId: request.id,
+    files: [
+      {
+        path: "document.html",
+        encoding: "utf8",
+        content:
+          '<!doctype html><html><head><title>MCP</title></head><body><h1 data-dstar-id="title">Second</h1></body></html>',
+      },
+    ],
+    commentIds: [comment.id],
+  });
+  expect(missingAttempt.isError).toBe(true);
+
+  const missingRequest = await handlers.get("dstar_propose_revision")!({
+    base: genesis.revision,
+    request: request.request,
+    key: "missing-request",
+    attemptId,
+    files: [
+      {
+        path: "document.html",
+        encoding: "utf8",
+        content:
+          '<!doctype html><html><head><title>MCP</title></head><body><h1 data-dstar-id="title">Second</h1></body></html>',
+      },
+    ],
+    commentIds: [comment.id],
+  });
+  expect(missingRequest.isError).toBe(true);
+
   const unsafeCandidate = await handlers.get("dstar_propose_revision")!({
     base: genesis.revision,
     request: "Case collision",
@@ -127,7 +174,7 @@ it("registers caller-scoped tools that drive the Core collaboration API", async 
 
   const proposed = await handlers.get("dstar_propose_revision")!({
     base: genesis.revision,
-    request: "Clarify heading",
+    request: request.request,
     key: "proposal-2",
     files: [
       {
@@ -138,11 +185,15 @@ it("registers caller-scoped tools that drive the Core collaboration API", async 
       },
     ],
     commentIds: [comment.id],
+    requestId: request.id,
+    attemptId,
   });
   const proposal = proposed.structuredContent?.proposal as {
     id: string;
     revision: string;
+    requestId: string;
   };
+  expect(proposal.requestId).toBe(request.id);
   const decided = await handlers.get("dstar_decide_proposal")!({
     proposalId: proposal.id,
     action: "reject",
@@ -166,6 +217,15 @@ it("registers caller-scoped tools that drive the Core collaboration API", async 
   const read = await handlers.get("dstar_get_document")!({});
   expect(read.structuredContent).toMatchObject({
     revision: genesis.revision,
+    state: {
+      revisionRequests: [
+        {
+          id: request.id,
+          proposalId: proposal.id,
+          status: "returned",
+        },
+      ],
+    },
   });
   const comments = (
     read.structuredContent?.state as {
@@ -173,4 +233,19 @@ it("registers caller-scoped tools that drive the Core collaboration API", async 
     }
   ).comments;
   expect(comments[0]?.replies[0]).not.toHaveProperty("key");
+  const revisionRequests = (
+    read.structuredContent?.state as {
+      revisionRequests: {
+        key?: string;
+        command?: string;
+        feedback: unknown[];
+      }[];
+    }
+  ).revisionRequests;
+  expect(revisionRequests[0]).not.toHaveProperty("key");
+  expect(revisionRequests[0]).not.toHaveProperty("command");
+  expect(revisionRequests[0]?.feedback[0]).not.toHaveProperty("key");
+  expect(
+    (revisionRequests[0]?.feedback[0] as { replies: unknown[] }).replies[0],
+  ).not.toHaveProperty("key");
 });

@@ -76,8 +76,8 @@ routing, auth and deployment code belongs in that product's repository.
 ### Agent-specific Core API
 
 Rejected because Core does not communicate with an agent directly. MCP is the
-protocol and authorization adapter; it calls the same complete Core API as any
-other application integration.
+protocol and authorization adapter; its selected operations call the same
+public Core API as any other application integration.
 
 ## Verification
 

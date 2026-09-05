@@ -1,16 +1,17 @@
 # Review-round delivery plan
 
-Status: implemented and verified by automated repository tests, 2026-09-04.
-This status applies to roadmap milestones 1 and 2 only. Verification uses real
-Core persistence, loopback Viewer HTTP and a controlled test agent; it does not
-claim a real model provider, production host deployment or completed milestone 3.
+Status: DSTAR standalone delivery implemented and verified by automated
+repository tests, 2026-09-04. Verification uses real Core persistence, loopback
+Viewer HTTP, clean packed-package imports and a controlled test agent. It does
+not claim a real model provider or production external-host deployment; those
+are deferred cross-product evidence.
 
 ## Current delivery batch: embedding readiness and inspection
 
 Status: repository scope implemented, verified and independently reviewed,
 2026-09-04. This batch begins from integrated commit `d8c99b5`. It does not
 reopen the completed request lifecycle or host-agent callback work, and it does
-not claim the real-host exit evidence required by milestone 3.
+not claim deferred external-host/provider evidence.
 
 The independently executable DSTAR scope is:
 
@@ -23,12 +24,9 @@ The independently executable DSTAR scope is:
 - keep exact revision, request-attempt, Owner-decision, comment-resolution and
   iframe isolation boundaries unchanged.
 
-A read-only xPrime inspection may inform a minimal real-host adapter plan. It
-does not authorize changes to xPrime, use of its existing user data, or a live
-provider call. Milestone 3 remains incomplete unless a selected real host runs
-two rounds at its own origin with host-owned identity, data and provider
-execution. Repository fixtures, controlled callbacks and mount examples remain
-embedding-readiness evidence only.
+Cross-product repository inspection, existing user data and live provider calls
+are outside this batch. Repository fixtures, controlled callbacks and mount
+examples are standalone integration-contract evidence only.
 
 ## Delivered scope
 
@@ -45,6 +43,8 @@ embedding-readiness evidence only.
 - UI status/drift disclosure and basic request → proposal and comment → proposal
   → changes navigation.
 - Public SDK, HTTP, Viewer, storage-format and design documentation.
+- Packed Core/MCP/Viewer entry-point smoke from a clean consumer layout, with
+  MCP request/proposal linkage projected through the public adapter.
 
 The delivery retains complete static HTML/CSS/local-asset candidates, the
 filesystem package and the exact Owner decision boundary. It does not add
@@ -67,10 +67,10 @@ The current automated suites cover:
 - explicit proposal accept/reject with comment resolution unchanged; and
 - request/comment/proposal/change navigation helpers.
 
-Repository test success is sufficient to mark this implementation delivery
-verified. It is not sufficient to claim real provider behavior, billing
+Repository test success is sufficient to mark the standalone implementation
+delivery verified. It is not sufficient to claim real provider behavior, billing
 deduplication, production process recovery, native browser/provider integration,
-container/TLS deployment or real-host embedding.
+container/TLS deployment or external-product validation.
 
 For the embedding-readiness and inspection batch, the final repository suite
 passed with 73 Core, 181 Viewer, 1 MCP, 2 example-library, 11 workspace and 1
@@ -78,24 +78,24 @@ TypeScript-host test. A fresh Chromium session at 390×844 independently
 confirmed that ambiguous and orphaned threads remain visible and focusable,
 only exact/recovered feedback can enter a revision request, the narrow drawer
 uses non-modal semantics, and the page has no horizontal overflow. This is
-controlled-fixture evidence, not real-host evidence.
+controlled-fixture evidence, not external-product evidence.
 
-## Remaining delivery
+## Deferred cross-product evidence
 
-Roadmap milestone 3 remains open: mount or embed the review experience in one
-real host at its own origin, with host-owned identity, filesystem package and
-provider invocation. Complete two review rounds and record setup work, adapter
-code, deployment constraints and time to first accepted revision. Only that
-evidence can mark real-host embedding complete or justify a reusable overlay
-package.
+A future integration may mount the review experience in an external product at
+its own origin, with its identity, filesystem package and provider invocation,
+then record setup work, adapter code, deployment constraints and time to first
+accepted revision. That evidence would support claims about that integration
+or a reusable overlay package; it is not missing standalone delivery work.
 
-Further comment-to-change navigation should follow observed real-host review
-friction. A structured motivation link is not proof that every selected comment
-was satisfied, especially for CSS/layout changes.
+Further comment-to-change navigation should follow observed review friction. A
+structured motivation link is not proof that every selected comment was
+satisfied, especially for CSS/layout changes.
 
-## Handoff
+## Release handoff
 
-Before merging, rerun the relevant workspace tests, formatting/link checks and
-the repository verification suite where the environment permits. Record failed
-or unavailable checks accurately. The final merge/commit is owned by the delivery
-lead; this plan does not itself claim a commit, deployment or provider run.
+Before merging, rerun the relevant workspace tests, formatting/link checks,
+packed-package consumer smoke and the repository verification suite where the
+environment permits. Record failed or unavailable checks accurately. The final
+merge/commit is owned by the delivery lead; this plan does not itself claim a
+deployment or provider run.
