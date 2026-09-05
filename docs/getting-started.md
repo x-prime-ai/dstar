@@ -22,11 +22,11 @@ Use one of the checked-in complete HTML candidates:
 
 ```sh
 pnpm dstar validate examples/html-first
-pnpm dstar propose ./my-document.dstar \
+pnpm dstar propose ./quickstart-document.dstar \
   --candidate examples/html-first \
   --base none \
   --request "Create the document" \
-  --key initial
+  --key quickstart-genesis
 ```
 
 This creates a package with a pending genesis proposal. It does not accept that
@@ -35,7 +35,7 @@ proposal automatically.
 ## Review it
 
 ```sh
-pnpm dstar serve ./my-document.dstar --port 4173
+pnpm dstar serve ./quickstart-document.dstar --port 4173
 ```
 
 Open the complete private Owner URL printed in the terminal. Select **Review
@@ -48,25 +48,29 @@ link.
 Read the exact accepted revision and export it into a new empty directory:
 
 ```sh
-pnpm dstar inspect ./my-document.dstar
-pnpm dstar export ./my-document.dstar \
+pnpm dstar inspect ./quickstart-document.dstar
+pnpm dstar export ./quickstart-document.dstar \
   --revision sha256:EXACT_ACCEPTED_REVISION \
-  --out ./candidate
+  --out ./quickstart-candidate
 ```
 
-Edit `candidate/document.html`, CSS or assets, preserving stable
+Edit `quickstart-candidate/document.html`, CSS or assets, preserving stable
 `data-dstar-id` values. Then validate and propose the complete candidate:
 
 ```sh
-pnpm dstar validate ./candidate
-pnpm dstar propose ./my-document.dstar \
-  --candidate ./candidate \
+pnpm dstar validate ./quickstart-candidate
+pnpm dstar propose ./quickstart-document.dstar \
+  --candidate ./quickstart-candidate \
   --base sha256:EXACT_ACCEPTED_REVISION \
   --request "Explain the change" \
-  --key second-version
+  --key quickstart-second
 ```
 
 The already-running Viewer will show the pending proposal.
+
+The two `quickstart-*` paths are ignored by this repository and must not exist
+before the first run. Choose different new paths if you already used them; the
+CLI will not overwrite an existing package genesis or a nonempty export.
 
 ## Next steps
 

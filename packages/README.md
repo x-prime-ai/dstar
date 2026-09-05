@@ -11,6 +11,7 @@ records proposals and comments without a central DSTAR service.
 The package exposes the complete document lifecycle. Authentication,
 authorization and MCP tool exposure belong to the integrating application.
 
-[`@dstar/mcp`](mcp/README.md) adapts that lifecycle to caller-scoped MCP tools.
-The integrating product owns the transport, document selection, authentication
-and capability policy; MCP calls Core rather than maintaining separate state.
+[`@dstar/mcp`](mcp/README.md) adapts selected collaboration operations to
+caller-scoped MCP tools. The integrating product owns revision-request
+invocation, transport, document selection, authentication and capability
+policy; MCP calls Core rather than maintaining separate state.

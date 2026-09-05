@@ -2,7 +2,8 @@
 
 This record covers the HTML-first Engine and Viewer on the integration branch.
 No deployment, public service, demo or browser setting change is part of this
-validation.
+validation. The DSTAR standalone delivery is complete at the repository
+evidence boundary; external-product/provider validation is deferred.
 
 ## Review-round milestones 1 and 2 (2026-09-04)
 
@@ -14,10 +15,10 @@ that returns encoded candidate files and deliberately times out on demand.
 
 This is automated contract evidence only. No real model provider, provider
 credential, billing path, production host deployment, native provider/browser
-integration or durable worker across process restart was exercised. Roadmap
-milestone 3—embedding the flow in one real host at its own origin—remains
-unverified and incomplete. Current test commands and outcomes should be recorded
-from the final integrated tree rather than inferred from older counts below.
+integration or durable worker across process restart was exercised. No
+external-product/provider result is claimed. Current test commands and outcomes
+should be recorded from the final integrated tree rather than inferred from
+older counts below.
 
 ## Embedding-readiness and inspection follow-up (2026-09-04)
 
@@ -48,7 +49,8 @@ only on the ready After preview.
 
 The installed Chromium build reported only its expected unsupported `tools`
 Permissions-Policy warnings; no page errors were reported. This was a controlled
-local package and no provider ran, so it is not milestone 3 exit evidence.
+local package and no provider ran, so it is not external-product/provider
+evidence.
 
 ### Final verification and independent review
 
@@ -66,7 +68,30 @@ checkboxes. The reviewer also confirmed no horizontal overflow and no modal
 ARIA claim on the non-modal drawer, then reported no remaining findings. This
 review remains controlled-fixture and repository evidence only.
 
-### Read-only xPrime fit assessment
+### DSTAR-only standalone closeout
+
+The standalone closeout removes external-product/provider validation from the
+DSTAR completion criteria without claiming that validation occurred. It also:
+
+- fixes fresh-clone onboarding to use a new ignored quickstart package instead
+  of the tracked `my-document.dstar` fixture;
+- projects durable requests and reciprocal request/proposal IDs through the
+  standard MCP read tool, and permits an MCP proposal to return into an exact
+  active host-managed attempt without adding request-creation or invocation
+  authority;
+- checks packed Core, MCP and Viewer runtime imports and public TypeScript
+  declarations from an isolated consumer layout; and
+- aligns public Viewer mount documentation with `basePath` and `healthUrl`.
+
+On the final closeout tree, `pnpm verify` passed under Node 22.22.3 and pnpm
+10.28.2: formatting, lint, links, builds, package-consumer checks, static-demo
+checks, type checking and every workspace test completed. The test totals were
+73 Core, 181 Viewer, 1 MCP, 2 example-library, 11 workspace and 1
+TypeScript-host test. A fresh-directory CLI genesis command from the updated
+quickstart also produced the expected pending proposal. No real provider or
+external product was invoked.
+
+### Historical external-product fit assessment (deferred)
 
 xPrime was inspected without changing its repository or invoking its data or
 models. Its current `@xprime/ui-artifact` panel projects one inline Markdown or
@@ -77,8 +102,7 @@ no authentication, while model work is governed through the Harness identity,
 Authority and Effect path rather than a public arbitrary-model callback. The
 xPrime main checkout also contained unrelated user changes during inspection.
 
-If xPrime is selected and cross-repository work is authorized, the smallest
-credible integration is therefore:
+The earlier read-only assessment recorded one possible future adapter shape:
 
 1. persist one DSTAR package outside inline Session artifact content and mount
    the full Viewer at an xPrime-owned path/origin;
@@ -91,9 +115,9 @@ credible integration is therefore:
    exact DSTAR request/attempt, with provider result recovery kept in xPrime.
    Calling a model adapter directly would bypass xPrime's execution boundary.
 
-That plan still requires explicit host selection, cross-repository scope and a
-configured real provider. No xPrime code or main branch was modified in this
-batch, and milestone 3 remains incomplete.
+That historical plan is outside the DSTAR-only delivery scope. No external
+product code, existing user data or provider was modified or invoked in this
+batch, and no follow-up selection is required to finish DSTAR standalone.
 
 ## Baseline and independent fix
 

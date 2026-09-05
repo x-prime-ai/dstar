@@ -10,10 +10,10 @@ Start here:
 - [Vision](../VISION.md): target users, multi-round review value and product
   boundaries.
 - [Roadmap](roadmap.md): priorities, milestone exit evidence and deferred work.
-- [Delivery plan](delivery-plan.md): implemented/automated-verification status,
-  evidence limits and remaining real-host handoff.
+- [Delivery plan](delivery-plan.md): standalone implementation and verification
+  status plus deferred evidence limits.
 - [Review rounds](review-rounds.md): implemented durable batch feedback and host
-  callback contracts plus the incomplete real-host embedding milestone.
+  callback contracts plus the deferred cross-product validation boundary.
 - [Architecture](architecture.md): skill → CLI/Engine → Viewer.
 - [Viewer information architecture](viewer-ux.md): implemented reading,
   comments, versions and review-change UX.

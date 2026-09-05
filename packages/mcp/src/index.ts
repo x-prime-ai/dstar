@@ -10,6 +10,7 @@ import {
   type DstarDocument,
   type Files,
   type Proposal,
+  type RevisionRequest,
   type Target,
 } from "@dstar/core";
 import * as z from "zod/v4";
@@ -84,12 +85,34 @@ function publicProposal(proposal: Proposal): Record<string, unknown> {
     parent: proposal.parent,
     revision: proposal.revision,
     request: proposal.request,
+    ...(proposal.requestId ? { requestId: proposal.requestId } : {}),
     motivatedBy: proposal.motivatedBy ?? [],
     author: proposal.author,
     createdAt: proposal.createdAt,
     status: proposal.status,
     diff: proposal.diff,
     ...(proposal.decision ? { decision: proposal.decision } : {}),
+  };
+}
+
+function publicRevisionRequest(
+  request: RevisionRequest,
+): Record<string, unknown> {
+  return {
+    id: request.id,
+    base: request.base,
+    instruction: request.instruction,
+    request: request.request,
+    commentIds: request.commentIds,
+    feedback: request.feedback.map(publicComment),
+    requester: request.requester,
+    createdAt: request.createdAt,
+    status: request.status,
+    attempt: request.attempt,
+    ...(request.attemptId ? { attemptId: request.attemptId } : {}),
+    updatedAt: request.updatedAt,
+    ...(request.error ? { error: request.error } : {}),
+    ...(request.proposalId ? { proposalId: request.proposalId } : {}),
   };
 }
 
@@ -235,6 +258,9 @@ export function registerDstarTools(
               head: snapshot.state.head,
               proposals: snapshot.state.proposals.map(publicProposal),
               comments: snapshot.state.comments.map(publicComment),
+              revisionRequests: snapshot.state.revisionRequests.map(
+                publicRevisionRequest,
+              ),
             },
             files: [...snapshot.files]
               .sort(([left], [right]) => left.localeCompare(right))
@@ -269,8 +295,15 @@ export function registerDstarTools(
                 message: "Comment IDs must be unique",
               })
               .optional(),
+            requestId: z.string().regex(UUID).optional(),
+            attemptId: z.string().min(1).max(200).optional(),
           })
-          .strict(),
+          .strict()
+          .refine(
+            ({ requestId, attemptId }) =>
+              Boolean(requestId) === Boolean(attemptId),
+            { message: "requestId and attemptId must be supplied together" },
+          ),
         annotations: {
           readOnlyHint: false,
           destructiveHint: false,
@@ -278,8 +311,12 @@ export function registerDstarTools(
           openWorldHint: false,
         },
       },
-      async ({ base, request, key, files, commentIds }) =>
+      async ({ base, request, key, files, commentIds, requestId, attemptId }) =>
         call(() => {
+          if (Boolean(requestId) !== Boolean(attemptId))
+            throw new Error(
+              "Invalid revision request link: requestId and attemptId must be supplied together",
+            );
           const candidate = filesFromInput(files);
           const proposal = withCandidate(candidate, (directory) =>
             document.propose({
@@ -289,6 +326,7 @@ export function registerDstarTools(
               author: actor,
               key,
               ...(commentIds ? { commentIds } : {}),
+              ...(requestId && attemptId ? { requestId, attemptId } : {}),
             }),
           );
           return { proposal: publicProposal(proposal) };

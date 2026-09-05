@@ -6,7 +6,7 @@ and retain the feedback and decisions behind each version.
 DSTAR gives AI products a document review and revision runtime with host-owned
 data. The initial focus is reports, proposals, design explanations and slides.
 See the [Vision](VISION.md) and [roadmap](design/roadmap.md) for the
-multi-comment review workflow and remaining real-host integration work.
+multi-comment review workflow, standalone delivery status and deferred work.
 
 There is one canonical artifact: `document.html` + CSS + local assets.
 A simple document, a designed page and slides are different layouts, not
@@ -63,8 +63,8 @@ Run from this repository:
 pnpm install
 pnpm --filter @dstar/core build
 pnpm dstar validate examples/html-first
-pnpm dstar propose ./my-document.dstar --candidate examples/html-first --base none --request "Create a document" --key first
-pnpm dstar serve ./my-document.dstar
+pnpm dstar propose ./quickstart-document.dstar --candidate examples/html-first --base none --request "Create a document" --key quickstart-genesis
+pnpm dstar serve ./quickstart-document.dstar
 ```
 
 `serve` prints separate private Owner and Reviewer URLs. The Owner may request
@@ -84,7 +84,7 @@ The local command uses an automatically assigned free port by default. To keep
 the same port between restarts, choose one explicitly:
 
 ```sh
-pnpm dstar serve ./my-document.dstar --port 4173
+pnpm dstar serve ./quickstart-document.dstar --port 4173
 ```
 
 Authorization and its fixed Owner/Reviewer identity belong to the browser tab,
@@ -101,11 +101,11 @@ authenticated state read; access links must never be shared publicly.
 To revise:
 
 ```sh
-pnpm dstar inspect ./my-document.dstar
-pnpm dstar export ./my-document.dstar --out ./candidate
+pnpm dstar inspect ./quickstart-document.dstar
+pnpm dstar export ./quickstart-document.dstar --out ./quickstart-candidate
 # Edit the exported HTML/CSS/assets; preserve surviving data-dstar-id values.
-pnpm dstar validate ./candidate
-pnpm dstar propose ./my-document.dstar --candidate ./candidate --base sha256:EXACT_HASH_FROM_INSPECT --request "Describe the edit" --key second
+pnpm dstar validate ./quickstart-candidate
+pnpm dstar propose ./quickstart-document.dstar --candidate ./quickstart-candidate --base sha256:EXACT_HASH_FROM_INSPECT --request "Describe the edit" --key quickstart-second
 ```
 
 The Viewer updates the review queue as proposals arrive. A proposal never changes the
@@ -147,7 +147,7 @@ or change fixed-document `startViewer`. No public deployment is included.
 ## Storage
 
 ```text
-my-document.dstar/
+quickstart-document.dstar/
 ├── document.html       accepted working copy (absent before genesis acceptance)
 ├── styles.css          optional; styles/ is also supported
 ├── assets/             optional local images/fonts
@@ -171,11 +171,12 @@ This is a local MVP with development format `dstar-html-0.2-dev`, not a stable
 interoperability specification. It supports static HTML/CSS, local raster images
 and fonts, linear history, element/single-element text comments, replies,
 fixed Owner/Reviewer identities, durable batch revision requests and exact
-Owner decisions. Milestones 1 and 2 are implemented and covered by repository
-automation using loopback HTTP and a controlled test agent. This is not evidence
-of a real model provider, production host deployment or native
-browser-provider integration; the roadmap's real-host embedding milestone
-remains incomplete. It does not yet offer
+Owner decisions. The DSTAR standalone Core/CLI/MCP/Viewer delivery is
+implemented and covered by repository automation using real filesystem
+persistence, loopback HTTP, clean packed-package imports and a controlled test
+agent. A real external product, model provider, production deployment or native
+browser-provider integration has not been validated and is explicitly deferred;
+it is not a blocker for the standalone delivery. DSTAR does not yet offer
 arbitrary scripts/SVG, an identity provider or arbitrary users, auto-merge,
 garbage collection, assignment, advanced slide
 scaling, or migration from earlier pre-HTML formats.

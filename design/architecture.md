@@ -6,9 +6,10 @@ SDK surface.
 This architecture supports the multi-round document review experience in the
 [Vision](../VISION.md). Durable batch requests, scoped external handoff and the
 optional trusted-host agent callback are implemented. The
-[review-round design](review-rounds.md) specifies those contracts and the still
-unimplemented real-host embedding milestone. Core continues to own revisions;
-the host owns agent execution. See the [roadmap](roadmap.md) for sequencing.
+[review-round design](review-rounds.md) specifies those contracts and the
+deferred external-host/provider evidence boundary. Core continues to own
+revisions; the host owns agent execution. See the [roadmap](roadmap.md) for
+sequencing.
 
 ## Responsibilities
 
@@ -40,7 +41,7 @@ the MCP transport, authentication, process and package directory.
 - `packages/core`: file inventory, HTML/CSS validation, hashes, byte deltas,
   materialization, comments, proposals and locked/journaled writes.
 - `packages/core/src/cli.ts`: validate, inspect, export, propose, comment, reply.
-- `packages/mcp`: MCP server/tool adapter over the complete Core API.
+- `packages/mcp`: caller-scoped MCP tools over selected Core operations.
 - `apps/viewer`: loopback HTTP adapter and static browser UI.
 - `scripts/dstar.mjs`: repository launcher, including `serve`.
 - `skills/dstar-documents`: agent operating instructions and format references.

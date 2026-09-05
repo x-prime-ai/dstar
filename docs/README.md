@@ -45,6 +45,10 @@ The supported public packages are:
 - `@dstar/mcp`: caller-scoped MCP adapter for Core.
 - `@dstar/viewer`: self-hosted Viewer and its browser WebMCP surface.
 
+The release check packs all three entry points and imports them from a clean
+consumer layout. It verifies package contents and public runtime entry points;
+it is not a registry publication or production deployment.
+
 There is currently no separate remote HTTP client package. The documented HTTP
 surface belongs to `@dstar/viewer`; custom services normally expose their own
 API over `@dstar/core`.

@@ -7,6 +7,8 @@ coverage/
 .env
 .env.local
 deploy/viewer/secrets/
+/quickstart-document.dstar/
+/quickstart-candidate/
 
 # Demo build products and private voice references. Keep the selected export,
 # source frames, scripts, and narration text in version control.

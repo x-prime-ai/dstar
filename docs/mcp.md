@@ -61,14 +61,14 @@ instead. DSTAR does not require a particular transport.
 `capabilities` is required and has no default. A tool is registered only when
 the caller has its capability.
 
-| Capability | MCP tool                 | Important input                                     |
-| ---------- | ------------------------ | --------------------------------------------------- |
-| `read`     | `dstar_get_document`     | optional exact revision or proposal reference       |
-| `propose`  | `dstar_propose_revision` | exact base, complete files, request and key         |
-| `comment`  | `dstar_add_comment`      | exact target and body                               |
-| `reply`    | `dstar_reply_comment`    | comment ID, body, key and observed state ID         |
-| `decide`   | `dstar_decide_proposal`  | proposal ID, action, revision and observed state ID |
-| `resolve`  | `dstar_resolve_comment`  | comment ID and observed state ID                    |
+| Capability | MCP tool                 | Important input                                                                   |
+| ---------- | ------------------------ | --------------------------------------------------------------------------------- |
+| `read`     | `dstar_get_document`     | optional exact revision or proposal reference; includes request/proposal links    |
+| `propose`  | `dstar_propose_revision` | exact base, complete files, request and key; optional active request/attempt link |
+| `comment`  | `dstar_add_comment`      | exact target and body                                                             |
+| `reply`    | `dstar_reply_comment`    | comment ID, body, key and observed state ID                                       |
+| `decide`   | `dstar_decide_proposal`  | proposal ID, action, revision and observed state ID                               |
+| `resolve`  | `dstar_resolve_comment`  | comment ID and observed state ID                                                  |
 
 A typical reviewer might receive `read`, `comment` and `reply`. A product may
 reserve `decide` and `resolve` for a separate owner flow. DSTAR does not define
@@ -115,6 +115,14 @@ The MCP client first calls `dstar_get_document`, then uses the returned
 On a stale-state failure, return the conflict to the caller. Do not refresh and
 repeat a user-authorized decision silently.
 
+For a host-managed durable revision request, first record its active attempt
+through Core or Viewer, then pass both `requestId` and `attemptId` to
+`dstar_propose_revision` with the request's exact `base`, canonical `request`
+and `commentIds`. The two IDs must be supplied together. Core rejects stale or
+superseded attempts and returns the reciprocal request/proposal link. MCP read
+results expose `state.revisionRequests` and each linked proposal's `requestId`,
+while omitting internal idempotency records.
+
 ## MCP is not WebMCP
 
 `@dstar/mcp` is a server-side standard MCP adapter. Browser WebMCP is part of
@@ -130,3 +138,7 @@ Use `registerDstarTools(server, options)` when the product already owns an
 
 See the compile-checked [TypeScript host example](../examples/typescript-host/README.md)
 and the [host integration contract](../integration/README.md).
+
+Revision-request creation and invocation are not separate MCP tools. The host
+owns that authority and lifecycle through Core or Viewer; MCP's propose tool can
+return a candidate into an already active attempt.
