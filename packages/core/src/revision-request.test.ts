@@ -304,6 +304,40 @@ describe("durable revision requests", () => {
     ).toBe("returned");
   });
 
+  it("requires an explicit active attempt before a request can return a proposal", () => {
+    const f = setup(),
+      request = f.repo.createRevisionRequest({
+        base: f.repo.snapshot().revision,
+        instruction: "Do not bypass the invocation boundary",
+        requester: "owner",
+        key: "inactive-linked-request",
+      });
+    f.write("Candidate from no attempt");
+    expect(() =>
+      f.propose(request.base, request.request, {
+        requestId: request.id,
+        key: "missing-attempt-result",
+      }),
+    ).toThrow("requires the active revision request attempt");
+
+    f.repo.updateRevisionRequest(request.id, {
+      status: "running",
+      attemptId: "failed-attempt",
+    });
+    f.repo.updateRevisionRequest(request.id, {
+      status: "failed",
+      attemptId: "failed-attempt",
+      error: "Provider failed",
+    });
+    expect(() =>
+      f.propose(request.base, request.request, {
+        requestId: request.id,
+        attemptId: "failed-attempt",
+        key: "failed-attempt-result",
+      }),
+    ).toThrow("requires the active revision request attempt");
+  });
+
   it("keeps the existing resolved-comment and stale-head proposal rejection", () => {
     const f = setup(),
       comment = f.comment("Selected"),
@@ -408,6 +442,15 @@ describe("durable revision requests", () => {
       attemptId: "corrupt-link-attempt",
       commentIds: request.commentIds,
     });
+    const returnedRequest = JSON.parse(fs.readFileSync(record, "utf8")),
+      corruptReturnedRequest = JSON.parse(JSON.stringify(returnedRequest));
+    corruptReturnedRequest.attempt = 0;
+    delete corruptReturnedRequest.attemptId;
+    fs.writeFileSync(record, JSON.stringify(corruptReturnedRequest));
+    expect(() => new Repository(f.root).snapshot()).toThrow(
+      "revision request metadata",
+    );
+    fs.writeFileSync(record, JSON.stringify(returnedRequest));
     const proposalRecord = join(f.root, ".dstar/proposals/00000001.json"),
       proposalValue = JSON.parse(fs.readFileSync(proposalRecord, "utf8"));
     proposalValue.requestId = randomUUID();

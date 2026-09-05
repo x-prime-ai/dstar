@@ -305,6 +305,7 @@ function validateState(value: State): State {
       !Number.isSafeInteger(request.attempt) ||
       request.attempt < 0 ||
       (request.attempt === 0) !== (request.attemptId === undefined) ||
+      (request.attempt === 0 && request.status !== "submitted") ||
       (request.attemptId !== undefined &&
         (typeof request.attemptId !== "string" ||
           !request.attemptId.trim() ||
@@ -897,6 +898,15 @@ export class Repository {
           JSON.stringify(motivatedBy) !== JSON.stringify(request.commentIds)
         )
           throw new Error("Proposal does not match its revision request");
+        if (
+          request.attempt === 0 ||
+          request.attemptId === undefined ||
+          args.attemptId === undefined ||
+          !["submitted", "running", "returned"].includes(request.status)
+        )
+          throw new Error(
+            "A linked proposal requires the active revision request attempt",
+          );
         if (args.attemptId !== request.attemptId)
           throw new Error("Invocation attempt was superseded");
       } else if (args.attemptId !== undefined) {
